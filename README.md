@@ -4,7 +4,7 @@ NuoCC is a small compiler for a subset of the C language. Supported syntax is li
 
 ## Quick Start
 
-This project uses CMake (out-of-source build recommended):
+This project uses CMake as the build system. Make sure you have CMake and a C++ compiler installed:
 
 ```bash
 mkdir build
