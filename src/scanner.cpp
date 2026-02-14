@@ -6,7 +6,7 @@
 namespace nuocc
 {
 
-Scanner::Scanner(std::string& file_name) : file_name_(file_name) {}
+Scanner::Scanner(const std::string& file_name) : file_name_(file_name) {}
 
 void Scanner::Scan()
 {

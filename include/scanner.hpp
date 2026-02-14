@@ -21,7 +21,7 @@ private:
 
 public:
     Scanner() = default;
-    Scanner(std::string& filename);
+    Scanner(const std::string& filename);
     ~Scanner() = default;
 
 public:
