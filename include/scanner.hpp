@@ -21,18 +21,15 @@ private:
 
 public:
     Scanner() = default;
-    Scanner(const std::string& filename);
     ~Scanner() = default;
 
 public:
-    void Scan();
-    const std::string& GetFileName() const;
+    void Scan(const std::string& file);
     const std::vector<std::unique_ptr<Node>>& GetTokenList() const;
 
 private:
-    void SkipEmpty(const std::string& buf, size_t& i);
-
     void StringToToken(const std::string& buf, size_t& i);
+    void SkipEmpty(const std::string& buf, size_t& i);
 
     bool IsNewToken(const std::string& token, char ch);
     void BeginToken(std::string& token, char ch);
@@ -44,7 +41,6 @@ private:
     bool IsVariable(const std::string& token);
 
 private:
-    std::string file_name_;
     std::vector<std::unique_ptr<Node>> token_list_;
 };
 

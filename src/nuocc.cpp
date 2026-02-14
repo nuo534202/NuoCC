@@ -14,8 +14,8 @@ int main(int argc, const char **argv)
     std::string file(argv[1]);
     std::cout << file << std::endl;
 
-    nuocc::Scanner scanner(file);
-    scanner.Scan();
+    nuocc::Scanner scanner;
+    scanner.Scan(file);
     nuocc::PRINTTOKENLIST(scanner);
 
     return 0;

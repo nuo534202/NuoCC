@@ -6,16 +6,14 @@
 namespace nuocc
 {
 
-Scanner::Scanner(const std::string& file_name) : file_name_(file_name) {}
-
-void Scanner::Scan()
+void Scanner::Scan(const std::string& file)
 {
     std::ifstream ifs;
 
-    ifs.open(file_name_.c_str(), std::ios::in);
+    ifs.open(file.c_str(), std::ios::in);
     if (!ifs.is_open())
     {
-        std::cerr << "Error: Fail to open file " << file_name_ << std::endl;
+        std::cerr << "Error: Fail to open file " << file << std::endl;
         return;
     }
 
@@ -24,16 +22,10 @@ void Scanner::Scan()
     while (ifs >> buf)
     {
         size_t i = 0;
-        SkipEmpty(buf, i);
         StringToToken(buf, i);
     }
 
     ifs.close();
-}
-
-const std::string& Scanner::GetFileName() const
-{
-    return file_name_;
 }
 
 const std::vector<std::unique_ptr<Node>>& Scanner::GetTokenList() const
@@ -41,27 +33,10 @@ const std::vector<std::unique_ptr<Node>>& Scanner::GetTokenList() const
     return token_list_;
 }
 
-void Scanner::SkipEmpty(const std::string& buf, size_t& i)
-{
-    size_t size = buf.size();
-
-    while (i < size)
-    {
-        if (buf[i] == ' ' ||
-            buf[i] == '\n' ||
-            buf[i] == '\t')
-        {
-            i++;
-        }
-        else
-        {
-            break;
-        }
-    }
-}
-
 void Scanner::StringToToken(const std::string& buf, size_t& i)
 {
+    SkipEmpty(buf, i);
+
     size_t size = buf.size();
     std::string token;
 
@@ -85,6 +60,25 @@ void Scanner::StringToToken(const std::string& buf, size_t& i)
     }
 
     CommitToken(token);
+}
+
+void Scanner::SkipEmpty(const std::string& buf, size_t& i)
+{
+    size_t size = buf.size();
+
+    while (i < size)
+    {
+        if (buf[i] == ' ' ||
+            buf[i] == '\n' ||
+            buf[i] == '\t')
+        {
+            i++;
+        }
+        else
+        {
+            break;
+        }
+    }
 }
 
 bool Scanner::IsNewToken(const std::string& token, char ch)
