@@ -1,4 +1,4 @@
-#include "scanner.hpp"
+#include "nuocc_scanner.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -25,6 +25,7 @@ void Scanner::Scan(const std::string& file)
         StringToToken(buf, i);
     }
 
+    token_list_.push_back(std::make_unique<Node>(T_EOF));
     ifs.close();
 }
 

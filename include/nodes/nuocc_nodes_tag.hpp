@@ -27,6 +27,7 @@ typedef enum NodeTag
     T_Variable,
 
     T_Semicolon,
+    T_EOF
 } NodeTag;
 
 }   /* namespace nuocc */

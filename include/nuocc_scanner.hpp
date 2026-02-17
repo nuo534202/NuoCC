@@ -6,8 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "nodes/nodes.hpp"
-#include "nodes/scanner_nodes.hpp"
+#include "nodes/nuocc_nodes.hpp"
+#include "nodes/nuocc_scanner_nodes.hpp"
 
 namespace nuocc
 {

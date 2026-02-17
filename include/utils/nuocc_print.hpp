@@ -4,9 +4,9 @@
 #include <memory>
 #include <string>
 
-#include "nodes/nodes_tag.hpp"
-#include "nodes/scanner_nodes.hpp"
-#include "scanner.hpp"
+#include "nodes/nuocc_nodes_tag.hpp"
+#include "nodes/nuocc_scanner_nodes.hpp"
+#include "nuocc_scanner.hpp"
 
 #ifdef NDEBUG
 

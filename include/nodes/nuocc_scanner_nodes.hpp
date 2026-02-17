@@ -1,6 +1,8 @@
 #pragma once
 
-#include "nodes/nodes.hpp"
+#include <string>
+
+#include "nodes/nuocc_nodes.hpp"
 
 namespace nuocc
 {

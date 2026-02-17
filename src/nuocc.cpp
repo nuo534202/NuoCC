@@ -1,8 +1,8 @@
 #include <iostream>
 #include <string>
 
-#include "scanner.hpp"
-#include "utils/print.hpp"
+#include "nuocc_scanner.hpp"
+#include "utils/nuocc_print.hpp"
 
 int main(int argc, const char **argv)
 {
