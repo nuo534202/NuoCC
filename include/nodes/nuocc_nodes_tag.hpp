@@ -5,6 +5,7 @@ namespace nuocc
 
 typedef enum NodeTag
 {
+    /* Scanner Tags */
     T_UnknownToken = 0,
 
     /* Operator */
@@ -27,7 +28,16 @@ typedef enum NodeTag
     T_Variable,
 
     T_Semicolon,
-    T_EOF
+    T_EOF,
+
+    /* Parser/AST Tags */
 } NodeTag;
+
+typedef enum AstNodeTag
+{
+    A_AstNode = 0,
+    A_AstOperator = 1,
+    A_AstIntLit
+} AstNodeTag;
 
 }   /* namespace nuocc */

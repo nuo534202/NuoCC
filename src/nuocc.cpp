@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include "nuocc_parser.hpp"
 #include "nuocc_scanner.hpp"
 #include "utils/nuocc_print.hpp"
 
@@ -17,6 +18,11 @@ int main(int argc, const char **argv)
     nuocc::Scanner scanner;
     scanner.Scan(file);
     nuocc::PRINTTOKENLIST(scanner);
+
+    nuocc::Parser parser;
+    parser.Parse(scanner.GetTokenList());
+
+    std::cout << InterpretAstTree(parser.GetAstRoot()) << std::endl;
 
     return 0;
 }
