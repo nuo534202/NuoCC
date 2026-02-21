@@ -9,7 +9,7 @@ namespace nuocc
 
 void Parser::Parse(const std::vector<std::unique_ptr<Node>>& token_list)
 {
-    size_t i = 0;
+    idx_t i = 0;
     ast_root_ = BinaryExpression(token_list, i, 0);
 }
 
@@ -20,7 +20,7 @@ const std::unique_ptr<AstNode>& Parser::GetAstRoot()
 
 std::unique_ptr<AstNode> Parser::BinaryExpression(
     const std::vector<std::unique_ptr<Node>>& token_list,
-    size_t& i,
+    idx_t& i,
     uint8 ptp) /* previous token precedence */
 {
     std::unique_ptr<AstNode> left = ParsePrimary(token_list[i++]);
@@ -30,7 +30,7 @@ std::unique_ptr<AstNode> Parser::BinaryExpression(
     
     std::unique_ptr<AstNode> right = nullptr;
     NodeTag tag = token_list[i]->GetNodeTag();
-    size_t root_index;
+    idx_t root_index;
 
     while (GetOpPrecedence(tag) > ptp)
     {
@@ -125,55 +125,5 @@ const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
 
     {T_Star, 3}, {T_Slash, 3}
 };
-
-int32 InterpretAstTree(const std::unique_ptr<AstNode>& root)
-{
-    int32 left_value = 0, right_value = 0;
-
-    if (root->GetLeft() != nullptr)
-        left_value = InterpretAstTree(root->GetLeft());
-    if (root->GetRight() != nullptr)
-        right_value = InterpretAstTree(root->GetRight());
-    
-    switch (root->GetAstNodeTag())
-    {
-        case A_AstOperator:
-            return InterpretAstOp(root, left_value, right_value);
-        case A_AstIntLit:
-        {
-            const AstIntLit* int_lit =
-                static_cast<const AstIntLit*>(root.get());
-            return int_lit->GetValue();
-        }
-        default:
-            break;
-    }
-
-    return 0;
-}
-
-int32 InterpretAstOp(const std::unique_ptr<AstNode>& root,
-                     int32 left_value,
-                     int32 right_value)
-{
-    const AstOperator* root_op =
-        static_cast<AstOperator*>(root.get());
-    
-    switch (root_op->GetOpType())
-    {
-        case T_Plus:
-            return left_value + right_value;
-        case T_Minus:
-            return left_value - right_value;
-        case T_Star:
-            return left_value * right_value;
-        case T_Slash:
-            return left_value / right_value;
-        default:
-            break;
-    }
-
-    return 0;
-}
 
 }   /* namespace nuocc */

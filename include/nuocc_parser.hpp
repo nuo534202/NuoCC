@@ -25,7 +25,7 @@ public:
 private:
     std::unique_ptr<AstNode> BinaryExpression(
         const std::vector<std::unique_ptr<Node>>& token_list,
-        size_t& i,
+        idx_t& i,
         uint8 ptp); /* previous token precedence */
     
     std::unique_ptr<AstNode> ParsePrimary(const std::unique_ptr<Node>& token);
@@ -42,10 +42,5 @@ private:
 private:
     std::unique_ptr<AstNode> ast_root_;
 };
-
-int32 InterpretAstTree(const std::unique_ptr<AstNode>& root);
-int32 InterpretAstOp(const std::unique_ptr<AstNode>& root,
-                     int32 left_value,
-                     int32 right_value);
 
 }   /* namespace nuocc */

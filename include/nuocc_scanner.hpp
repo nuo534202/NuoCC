@@ -8,6 +8,7 @@
 
 #include "nodes/nuocc_nodes.hpp"
 #include "nodes/nuocc_scanner_nodes.hpp"
+#include "utils/nuocc_types.hpp"
 
 namespace nuocc
 {
@@ -28,8 +29,8 @@ public:
     const std::vector<std::unique_ptr<Node>>& GetTokenList() const;
 
 private:
-    void StringToToken(const std::string& buf, size_t& i);
-    void SkipEmpty(const std::string& buf, size_t& i);
+    void StringToToken(const std::string& buf, idx_t& i);
+    void SkipEmpty(const std::string& buf, idx_t& i);
 
     bool IsNewToken(const std::string& token, char ch);
     void BeginToken(std::string& token, char ch);

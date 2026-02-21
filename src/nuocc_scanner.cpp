@@ -21,7 +21,7 @@ void Scanner::Scan(const std::string& file)
 
     while (ifs >> buf)
     {
-        size_t i = 0;
+        idx_t i = 0;
         StringToToken(buf, i);
     }
 
@@ -34,7 +34,7 @@ const std::vector<std::unique_ptr<Node>>& Scanner::GetTokenList() const
     return token_list_;
 }
 
-void Scanner::StringToToken(const std::string& buf, size_t& i)
+void Scanner::StringToToken(const std::string& buf, idx_t& i)
 {
     SkipEmpty(buf, i);
 
@@ -63,7 +63,7 @@ void Scanner::StringToToken(const std::string& buf, size_t& i)
     CommitToken(token);
 }
 
-void Scanner::SkipEmpty(const std::string& buf, size_t& i)
+void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
 {
     size_t size = buf.size();
 
@@ -175,7 +175,7 @@ bool Scanner::IsIntLit(const std::string& token)
 
 bool Scanner::IsVariable(const std::string& token)
 {
-    for (size_t i = 0; i < token.size(); i++)
+    for (idx_t i = 0; i < token.size(); i++)
     {
         if (i == 0 && isdigit(token[i]))
             return false;

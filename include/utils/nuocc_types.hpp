@@ -14,4 +14,8 @@ using uint16 = uint16_t;
 using uint32 = uint32_t;
 using uint64 = uint64_t;
 
+using idx_t = size_t;
+/* register index */
+using reg_idx = size_t;
+
 }   /* namespace nuocc */
