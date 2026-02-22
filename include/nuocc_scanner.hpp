@@ -16,9 +16,9 @@ namespace nuocc
 class Scanner
 {
 private:
-    static const std::unordered_map<std::string, NodeTag> key_words;
-    static const std::unordered_map<char, NodeTag> single_op;
-    static const std::unordered_set<char> alphabet;
+    static const std::unordered_map<std::string, NodeTag> kKeyWords;
+    static const std::unordered_map<char, NodeTag> kSingleOp;
+    static const std::unordered_set<char> kAlphabet;
 
 public:
     Scanner() = default;

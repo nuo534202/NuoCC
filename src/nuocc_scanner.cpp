@@ -44,7 +44,7 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
     for (; i < size; i++)
     {
         /* character is not in the alphabet */
-        if (alphabet.find(buf[i]) == alphabet.end())
+        if (kAlphabet.find(buf[i]) == kAlphabet.end())
         {
             std::cerr << "Error: unrecognized character!" << buf[i] << std::endl;
             return;
@@ -84,9 +84,9 @@ void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
 
 bool Scanner::IsNewToken(const std::string& token, char ch)
 {
-    return single_op.find(ch) != single_op.end() ||
+    return kSingleOp.find(ch) != kSingleOp.end() ||
         (token.size() == 1 &&
-         single_op.find(token.front()) != single_op.end());
+         kSingleOp.find(token.front()) != kSingleOp.end());
 }
 
 void Scanner::BeginToken(std::string& token, char ch)
@@ -110,7 +110,7 @@ void Scanner::CommitToken(const std::string& token)
     switch (nodetag)
     {
         case T_KeyWord:
-            token_node = std::make_unique<KeyWord>(key_words.at(token));
+            token_node = std::make_unique<KeyWord>(kKeyWords.at(token));
             break;
 
         case T_IntLit:
@@ -147,10 +147,10 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
     if (token.size() == 1 && token.front() == ';')
         return T_Semicolon;
 
-    if (token.size() == 1 && single_op.find(token.front()) != single_op.end())
-        return single_op.at(token.front());
+    if (token.size() == 1 && kSingleOp.find(token.front()) != kSingleOp.end())
+        return kSingleOp.at(token.front());
 
-    if (key_words.find(token) != key_words.end())
+    if (kKeyWords.find(token) != kKeyWords.end())
         return T_KeyWord;
 
     if (IsIntLit(token))
@@ -187,16 +187,16 @@ bool Scanner::IsVariable(const std::string& token)
     return true;
 }
 
-const std::unordered_map<std::string, NodeTag> Scanner::key_words = {
+const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"int", T_Int}
 };
 
-const std::unordered_map<char, NodeTag> Scanner::single_op = {
+const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'+', T_Plus}, {'-', T_Minus}, {'*', T_Star}, {'/', T_Slash},
     {'=', T_Assign}, {';', T_Semicolon}
 };
 
-const std::unordered_set<char> Scanner::alphabet = {
+const std::unordered_set<char> Scanner::kAlphabet = {
     '+', '-', '*', '/', '=', ';', '_', '.',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
