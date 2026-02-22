@@ -132,7 +132,7 @@ void Scanner::CommitToken(const std::string& token)
 
         case T_UnknownToken:
             std::cerr << "lexical error: unknown token!" << std::endl;
-            exit(1);
+            std::exit(1);
         default:
             token_node = std::make_unique<Node>(T_UnknownToken);
             break;

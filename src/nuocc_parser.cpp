@@ -1,5 +1,7 @@
 #include "nuocc_parser.hpp"
 
+#include <stdlib.h>
+
 #include <iostream>
 
 #include "nodes/nuocc_scanner_nodes.hpp"
@@ -56,7 +58,7 @@ Parser::ParsePrimary(const std::unique_ptr<Node>& token)
             return MakeAstLeaf(token);
         default:
             std::cerr << "syntax error!" << std::endl;
-            exit(1);
+            std::exit(1);
     }
 
     return nullptr;
@@ -112,7 +114,7 @@ uint8 Parser::GetOpPrecedence(NodeTag tag)
     if (kOpPrecedence.find(tag) == kOpPrecedence.end())
     {
         std::cerr << "syntax error: operator not found!" << std::endl;
-        exit(1);
+        std::exit(1);
     }
 
     return kOpPrecedence.at(tag);

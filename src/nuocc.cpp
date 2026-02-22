@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include "nuocc_asm_codegen.hpp"
 #include "nuocc_parser.hpp"
 #include "nuocc_scanner.hpp"
 #include "utils/nuocc_print.hpp"
@@ -22,7 +23,9 @@ int main(int argc, const char **argv)
     nuocc::Parser parser;
     parser.Parse(scanner.GetTokenList());
 
-    std::cout << InterpretAstTree(parser.GetAstRoot()) << std::endl;
+    std::string output_file("asm_out.txt");
+    nuocc::AsmCodegen asm_codegen(output_file);
+    asm_codegen.GenerateAsmCode(parser.GetAstRoot());
 
     return 0;
 }
