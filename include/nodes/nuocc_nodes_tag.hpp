@@ -24,6 +24,7 @@ typedef enum NodeTag
 
     T_KeyWord,
     T_Int,
+    T_Print,
 
     T_Variable,
 

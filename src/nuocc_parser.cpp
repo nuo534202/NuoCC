@@ -11,13 +11,58 @@ namespace nuocc
 
 void Parser::Parse(const std::vector<std::unique_ptr<Node>>& token_list)
 {
-    idx_t i = 0;
-    ast_root_ = BinaryExpression(token_list, i, 0);
+    std::string output_file("asm_out.txt");
+    nuocc::AsmCodegen asm_codegen(output_file);
+
+    asm_codegen.Preamble();
+
+    Statement(asm_codegen, token_list);
+
+    asm_codegen.Postamble();
 }
 
-const std::unique_ptr<AstNode>& Parser::GetAstRoot()
+void Parser::Statement(
+    AsmCodegen& asm_codegen,
+    const std::vector<std::unique_ptr<Node>>& token_list)
 {
-    return ast_root_;
+    std::unique_ptr<AstNode> root;
+    idx_t i = 0;
+
+    while (true)
+    {
+        if (token_list[i]->GetNodeTag() != T_KeyWord)
+        {
+            std::cerr << "syntax error: expected key word print!" << std::endl;
+            exit(1);
+        }
+        else
+        {
+            const KeyWord *key_word =
+                static_cast<const KeyWord *>(token_list[i].get());
+            if (key_word->GetWord() != T_Print)
+            {
+                std::cerr << "syntax error: expected key word print!" << std::endl;
+                exit(1);
+            }
+        }
+
+        i++;
+
+        root = BinaryExpression(token_list, i, 0);
+
+        if (token_list[i]->GetNodeTag() != T_Semicolon)
+        {
+            std::cerr << "syntax error: expected ;" << std::endl;
+            exit(1);
+        }
+
+        i++;
+
+        asm_codegen.GenPrint(root);
+
+        if (token_list[i]->GetNodeTag() == T_EOF)
+            break;
+    }
 }
 
 std::unique_ptr<AstNode> Parser::BinaryExpression(
@@ -27,11 +72,11 @@ std::unique_ptr<AstNode> Parser::BinaryExpression(
 {
     std::unique_ptr<AstNode> left = ParsePrimary(token_list[i++]);
     
-    if (token_list[i]->GetNodeTag() == T_EOF)
+    NodeTag tag = token_list[i]->GetNodeTag();
+    if (tag == T_Semicolon)
         return left;
     
     std::unique_ptr<AstNode> right = nullptr;
-    NodeTag tag = token_list[i]->GetNodeTag();
     idx_t root_index;
 
     while (GetOpPrecedence(tag) > ptp)
@@ -42,7 +87,7 @@ std::unique_ptr<AstNode> Parser::BinaryExpression(
         left = MakeAstNode(left, right, token_list[root_index]);
 
         tag = token_list[i]->GetNodeTag();
-        if (tag == T_EOF)
+        if (tag == T_Semicolon)
             break;
     }
 

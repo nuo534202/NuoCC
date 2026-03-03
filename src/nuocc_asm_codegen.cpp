@@ -28,12 +28,10 @@ AsmCodegen::~AsmCodegen()
     ofs_.close();
 }
 
-void AsmCodegen::GenerateAsmCode(const std::unique_ptr<AstNode>& root)
+void AsmCodegen::GenPrint(const std::unique_ptr<AstNode>& root)
 {
-    Preamble();
-    reg_idx reg = GenAst(root);
+    reg_idx reg = GenAstValue(root);
     PrintInt(reg);
-    Postamble();
 }
 
 void AsmCodegen::Preamble()
@@ -164,14 +162,14 @@ void AsmCodegen::PrintInt(reg_idx reg)
     FreeRegister(reg);
 }
 
-reg_idx AsmCodegen::GenAst(const std::unique_ptr<AstNode>& root)
+reg_idx AsmCodegen::GenAstValue(const std::unique_ptr<AstNode>& root)
 {
     reg_idx left_reg = kRegSize, right_reg = kRegSize;
 
     if (root->GetLeft())
-        left_reg = GenAst(root->GetLeft());
+        left_reg = GenAstValue(root->GetLeft());
     if (root->GetRight())
-        right_reg = GenAst(root->GetRight());
+        right_reg = GenAstValue(root->GetRight());
 
     switch (root->GetAstNodeTag())
     {

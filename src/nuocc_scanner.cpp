@@ -84,9 +84,13 @@ void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
 
 bool Scanner::IsNewToken(const std::string& token, char ch)
 {
-    return kSingleOp.find(ch) != kSingleOp.end() ||
+    /* ch is a single op, or token is a single op*/
+    if (kSingleOp.find(ch) != kSingleOp.end() ||
         (token.size() == 1 &&
-         kSingleOp.find(token.front()) != kSingleOp.end());
+         kSingleOp.find(token.front()) != kSingleOp.end()))
+        return true;
+    
+    return false;
 }
 
 void Scanner::BeginToken(std::string& token, char ch)
@@ -188,7 +192,7 @@ bool Scanner::IsVariable(const std::string& token)
 }
 
 const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
-    {"int", T_Int}
+    {"int", T_Int}, {"print", T_Print}
 };
 
 const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {

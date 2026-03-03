@@ -8,6 +8,7 @@
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "nodes/nuocc_nodes.hpp"
 #include "utils/nuocc_types.hpp"
+#include "nuocc_asm_codegen.hpp"
 
 namespace nuocc
 {
@@ -20,9 +21,11 @@ private:
 
 public:
     void Parse(const std::vector<std::unique_ptr<Node>>& token_list);
-    const std::unique_ptr<AstNode>& GetAstRoot();
 
 private:
+    void Statement(
+        AsmCodegen& asm_codegen,
+        const std::vector<std::unique_ptr<Node>>& token_list);
     std::unique_ptr<AstNode> BinaryExpression(
         const std::vector<std::unique_ptr<Node>>& token_list,
         idx_t& i,
@@ -38,9 +41,6 @@ private:
                                           const std::unique_ptr<Node>& node);
 
     uint8 GetOpPrecedence(NodeTag tag);
-
-private:
-    std::unique_ptr<AstNode> ast_root_;
 };
 
 }   /* namespace nuocc */
