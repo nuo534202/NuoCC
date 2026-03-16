@@ -26,7 +26,7 @@ typedef enum NodeTag
     T_Int,
     T_Print,
 
-    T_Variable,
+    T_Identifier,
 
     T_Semicolon,
     T_EOF,
@@ -38,7 +38,8 @@ typedef enum AstNodeTag
 {
     A_AstNode = 0,
     A_AstOperator = 1,
-    A_AstIntLit
+    A_AstIntLit,
+    A_AstIdentifier
 } AstNodeTag;
 
 }   /* namespace nuocc */

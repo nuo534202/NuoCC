@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#include <memory>
+#include <string>
+
 namespace nuocc
 {
 
@@ -17,5 +20,10 @@ using uint64 = uint64_t;
 using idx_t = size_t;
 /* register index */
 using reg_idx = size_t;
+
+using Symbol = std::string;
+
+using NodePtr = std::unique_ptr<class Node>;
+using AstNodePtr = std::unique_ptr<class AstNode>;
 
 }   /* namespace nuocc */

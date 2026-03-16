@@ -12,26 +12,23 @@ class AstNode
 {
 protected:
     AstNode() = default;
-    AstNode(std::unique_ptr<AstNode>& left,
-            std::unique_ptr<AstNode>& right);
-    AstNode(std::unique_ptr<AstNode>& left,
-            std::unique_ptr<AstNode>& right,
-            AstNodeTag node_type);
+    AstNode(AstNodePtr& left, AstNodePtr& right);
+    AstNode(AstNodePtr& left, AstNodePtr& right, AstNodeTag node_type);
     AstNode(AstNodeTag node_type);
 
 public:
     virtual ~AstNode() = default;
 
 public:
-    void SetLeft(std::unique_ptr<AstNode>& left);
-    void SetRight(std::unique_ptr<AstNode>& right);
-    const std::unique_ptr<AstNode>& GetLeft() const;
-    const std::unique_ptr<AstNode>& GetRight() const;
+    void SetLeft(AstNodePtr& left);
+    void SetRight(AstNodePtr& right);
+    const AstNodePtr& GetLeft() const;
+    const AstNodePtr& GetRight() const;
     AstNodeTag GetAstNodeTag() const;
 
 private:
-    std::unique_ptr<AstNode> left_;
-    std::unique_ptr<AstNode> right_;
+    AstNodePtr left_;
+    AstNodePtr right_;
     AstNodeTag node_type_;
 };
 
@@ -40,9 +37,7 @@ class AstOperator : public AstNode
 public:
     AstOperator();
     AstOperator(NodeTag op_type);
-    AstOperator(std::unique_ptr<AstNode>& left,
-                std::unique_ptr<AstNode>& right,
-                NodeTag op_type);
+    AstOperator(AstNodePtr& left, AstNodePtr& right, NodeTag op_type);
     ~AstOperator() = default;
 
 public:
@@ -57,9 +52,7 @@ class AstIntLit : public AstNode
 public:
     AstIntLit();
     AstIntLit(int32 value);
-    AstIntLit(std::unique_ptr<AstNode>& left,
-              std::unique_ptr<AstNode>& right,
-              int32 value);
+    AstIntLit(AstNodePtr& left, AstNodePtr& right, int32 value);
     ~AstIntLit() = default;
 
 public:
@@ -68,6 +61,27 @@ public:
 
 private:
     int32 value_;
+};
+
+class AstIdentifier : public AstNode
+{
+public:
+    AstIdentifier(AstNodePtr& left,
+                  AstNodePtr& right,
+                  const Symbol& symbol,
+                  idx_t ident_idx,
+                  bool is_lv_ident);
+    ~AstIdentifier() = default;
+
+public:
+    idx_t GetIdentIdx() const;
+    const Symbol& GetSymbol() const;
+    bool GetLvIdent() const;
+
+private:
+    Symbol symbol_;
+    idx_t ident_idx_;
+    bool is_lv_ident_;
 };
 
 }   /* namespace nuocc */

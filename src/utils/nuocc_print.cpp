@@ -15,7 +15,7 @@ namespace nuocc
 
 void PrintTokenList(const nuocc::Scanner& scanner)
 {
-    const std::vector<std::unique_ptr<Node>>& token_list
+    const std::vector<NodePtr>& token_list
         = scanner.GetTokenList();
 
     for (auto& token : token_list)
@@ -32,10 +32,10 @@ void PrintTokenList(const nuocc::Scanner& scanner)
             auto key_word = static_cast<KeyWord*>(token.get());
             std::cout << " " << NodeTagToString(key_word->GetWord());
         }
-        else if (token->GetNodeTag() == T_Variable)
+        else if (token->GetNodeTag() == T_Identifier)
         {
-            auto variable = static_cast<Variable*>(token.get());
-            std::cout << " " << variable->GetName();
+            auto identifier = static_cast<Identifier*>(token.get());
+            std::cout << " " << identifier->GetName();
         }
 
         std::cout << std::endl;
@@ -78,8 +78,8 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Print:
             out = "print";
             break;
-        case T_Variable:
-            out = "Variable";
+        case T_Identifier:
+            out = "Identifier";
             break;
         case T_Semicolon:
             out = ";";

@@ -28,10 +28,25 @@ AsmCodegen::~AsmCodegen()
     ofs_.close();
 }
 
-void AsmCodegen::GenPrint(const std::unique_ptr<AstNode>& root)
+void AsmCodegen::GenPrint(const AstNodePtr& root)
 {
     reg_idx reg = GenAstValue(root);
     PrintInt(reg);
+}
+
+void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
+{
+    ofs_ << "\t.comm\t" << symbol << " 8:8" << std::endl;
+}
+
+reg_idx AsmCodegen::LoadGlobSymbol(const Symbol& symbol)
+{
+    reg_idx idx = AllocRegister();
+
+    ofs_ << "\tmov\t" << reg_list_[idx] << ", ";
+    ofs_ << "[" << symbol << "]" << std::endl;
+
+    return idx;
 }
 
 void AsmCodegen::Preamble()
@@ -162,7 +177,7 @@ void AsmCodegen::PrintInt(reg_idx reg)
     FreeRegister(reg);
 }
 
-reg_idx AsmCodegen::GenAstValue(const std::unique_ptr<AstNode>& root)
+reg_idx AsmCodegen::GenAstValue(const AstNodePtr& root)
 {
     reg_idx left_reg = kRegSize, right_reg = kRegSize;
 
@@ -181,6 +196,15 @@ reg_idx AsmCodegen::GenAstValue(const std::unique_ptr<AstNode>& root)
         }
         case A_AstOperator:
             return GenAstOp(root, left_reg, right_reg);
+        case A_AstIdentifier:
+        {
+            const AstIdentifier *ident =
+                static_cast<const AstIdentifier *>(root.get());
+            if (ident->GetLvIdent())
+                return StoreGlobSymbol(ident->GetSymbol(), ident->GetIdentIdx());
+            else
+                return LoadGlobSymbol(ident->GetSymbol());
+        }
         default:
             break;
     }
@@ -189,7 +213,7 @@ reg_idx AsmCodegen::GenAstValue(const std::unique_ptr<AstNode>& root)
     std::exit(1);
 }
 
-reg_idx AsmCodegen::GenAstOp(const std::unique_ptr<AstNode>& root,
+reg_idx AsmCodegen::GenAstOp(const AstNodePtr& root,
                              reg_idx left_reg,
                              reg_idx right_reg)
 {
@@ -206,12 +230,20 @@ reg_idx AsmCodegen::GenAstOp(const std::unique_ptr<AstNode>& root,
             return Mul(left_reg, right_reg);
         case T_Slash:
             return Div(left_reg, right_reg);
+        case T_Assign:
+            return right_reg;
         default:
             break;
     }
 
     std::cerr << "Unknown Operator Type " << root_op->GetOpType() << "!" << std::endl;
     std::exit(1);
+}
+
+reg_idx AsmCodegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
+{
+    ofs_ << "\tmove\t[" << symbol << "], " << reg_list_[reg] << std::endl;
+    return reg;
 }
 
 }   /* namespace nuocc */

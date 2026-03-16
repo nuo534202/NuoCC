@@ -3,6 +3,7 @@
 #include <string>
 
 #include "nodes/nuocc_nodes.hpp"
+#include "utils/nuocc_types.hpp"
 
 namespace nuocc
 {
@@ -52,28 +53,28 @@ private:
     NodeTag word_;
 };
 
-class Variable : public Node
+class Identifier : public Node
 {
 public:
-    Variable() : Node(T_Variable) {}
-    Variable(const std::string& name) :
-        Node(T_Variable),
+    Identifier() : Node(T_Identifier) {}
+    Identifier(const std::string& name) :
+        Node(T_Identifier),
         name_(name) {}
     
-    Variable(const Variable& variable) :
+    Identifier(const Identifier& variable) :
         Node(variable),
         name_(variable.name_) {}
     
-    ~Variable() = default;
+    ~Identifier() = default;
 
 public:
-    const std::string& GetName() const
+    const Symbol& GetName() const
     {
         return name_;
     }
 
 private:
-    std::string name_;
+    Symbol name_;
 };
 
 }   /* namespace nuocc */

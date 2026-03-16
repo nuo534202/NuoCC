@@ -1,5 +1,5 @@
 # Supported Features
 
-1. Int variable Declaration and Assignment. (Only Scanner support)
+1. Int variable Declaration and Assignment.
 2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division.
 3. Simple `print` statement.

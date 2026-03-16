@@ -26,7 +26,7 @@ public:
 
 public:
     void Scan(const std::string& file);
-    const std::vector<std::unique_ptr<Node>>& GetTokenList() const;
+    const std::vector<NodePtr>& GetTokenList() const;
 
 private:
     void StringToToken(const std::string& buf, idx_t& i);
@@ -39,10 +39,10 @@ private:
 
     NodeTag GetTokenNodeTag(const std::string& token);
     bool IsIntLit(const std::string& token);
-    bool IsVariable(const std::string& token);
+    bool IsIdent(const std::string& token);
 
 private:
-    std::vector<std::unique_ptr<Node>> token_list_;
+    std::vector<NodePtr> token_list_;
 };
 
 }   /* namespace nuocc */

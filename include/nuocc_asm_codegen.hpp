@@ -20,13 +20,19 @@ public:
 
 public:
     void Preamble();
-    void GenPrint(const std::unique_ptr<AstNode>& root);
     void Postamble();
 
-private:
+    void GenPrint(const AstNodePtr& root);
+    reg_idx GenAstValue(const AstNodePtr& root);
 
-    reg_idx AllocRegister();
+    void GenGlobSymbol(const Symbol& symbol);
+    reg_idx LoadGlobSymbol(const Symbol& symbol);
+    reg_idx StoreGlobSymbol(const Symbol& symbol, reg_idx reg);
+
     void FreeRegister(reg_idx reg);
+
+private:
+    reg_idx AllocRegister();
     void FreeAllRegister();
 
     reg_idx Load(int32 value);
@@ -36,8 +42,7 @@ private:
     reg_idx Div(reg_idx reg1, reg_idx reg2);
     void PrintInt(reg_idx reg);
 
-    reg_idx GenAstValue(const std::unique_ptr<AstNode>& root);
-    reg_idx GenAstOp(const std::unique_ptr<AstNode>& root,
+    reg_idx GenAstOp(const AstNodePtr& root,
                      reg_idx left_reg,
                      reg_idx right_reg);
 

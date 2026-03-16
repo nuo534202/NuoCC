@@ -29,7 +29,7 @@ void Scanner::Scan(const std::string& file)
     ifs.close();
 }
 
-const std::vector<std::unique_ptr<Node>>& Scanner::GetTokenList() const
+const std::vector<NodePtr>& Scanner::GetTokenList() const
 {
     return token_list_;
 }
@@ -109,7 +109,7 @@ void Scanner::CommitToken(const std::string& token)
         return;
 
     NodeTag nodetag = GetTokenNodeTag(token);
-    std::unique_ptr<Node> token_node;
+    NodePtr token_node;
 
     switch (nodetag)
     {
@@ -121,8 +121,8 @@ void Scanner::CommitToken(const std::string& token)
             token_node = std::make_unique<Literal<int, T_IntLit>>(std::stoi(token));
             break;
 
-        case T_Variable:
-            token_node = std::make_unique<Variable>(token);
+        case T_Identifier:
+            token_node = std::make_unique<Identifier>(token);
             break;
 
         case T_Plus:
@@ -160,8 +160,8 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
     if (IsIntLit(token))
         return T_IntLit;
 
-    if (IsVariable(token))
-        return T_Variable;
+    if (IsIdent(token))
+        return T_Identifier;
     
     return T_UnknownToken;
 }
@@ -177,7 +177,7 @@ bool Scanner::IsIntLit(const std::string& token)
     return true;
 }
 
-bool Scanner::IsVariable(const std::string& token)
+bool Scanner::IsIdent(const std::string& token)
 {
     for (idx_t i = 0; i < token.size(); i++)
     {
