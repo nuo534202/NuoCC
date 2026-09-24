@@ -89,7 +89,8 @@ AstIdentifier::AstIdentifier(AstNodePtr& left,
     bool is_lv_ident)
     : AstNode(left, right, A_AstIdentifier),
       symbol_(symbol),
-      ident_idx_(ident_idx) {}
+      ident_idx_(ident_idx),
+      is_lv_ident_(is_lv_ident) {}
 
 idx_t AstIdentifier::GetIdentIdx() const
 {

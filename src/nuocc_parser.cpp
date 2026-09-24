@@ -28,24 +28,27 @@ void Parser::Statements(AsmCodegen& asm_codegen,
 
     while (i < token_list.size())
     {
-        NodeTag node_tag = token_list[i]->GetNodeTag();
         switch(token_list[i]->GetNodeTag())
         {
             case T_KeyWord:
             {
                 const KeyWord *key_word =
                     static_cast<const KeyWord *>(token_list[i].get());
-                NodeTag kw_node_tag = key_word->GetWord();
-                if (kw_node_tag == T_Print)
+
+                switch (key_word->GetWord())
                 {
-                    PrintStatement(asm_codegen, token_list, i);
-                    break;
+                    case T_Print:
+                        PrintStatement(asm_codegen, token_list, i);
+                        break;
+                    case T_Int:
+                        DeclareStatement(asm_codegen, token_list, i);
+                        break;
+                    default:
+                        std::cerr << "syntax error: unknown keyword ";
+                        std::cerr << key_word->GetWord() << "!" << std::endl;
+                        exit(1);
                 }
-                else if (kw_node_tag == T_Int)
-                {
-                    DeclareStatement(asm_codegen, token_list, i);
-                    break;
-                }
+                break;
             }
             case T_Identifier:
                 AssignStatement(asm_codegen, token_list, i);
@@ -54,7 +57,7 @@ void Parser::Statements(AsmCodegen& asm_codegen,
                 return;
             default:
                 std::cerr << "syntax error: incorrect token ";
-                std::cerr << node_tag << "!" << std::endl;
+                std::cerr << token_list[i]->GetNodeTag() << "!" << std::endl;
                 exit(1);
         }
     }
@@ -72,7 +75,7 @@ void Parser::PrintStatement(AsmCodegen& asm_codegen,
 
     if (token_list[i]->GetNodeTag() != T_Semicolon)
     {
-        std::cerr << "syntax error: expected ;" << std::endl;
+        std::cerr << "syntax error: expect ;!" << std::endl;
         exit(1);
     }
 
@@ -106,7 +109,7 @@ void Parser::DeclareStatement(AsmCodegen& asm_codegen,
 
     if (token_list[i]->GetNodeTag() != T_Semicolon)
     {
-        std::cerr << "syntax error: expect an identifier!" << std::endl;
+        std::cerr << "syntax error: expect ;!" << std::endl;
         exit(1);
     }
 
@@ -117,23 +120,23 @@ void Parser::AssignStatement(AsmCodegen& asm_codegen,
     const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    Identifier *ident =
-        static_cast<Identifier *>(token_list[i].get());
+    const Identifier *ident =
+        static_cast<const Identifier *>(token_list[i].get());
     Symbol symbol_name = ident->GetName();
     idx_t sym_idx = symbol_table_.FindSymbol(symbol_name);
 
     if (!sym_idx)
     {
-        std::cerr << "syntax error: identifier " << symbol_name;
-        std::cerr << " not found!" << std::endl;
+        std::cerr << "syntax error: undeclared variable " << symbol_name;
+        std::cerr << "!" << std::endl;
         exit(1);
     }
 
+    /* The identifier names the target of the assignment, it is an lvalue. */
     AstNodePtr right = MakeAstIdentLeaf(token_list[i], sym_idx, true);
 
-    i++;
+    idx_t assign_idx = ++i;
 
-    idx_t assign_idx = i;
     if (token_list[i]->GetNodeTag() != T_Assign)
     {
         std::cerr << "syntax error: expect =!" << std::endl;
@@ -145,8 +148,14 @@ void Parser::AssignStatement(AsmCodegen& asm_codegen,
     AstNodePtr left = BinaryExpression(token_list, i, 0);
     AstNodePtr root = MakeAstNode(left, right, token_list[assign_idx]);
 
-    reg_idx idx = asm_codegen.GenAstValue(root);
-    asm_codegen.FreeRegister(idx);
+    reg_idx reg = asm_codegen.GenAstValue(root);
+    asm_codegen.FreeRegister(reg);
+
+    if (token_list[i]->GetNodeTag() != T_Semicolon)
+    {
+        std::cerr << "syntax error: expect ;!" << std::endl;
+        exit(1);
+    }
 
     i++;
 }
@@ -157,24 +166,20 @@ AstNodePtr Parser::BinaryExpression(
     uint8 ptp) /* previous token precedence */
 {
     AstNodePtr left = ParsePrimary(token_list[i++]);
-    
-    NodeTag tag = token_list[i]->GetNodeTag();
-    if (tag == T_Semicolon)
-        return left;
-    
-    AstNodePtr right = nullptr;
-    idx_t root_index;
 
-    while (GetOpPrecedence(tag) > ptp)
+    /*
+     * Only a binary operator has a non-zero precedence, so the loop
+     * stops as soon as a semicolon, an EOF or any other token shows up.
+     */
+    while (GetOpPrecedence(token_list[i]->GetNodeTag()) > ptp)
     {
-        root_index = i;
+        idx_t op_idx = i;
+        uint8 op_prec = GetOpPrecedence(token_list[op_idx]->GetNodeTag());
 
-        right = BinaryExpression(token_list, ++i, GetOpPrecedence(tag));
-        left = MakeAstNode(left, right, token_list[root_index]);
+        i++;
 
-        tag = token_list[i]->GetNodeTag();
-        if (tag == T_Semicolon)
-            break;
+        AstNodePtr right = BinaryExpression(token_list, i, op_prec);
+        left = MakeAstNode(left, right, token_list[op_idx]);
     }
 
     return left;
@@ -192,6 +197,14 @@ Parser::ParsePrimary(const NodePtr& token)
             const Identifier *ident =
                 static_cast<const Identifier *>(token.get());
             idx_t sym_idx = symbol_table_.FindSymbol(ident->GetName());
+
+            if (!sym_idx)
+            {
+                std::cerr << "syntax error: undeclared variable ";
+                std::cerr << ident->GetName() << "!" << std::endl;
+                std::exit(1);
+            }
+
             return MakeAstIdentLeaf(token, sym_idx, false);
         }
         default:
@@ -279,18 +292,16 @@ AstNodePtr Parser::MakeAstIdentUnary(AstNodePtr& left,
 
 uint8 Parser::GetOpPrecedence(NodeTag tag)
 {
-    if (kOpPrecedence.find(tag) == kOpPrecedence.end())
-    {
-        std::cerr << "syntax error: operator not found!" << std::endl;
-        std::exit(1);
-    }
+    auto it = kOpPrecedence.find(tag);
 
-    return kOpPrecedence.at(tag);
+    /* Anything which is not a binary operator has zero precedence. */
+    if (it == kOpPrecedence.end())
+        return 0;
+
+    return it->second;
 }
 
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
-    {T_IntLit, 1}, {T_EOF, 1},
-
     {T_Plus, 2}, {T_Minus, 2},
 
     {T_Star, 3}, {T_Slash, 3}

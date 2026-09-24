@@ -36,17 +36,25 @@ void AsmCodegen::GenPrint(const AstNodePtr& root)
 
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
-    ofs_ << "\t.comm\t" << symbol << " 8:8" << std::endl;
+    ofs_ << "\t.comm\t" << symbol << ",8,8" << std::endl;
 }
 
 reg_idx AsmCodegen::LoadGlobSymbol(const Symbol& symbol)
 {
     reg_idx idx = AllocRegister();
 
-    ofs_ << "\tmov\t" << reg_list_[idx] << ", ";
-    ofs_ << "[" << symbol << "]" << std::endl;
+    ofs_ << "\tmovq\t" << symbol << "(%rip), ";
+    ofs_ << reg_list_[idx] << std::endl;
 
     return idx;
+}
+
+reg_idx AsmCodegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
+{
+    ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
+    ofs_ << symbol << "(%rip)" << std::endl;
+
+    return reg;
 }
 
 void AsmCodegen::Preamble()
@@ -179,13 +187,6 @@ void AsmCodegen::PrintInt(reg_idx reg)
 
 reg_idx AsmCodegen::GenAstValue(const AstNodePtr& root)
 {
-    reg_idx left_reg = kRegSize, right_reg = kRegSize;
-
-    if (root->GetLeft())
-        left_reg = GenAstValue(root->GetLeft());
-    if (root->GetRight())
-        right_reg = GenAstValue(root->GetRight());
-
     switch (root->GetAstNodeTag())
     {
         case A_AstIntLit:
@@ -194,16 +195,21 @@ reg_idx AsmCodegen::GenAstValue(const AstNodePtr& root)
                 static_cast<const AstIntLit*>(root.get());
             return Load(int_lit->GetValue());
         }
-        case A_AstOperator:
-            return GenAstOp(root, left_reg, right_reg);
         case A_AstIdentifier:
+            return GenAstIdent(root);
+        case A_AstOperator:
         {
-            const AstIdentifier *ident =
-                static_cast<const AstIdentifier *>(root.get());
-            if (ident->GetLvIdent())
-                return StoreGlobSymbol(ident->GetSymbol(), ident->GetIdentIdx());
-            else
-                return LoadGlobSymbol(ident->GetSymbol());
+            const AstOperator *ast_op =
+                static_cast<const AstOperator*>(root.get());
+
+            /* Assignment stores a value into the identifier on its right. */
+            if (ast_op->GetOpType() == T_Assign)
+                return GenAstAssign(root);
+
+            reg_idx left_reg = GenAstValue(root->GetLeft());
+            reg_idx right_reg = GenAstValue(root->GetRight());
+
+            return GenAstOp(ast_op->GetOpType(), left_reg, right_reg);
         }
         default:
             break;
@@ -213,14 +219,53 @@ reg_idx AsmCodegen::GenAstValue(const AstNodePtr& root)
     std::exit(1);
 }
 
-reg_idx AsmCodegen::GenAstOp(const AstNodePtr& root,
+reg_idx AsmCodegen::GenAstIdent(const AstNodePtr& root)
+{
+    const AstIdentifier *ident =
+        static_cast<const AstIdentifier*>(root.get());
+
+    /* An lvalue identifier only names a storage location, it holds no value. */
+    if (ident->GetLvIdent())
+    {
+        std::cerr << "Error: lvalue identifier " << ident->GetSymbol();
+        std::cerr << " is used as a value!" << std::endl;
+        std::exit(1);
+    }
+
+    return LoadGlobSymbol(ident->GetSymbol());
+}
+
+reg_idx AsmCodegen::GenAstAssign(const AstNodePtr& root)
+{
+    const AstNodePtr& target = root->GetRight();
+
+    if (!target || target->GetAstNodeTag() != A_AstIdentifier)
+    {
+        std::cerr << "Error: assignment target is not an identifier!" << std::endl;
+        std::exit(1);
+    }
+
+    const AstIdentifier *ident =
+        static_cast<const AstIdentifier*>(target.get());
+
+    if (!ident->GetLvIdent())
+    {
+        std::cerr << "Error: assignment target " << ident->GetSymbol();
+        std::cerr << " is not an lvalue!" << std::endl;
+        std::exit(1);
+    }
+
+    /* The left child is evaluated first to obtain the value to store. */
+    reg_idx value_reg = GenAstValue(root->GetLeft());
+
+    return StoreGlobSymbol(ident->GetSymbol(), value_reg);
+}
+
+reg_idx AsmCodegen::GenAstOp(NodeTag op_type,
                              reg_idx left_reg,
                              reg_idx right_reg)
 {
-    const AstOperator *root_op =
-        static_cast<const AstOperator*>(root.get());
-    
-    switch (root_op->GetOpType())
+    switch (op_type)
     {
         case T_Plus:
             return Add(left_reg, right_reg);
@@ -230,20 +275,12 @@ reg_idx AsmCodegen::GenAstOp(const AstNodePtr& root,
             return Mul(left_reg, right_reg);
         case T_Slash:
             return Div(left_reg, right_reg);
-        case T_Assign:
-            return right_reg;
         default:
             break;
     }
 
-    std::cerr << "Unknown Operator Type " << root_op->GetOpType() << "!" << std::endl;
+    std::cerr << "Unknown Operator Type " << op_type << "!" << std::endl;
     std::exit(1);
-}
-
-reg_idx AsmCodegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
-{
-    ofs_ << "\tmove\t[" << symbol << "], " << reg_list_[reg] << std::endl;
-    return reg;
 }
 
 }   /* namespace nuocc */

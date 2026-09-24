@@ -42,7 +42,9 @@ private:
     reg_idx Div(reg_idx reg1, reg_idx reg2);
     void PrintInt(reg_idx reg);
 
-    reg_idx GenAstOp(const AstNodePtr& root,
+    reg_idx GenAstIdent(const AstNodePtr& root);
+    reg_idx GenAstAssign(const AstNodePtr& root);
+    reg_idx GenAstOp(NodeTag op_type,
                      reg_idx left_reg,
                      reg_idx right_reg);
 

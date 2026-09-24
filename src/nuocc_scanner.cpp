@@ -1,5 +1,7 @@
 #include "nuocc_scanner.hpp"
 
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 
@@ -14,7 +16,7 @@ void Scanner::Scan(const std::string& file)
     if (!ifs.is_open())
     {
         std::cerr << "Error: Fail to open file " << file << std::endl;
-        return;
+        std::exit(1);
     }
 
     std::string buf;
@@ -46,8 +48,9 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
         /* character is not in the alphabet */
         if (kAlphabet.find(buf[i]) == kAlphabet.end())
         {
-            std::cerr << "Error: unrecognized character!" << buf[i] << std::endl;
-            return;
+            std::cerr << "Error: unrecognized character " << buf[i];
+            std::cerr << "!" << std::endl;
+            std::exit(1);
         }
 
         if (IsNewToken(token, buf[i]))
@@ -168,9 +171,12 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
 
 bool Scanner::IsIntLit(const std::string& token)
 {
+    if (token.empty())
+        return false;
+
     for (char c : token)
     {
-        if (!isdigit(c))
+        if (!isdigit(static_cast<unsigned char>(c)))
             return false;
     }
 
@@ -179,12 +185,19 @@ bool Scanner::IsIntLit(const std::string& token)
 
 bool Scanner::IsIdent(const std::string& token)
 {
-    for (idx_t i = 0; i < token.size(); i++)
+    if (token.empty())
+        return false;
+
+    if (isdigit(static_cast<unsigned char>(token.front())))
+        return false;
+
+    for (char c : token)
     {
-        if (i == 0 && isdigit(token[i]))
-            return false;
-        
-        if (token[i] != '_' && !isalpha(token[i]) && !isdigit(token[i]))
+        bool is_valid = c == '_' ||
+                        isalpha(static_cast<unsigned char>(c)) ||
+                        isdigit(static_cast<unsigned char>(c));
+
+        if (!is_valid)
             return false;
     }
 

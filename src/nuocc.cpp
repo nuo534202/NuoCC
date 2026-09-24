@@ -9,7 +9,8 @@ int main(int argc, const char **argv)
 {
     if (argc < 2)
     {
-        std::cerr << "wrong input type" << std::endl;
+        std::cerr << "usage: " << argv[0] << " <input file>" << std::endl;
+        return 1;
     }
 
     std::string file(argv[1]);
