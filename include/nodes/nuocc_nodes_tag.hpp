@@ -33,9 +33,15 @@ typedef enum NodeTag
     T_KeyWord,
     T_Int,
     T_Print,
+    T_If,
+    T_Else,
 
     T_Identifier,
 
+    T_LBrace,
+    T_RBrace,
+    T_LParen,
+    T_RParen,
     T_Semicolon,
     T_EOF,
 
@@ -47,7 +53,11 @@ typedef enum AstNodeTag
     A_AstNode = 0,
     A_AstOperator = 1,
     A_AstIntLit,
-    A_AstIdentifier
+    A_AstIdentifier,
+    A_AstPrint,
+    A_AstGlue,
+    A_AstIf,
+    A_AstDeclare
 } AstNodeTag;
 
 }   /* namespace nuocc */

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -9,7 +9,6 @@
 #include "nodes/nuocc_nodes.hpp"
 #include "utils/nuocc_symbol_table.hpp"
 #include "utils/nuocc_types.hpp"
-#include "nuocc_asm_codegen.hpp"
 
 namespace nuocc
 {
@@ -17,30 +16,36 @@ namespace nuocc
 class Parser
 {
 private:
-    /* Operator Precedence: all larger than 0 */
+    /* Operator precedence: every binary operator has a precedence above 0 */
     static const std::unordered_map<NodeTag, uint8> kOpPrecedence;
 
 public:
-    void Parse(const std::vector<NodePtr>& token_list);
+    /*
+     * Parse the whole token list and return the abstract syntax tree of
+     * the program. The program is a compound statement.
+     */
+    AstNodePtr Parse(const std::vector<NodePtr>& token_list);
 
 private:
-    void Statements(AsmCodegen& asm_codegen,
-        const std::vector<NodePtr>& token_list);
-    void PrintStatement(AsmCodegen& asm_codegen,
-        const std::vector<NodePtr>& token_list,
+    AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
-    void DeclareStatement(AsmCodegen& asm_codegen,
-        const std::vector<NodePtr>& token_list,
+    AstNodePtr Statement(const std::vector<NodePtr>& token_list,
         idx_t& i);
-    void AssignStatement(AsmCodegen& asm_codegen,
-        const std::vector<NodePtr>& token_list,
+
+    AstNodePtr PrintStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+    AstNodePtr DeclareStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+    AstNodePtr AssignStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+    AstNodePtr IfStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
 
     AstNodePtr BinaryExpression(
         const std::vector<NodePtr>& token_list,
         idx_t& i,
         uint8 ptp); /* previous token precedence */
-    
+
     AstNodePtr ParsePrimary(const NodePtr& token);
 
     /*
@@ -65,6 +70,18 @@ private:
                                  const NodePtr& node,
                                  idx_t ident_idx,
                                  bool is_lv_ident);
+
+    /*
+     * The tag a token is matched by. A keyword carries its own tag inside
+     * a T_KeyWord node, every other token is matched by its node tag.
+     */
+    static NodeTag TokenTag(const NodePtr& token);
+    static bool IsComparisonOperator(NodeTag tag);
+
+    void Match(const std::vector<NodePtr>& token_list,
+               idx_t& i,
+               NodeTag tag,
+               std::string_view name);
 
     uint8 GetOpPrecedence(NodeTag tag);
 

@@ -1,9 +1,17 @@
 #include <iostream>
 #include <string>
 
+#include "nuocc_asm_codegen.hpp"
 #include "nuocc_parser.hpp"
 #include "nuocc_scanner.hpp"
 #include "utils/nuocc_print.hpp"
+
+namespace
+{
+
+constexpr char kOutputFile[] = "asm_out.txt";
+
+}   /* namespace */
 
 int main(int argc, const char **argv)
 {
@@ -21,7 +29,10 @@ int main(int argc, const char **argv)
     nuocc::PRINTTOKENLIST(scanner);
 
     nuocc::Parser parser;
-    parser.Parse(scanner.GetTokenList());
+    nuocc::AstNodePtr program = parser.Parse(scanner.GetTokenList());
+
+    nuocc::AsmCodegen asm_codegen(kOutputFile);
+    asm_codegen.GenProgram(program);
 
     return 0;
 }

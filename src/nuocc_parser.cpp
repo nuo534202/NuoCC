@@ -5,97 +5,121 @@
 #include <iostream>
 
 #include "nodes/nuocc_scanner_nodes.hpp"
+#include "utils/nuocc_print.hpp"
 
 namespace nuocc
 {
 
-void Parser::Parse(const std::vector<NodePtr>& token_list)
-{
-    std::string output_file("asm_out.txt");
-    nuocc::AsmCodegen asm_codegen(output_file);
-
-    asm_codegen.Preamble();
-
-    Statements(asm_codegen, token_list);
-
-    asm_codegen.Postamble();
-}
-
-void Parser::Statements(AsmCodegen& asm_codegen,
-    const std::vector<NodePtr>& token_list)
+AstNodePtr Parser::Parse(const std::vector<NodePtr>& token_list)
 {
     idx_t i = 0;
+    AstNodePtr program = CompoundStatement(token_list, i);
 
-    while (i < token_list.size())
+    if (TokenTag(token_list[i]) != T_EOF)
     {
-        switch(token_list[i]->GetNodeTag())
-        {
-            case T_KeyWord:
-            {
-                const KeyWord *key_word =
-                    static_cast<const KeyWord *>(token_list[i].get());
+        std::cerr << "syntax error: unexpected token ";
+        std::cerr << NodeTagToString(TokenTag(token_list[i]));
+        std::cerr << " after the program!" << std::endl;
+        std::exit(1);
+    }
 
-                switch (key_word->GetWord())
-                {
-                    case T_Print:
-                        PrintStatement(asm_codegen, token_list, i);
-                        break;
-                    case T_Int:
-                        DeclareStatement(asm_codegen, token_list, i);
-                        break;
-                    default:
-                        std::cerr << "syntax error: unknown keyword ";
-                        std::cerr << key_word->GetWord() << "!" << std::endl;
-                        exit(1);
-                }
-                break;
-            }
-            case T_Identifier:
-                AssignStatement(asm_codegen, token_list, i);
-                break;
-            case T_EOF:
-                return;
-            default:
-                std::cerr << "syntax error: incorrect token ";
-                std::cerr << token_list[i]->GetNodeTag() << "!" << std::endl;
-                exit(1);
+    return program;
+}
+
+/*
+ * compound_statement: '{' '}'
+ *      |      '{' statement '}'
+ *      |      '{' statement statements '}'
+ *      ;
+ */
+AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_LBrace, "{");
+
+    AstNodePtr left = nullptr;
+
+    while (true)
+    {
+        if (TokenTag(token_list[i]) == T_EOF)
+        {
+            std::cerr << "syntax error: expect }!" << std::endl;
+            std::exit(1);
+        }
+
+        if (TokenTag(token_list[i]) == T_RBrace)
+            break;
+
+        AstNodePtr tree = Statement(token_list, i);
+
+        /* Glue each statement onto the statements parsed before it. */
+        if (!left)
+        {
+            left = std::move(tree);
+        }
+        else
+        {
+            AstNodePtr glued = std::make_unique<AstGlue>(left, tree);
+            left = std::move(glued);
         }
     }
+
+    i++;    /* step over the right brace */
+
+    return left;
 }
 
-void Parser::PrintStatement(AsmCodegen& asm_codegen,
-    const std::vector<NodePtr>& token_list,
-    idx_t& i)
+/*
+ * statement: print_statement
+ *      |     declaration
+ *      |     assignment_statement
+ *      |     if_statement
+ *      ;
+ */
+AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
 {
-    i++;
-
-    AstNodePtr root;
-
-    root = BinaryExpression(token_list, i, 0);
-
-    if (token_list[i]->GetNodeTag() != T_Semicolon)
+    switch (TokenTag(token_list[i]))
     {
-        std::cerr << "syntax error: expect ;!" << std::endl;
-        exit(1);
+        case T_Print:
+            return PrintStatement(token_list, i);
+        case T_Int:
+            return DeclareStatement(token_list, i);
+        case T_If:
+            return IfStatement(token_list, i);
+        case T_Identifier:
+            return AssignStatement(token_list, i);
+        default:
+            std::cerr << "syntax error: unexpected token ";
+            std::cerr << NodeTagToString(TokenTag(token_list[i])) << "!";
+            std::cerr << std::endl;
+            std::exit(1);
     }
-
-    asm_codegen.GenPrint(root);
-
-    i++;
 }
 
-void Parser::DeclareStatement(AsmCodegen& asm_codegen,
-    const std::vector<NodePtr>& token_list,
+/* print_statement: 'print' expression ';'  ; */
+AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    i++;
+    Match(token_list, i, T_Print, "print");
 
-    AstNodePtr root;
+    AstNodePtr expression = BinaryExpression(token_list, i, 0);
+    AstNodePtr root = std::make_unique<AstPrint>(expression);
 
-    if (token_list[i]->GetNodeTag() != T_Identifier)
+    Match(token_list, i, T_Semicolon, ";");
+
+    return root;
+}
+
+/* declaration: 'int' identifier ';'  ; */
+AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Int, "int");
+
+    if (TokenTag(token_list[i]) != T_Identifier)
     {
         std::cerr << "syntax error: expect an identifier!" << std::endl;
-        exit(1);
+        std::exit(1);
     }
 
     const Identifier *ident =
@@ -103,21 +127,16 @@ void Parser::DeclareStatement(AsmCodegen& asm_codegen,
     Symbol symbol_name = ident->GetName();
 
     symbol_table_.AddSymbol(symbol_name);
-    asm_codegen.GenGlobSymbol(symbol_name);
 
     i++;
 
-    if (token_list[i]->GetNodeTag() != T_Semicolon)
-    {
-        std::cerr << "syntax error: expect ;!" << std::endl;
-        exit(1);
-    }
+    Match(token_list, i, T_Semicolon, ";");
 
-    i++;
+    return std::make_unique<AstDeclare>(symbol_name);
 }
 
-void Parser::AssignStatement(AsmCodegen& asm_codegen,
-    const std::vector<NodePtr>& token_list,
+/* assignment_statement: identifier '=' expression ';'  ; */
+AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
     const Identifier *ident =
@@ -129,35 +148,65 @@ void Parser::AssignStatement(AsmCodegen& asm_codegen,
     {
         std::cerr << "syntax error: undeclared variable " << symbol_name;
         std::cerr << "!" << std::endl;
-        exit(1);
+        std::exit(1);
     }
 
     /* The identifier names the target of the assignment, it is an lvalue. */
     AstNodePtr right = MakeAstIdentLeaf(token_list[i], sym_idx, true);
 
-    idx_t assign_idx = ++i;
-
-    if (token_list[i]->GetNodeTag() != T_Assign)
-    {
-        std::cerr << "syntax error: expect =!" << std::endl;
-        exit(1);
-    }
-
     i++;
+
+    Match(token_list, i, T_Assign, "=");
 
     AstNodePtr left = BinaryExpression(token_list, i, 0);
-    AstNodePtr root = MakeAstNode(left, right, token_list[assign_idx]);
+    AstNodePtr root = std::make_unique<AstOperator>(left, right, T_Assign);
 
-    reg_idx reg = asm_codegen.GenAstValue(root);
-    asm_codegen.FreeRegister(reg);
+    Match(token_list, i, T_Semicolon, ";");
 
-    if (token_list[i]->GetNodeTag() != T_Semicolon)
+    return root;
+}
+
+/*
+ * if_statement: if_head
+ *      |        if_head 'else' compound_statement
+ *      ;
+ *
+ * if_head: 'if' '(' true_false_expression ')' compound_statement  ;
+ */
+AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_If, "if");
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr condition = BinaryExpression(token_list, i, 0);
+
+    if (condition->GetAstNodeTag() != A_AstOperator ||
+        !IsComparisonOperator(
+            static_cast<const AstOperator *>(condition.get())->GetOpType()))
     {
-        std::cerr << "syntax error: expect ;!" << std::endl;
-        exit(1);
+        std::cerr << "syntax error: an if condition must be a comparison";
+        std::cerr << "!" << std::endl;
+        std::exit(1);
     }
 
-    i++;
+    Match(token_list, i, T_RParen, ")");
+
+    AstNodePtr true_branch = CompoundStatement(token_list, i);
+    AstNodePtr false_branch = nullptr;
+    bool has_else = false;
+
+    if (TokenTag(token_list[i]) == T_Else)
+    {
+        has_else = true;
+        i++;
+        false_branch = CompoundStatement(token_list, i);
+    }
+
+    return std::make_unique<AstIf>(condition,
+                                   true_branch,
+                                   false_branch,
+                                   has_else);
 }
 
 AstNodePtr Parser::BinaryExpression(
@@ -171,10 +220,10 @@ AstNodePtr Parser::BinaryExpression(
      * Only a binary operator has a non-zero precedence, so the loop
      * stops as soon as a semicolon, an EOF or any other token shows up.
      */
-    while (GetOpPrecedence(token_list[i]->GetNodeTag()) > ptp)
+    while (GetOpPrecedence(TokenTag(token_list[i])) > ptp)
     {
         idx_t op_idx = i;
-        uint8 op_prec = GetOpPrecedence(token_list[op_idx]->GetNodeTag());
+        uint8 op_prec = GetOpPrecedence(TokenTag(token_list[op_idx]));
 
         i++;
 
@@ -188,7 +237,7 @@ AstNodePtr Parser::BinaryExpression(
 AstNodePtr
 Parser::ParsePrimary(const NodePtr& token)
 {
-    switch (token->GetNodeTag())
+    switch (TokenTag(token))
     {
         case T_IntLit:
             return MakeAstLeaf(token);
@@ -208,7 +257,9 @@ Parser::ParsePrimary(const NodePtr& token)
             return MakeAstIdentLeaf(token, sym_idx, false);
         }
         default:
-            std::cerr << "syntax error!" << std::endl;
+            std::cerr << "syntax error: unexpected token ";
+            std::cerr << NodeTagToString(TokenTag(token));
+            std::cerr << ", expect an expression!" << std::endl;
             std::exit(1);
     }
 
@@ -228,7 +279,6 @@ AstNodePtr Parser::MakeAstNode(AstNodePtr& left,
             return std::make_unique<AstIntLit>(left, right,
                                                intlit_node->GetValue());
         }
-        case T_Assign:
         case T_Plus:
         case T_Minus:
         case T_Star:
@@ -241,11 +291,11 @@ AstNodePtr Parser::MakeAstNode(AstNodePtr& left,
         case T_GE:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag());
-        case T_Identifier:
-            std::cerr << "code error: you should call MakeAstIdent" << std::endl;
-            exit(1);
         default:
-            return nullptr;
+            std::cerr << "code error: token ";
+            std::cerr << NodeTagToString(node->GetNodeTag());
+            std::cerr << " is not a binary operator!" << std::endl;
+            std::exit(1);
     }
 
     return nullptr;
@@ -294,6 +344,44 @@ AstNodePtr Parser::MakeAstIdentUnary(AstNodePtr& left,
 {
     AstNodePtr right = nullptr;
     return MakeAstIdent(left, right, node, ident_idx, is_lv_ident);
+}
+
+NodeTag Parser::TokenTag(const NodePtr& token)
+{
+    if (token->GetNodeTag() == T_KeyWord)
+        return static_cast<const KeyWord *>(token.get())->GetWord();
+
+    return token->GetNodeTag();
+}
+
+bool Parser::IsComparisonOperator(NodeTag tag)
+{
+    switch (tag)
+    {
+        case T_EQ:
+        case T_NE:
+        case T_LT:
+        case T_GT:
+        case T_LE:
+        case T_GE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void Parser::Match(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    NodeTag tag,
+    std::string_view name)
+{
+    if (TokenTag(token_list[i]) != tag)
+    {
+        std::cerr << "syntax error: expect " << name << "!" << std::endl;
+        std::exit(1);
+    }
+
+    i++;
 }
 
 uint8 Parser::GetOpPrecedence(NodeTag tag)

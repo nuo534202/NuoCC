@@ -4,24 +4,41 @@ namespace nuocc
 {
 
 /* AstNode */
-AstNode::AstNode(AstNodePtr& left, AstNodePtr& right)
-    : left_(std::move(left)),
-      right_(std::move(right)),
-      node_type_(A_AstNode) {}
+AstNode::AstNode(AstNodeTag node_type)
+    : left_(nullptr),
+      mid_(nullptr),
+      right_(nullptr),
+      node_type_(node_type) {}
 
-AstNode::AstNode(AstNodePtr& left, AstNodePtr& right, AstNodeTag node_type)
+AstNode::AstNode(AstNodeTag node_type, AstNodePtr& left)
     : left_(std::move(left)),
+      mid_(nullptr),
+      right_(nullptr),
+      node_type_(node_type) {}
+
+AstNode::AstNode(AstNodeTag node_type, AstNodePtr& left, AstNodePtr& right)
+    : left_(std::move(left)),
+      mid_(nullptr),
       right_(std::move(right)),
       node_type_(node_type) {}
 
-AstNode::AstNode(AstNodeTag node_type)
-    : left_(nullptr),
-      right_(nullptr),
+AstNode::AstNode(AstNodeTag node_type,
+                 AstNodePtr& left,
+                 AstNodePtr& mid,
+                 AstNodePtr& right)
+    : left_(std::move(left)),
+      mid_(std::move(mid)),
+      right_(std::move(right)),
       node_type_(node_type) {}
 
 void AstNode::SetLeft(AstNodePtr& left)
 {
     left_ = std::move(left);
+}
+
+void AstNode::SetMid(AstNodePtr& mid)
+{
+    mid_ = std::move(mid);
 }
 
 void AstNode::SetRight(AstNodePtr& right)
@@ -32,6 +49,11 @@ void AstNode::SetRight(AstNodePtr& right)
 const AstNodePtr& AstNode::GetLeft() const
 {
     return left_;
+}
+
+const AstNodePtr& AstNode::GetMid() const
+{
+    return mid_;
 }
 
 const AstNodePtr& AstNode::GetRight() const
@@ -52,7 +74,7 @@ AstOperator::AstOperator(NodeTag op_type)
     : AstNode(A_AstOperator), op_type_(op_type) {}
 
 AstOperator::AstOperator(AstNodePtr& left, AstNodePtr& right, NodeTag op_type)
-    : AstNode(left, right, A_AstOperator),
+    : AstNode(A_AstOperator, left, right),
       op_type_(op_type) {}
 
 NodeTag AstOperator::GetOpType() const
@@ -68,7 +90,7 @@ AstIntLit::AstIntLit(int32 value)
       value_(value) {}
 
 AstIntLit::AstIntLit(AstNodePtr& left, AstNodePtr& right, int32 value)
-    : AstNode(left, right, A_AstIntLit),
+    : AstNode(A_AstIntLit, left, right),
       value_(value) {}
 
 void AstIntLit::SetValue(int value)
@@ -87,7 +109,7 @@ AstIdentifier::AstIdentifier(AstNodePtr& left,
     const Symbol& symbol,
     idx_t ident_idx,
     bool is_lv_ident)
-    : AstNode(left, right, A_AstIdentifier),
+    : AstNode(A_AstIdentifier, left, right),
       symbol_(symbol),
       ident_idx_(ident_idx),
       is_lv_ident_(is_lv_ident) {}
@@ -107,5 +129,35 @@ bool AstIdentifier::GetLvIdent() const
     return is_lv_ident_;
 }
 
+/* AstPrint */
+AstPrint::AstPrint(AstNodePtr& expression)
+    : AstNode(A_AstPrint, expression) {}
+
+/* AstGlue */
+AstGlue::AstGlue(AstNodePtr& left, AstNodePtr& right)
+    : AstNode(A_AstGlue, left, right) {}
+
+/* AstIf */
+AstIf::AstIf(AstNodePtr& condition,
+    AstNodePtr& true_branch,
+    AstNodePtr& false_branch,
+    bool has_else)
+    : AstNode(A_AstIf, condition, true_branch, false_branch),
+      has_else_(has_else) {}
+
+bool AstIf::HasElse() const
+{
+    return has_else_;
+}
+
+/* AstDeclare */
+AstDeclare::AstDeclare(const Symbol& symbol)
+    : AstNode(A_AstDeclare),
+      symbol_(symbol) {}
+
+const Symbol& AstDeclare::GetSymbol() const
+{
+    return symbol_;
+}
 
 }   /* namespace nuocc*/

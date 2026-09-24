@@ -1,7 +1,6 @@
 #pragma once
 
 #include <fstream>
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -13,18 +12,27 @@ namespace nuocc
 
 constexpr int kRegSize = 4;
 
+/*
+ * Code generator for x86-64. It walks the abstract syntax tree of the
+ * whole program and writes the assembly code for it.
+ */
 class AsmCodegen
 {
 public:
-    AsmCodegen(const std::string& output_file);
+    explicit AsmCodegen(const std::string& output_file);
     ~AsmCodegen();
 
 public:
-    void Preamble();
-    void Postamble();
+    void GenProgram(const AstNodePtr& root);
 
-    void GenPrint(const AstNodePtr& root);
-    reg_idx GenAstValue(const AstNodePtr& root);
+private:
+    void GenPreamble();
+    void GenPostamble();
+
+    void GenStatement(const AstNodePtr& root);
+    void GenIf(const AstNodePtr& root);
+    void GenCondition(const AstNodePtr& condition, label_idx false_label);
+    reg_idx GenExpr(const AstNodePtr& root);
 
     void GenGlobSymbol(const Symbol& symbol);
     reg_idx LoadGlobSymbol(const Symbol& symbol);
@@ -36,27 +44,34 @@ private:
     reg_idx AllocRegister();
     void FreeAllRegister();
 
+    label_idx NewLabel();
+    void EmitLabel(label_idx label);
+    void EmitJump(label_idx label);
+
     reg_idx Load(int32 value);
     reg_idx Add(reg_idx reg1, reg_idx reg2);
     reg_idx Sub(reg_idx reg1, reg_idx reg2);
     reg_idx Mul(reg_idx reg1, reg_idx reg2);
     reg_idx Div(reg_idx reg1, reg_idx reg2);
-    reg_idx Compare(reg_idx reg1,
-                    reg_idx reg2,
-                    std::string_view set_instr);
+
+    reg_idx CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2);
+    void CompareAndJump(NodeTag op_type,
+                        reg_idx reg1,
+                        reg_idx reg2,
+                        label_idx label);
+
     void PrintInt(reg_idx reg);
 
-    reg_idx GenAstIdent(const AstNodePtr& root);
-    reg_idx GenAstAssign(const AstNodePtr& root);
-    reg_idx GenAstOp(NodeTag op_type,
-                     reg_idx left_reg,
-                     reg_idx right_reg);
+    reg_idx GenOperator(NodeTag op_type,
+                        reg_idx left_reg,
+                        reg_idx right_reg);
 
 private:
     bool is_free_[kRegSize];
     std::string reg_list_[kRegSize];
     /* The low byte of each register, required by the setX instructions. */
     std::string breg_list_[kRegSize];
+    label_idx next_label_;
     std::ofstream ofs_;
 };
 

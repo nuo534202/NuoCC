@@ -20,6 +20,8 @@ using uint64 = uint64_t;
 using idx_t = size_t;
 /* register index */
 using reg_idx = size_t;
+/* assembly label number */
+using label_idx = uint32;
 
 using Symbol = std::string;
 

@@ -5,42 +5,8 @@
 #include <string>
 #include <vector>
 
-#ifndef NDEBUG
-
-/* Debug Mode */
 namespace nuocc
 {
-
-#define PRINTTOKENLIST(scanner) PrintTokenList(scanner)
-
-void PrintTokenList(const nuocc::Scanner& scanner)
-{
-    const std::vector<NodePtr>& token_list
-        = scanner.GetTokenList();
-
-    for (auto& token : token_list)
-    {
-        std::cout << NodeTagToString(token->GetNodeTag());
-
-        if (token->GetNodeTag() == T_IntLit)
-        {
-            auto lit = static_cast<Literal<int, T_IntLit>*>(token.get());
-            std::cout << " " << lit->GetValue();
-        }
-        else if (token->GetNodeTag() == T_KeyWord)
-        {
-            auto key_word = static_cast<KeyWord*>(token.get());
-            std::cout << " " << NodeTagToString(key_word->GetWord());
-        }
-        else if (token->GetNodeTag() == T_Identifier)
-        {
-            auto identifier = static_cast<Identifier*>(token.get());
-            std::cout << " " << identifier->GetName();
-        }
-
-        std::cout << std::endl;
-    }
-}
 
 std::string NodeTagToString(const NodeTag& tag)
 {
@@ -96,8 +62,26 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Print:
             out = "print";
             break;
+        case T_If:
+            out = "if";
+            break;
+        case T_Else:
+            out = "else";
+            break;
         case T_Identifier:
             out = "Identifier";
+            break;
+        case T_LBrace:
+            out = "{";
+            break;
+        case T_RBrace:
+            out = "}";
+            break;
+        case T_LParen:
+            out = "(";
+            break;
+        case T_RParen:
+            out = ")";
             break;
         case T_Semicolon:
             out = ";";
@@ -112,6 +96,38 @@ std::string NodeTagToString(const NodeTag& tag)
     return out;
 }
 
-}   /* namespace nuocc */
+#ifndef NDEBUG
+
+/* Debug Mode */
+void PrintTokenList(const Scanner& scanner)
+{
+    const std::vector<NodePtr>& token_list
+        = scanner.GetTokenList();
+
+    for (auto& token : token_list)
+    {
+        std::cout << NodeTagToString(token->GetNodeTag());
+
+        if (token->GetNodeTag() == T_IntLit)
+        {
+            auto lit = static_cast<Literal<int, T_IntLit>*>(token.get());
+            std::cout << " " << lit->GetValue();
+        }
+        else if (token->GetNodeTag() == T_KeyWord)
+        {
+            auto key_word = static_cast<KeyWord*>(token.get());
+            std::cout << " " << NodeTagToString(key_word->GetWord());
+        }
+        else if (token->GetNodeTag() == T_Identifier)
+        {
+            auto identifier = static_cast<Identifier*>(token.get());
+            std::cout << " " << identifier->GetName();
+        }
+
+        std::cout << std::endl;
+    }
+}
 
 #endif
+
+}   /* namespace nuocc */
