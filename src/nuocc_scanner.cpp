@@ -87,12 +87,23 @@ void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
 
 bool Scanner::IsNewToken(const std::string& token, char ch)
 {
+    /*
+     * The next character may still be part of the token when the two of
+     * them together start a two character operator such as == or <=.
+     */
+    if (kDoubleOp.find(token + ch) != kDoubleOp.end())
+        return false;
+
+    /* An operator is at most two characters long, so it ends here. */
+    if (kDoubleOp.find(token) != kDoubleOp.end())
+        return true;
+
     /* ch is a single op, or token is a single op*/
     if (kSingleOp.find(ch) != kSingleOp.end() ||
         (token.size() == 1 &&
          kSingleOp.find(token.front()) != kSingleOp.end()))
         return true;
-    
+
     return false;
 }
 
@@ -134,6 +145,12 @@ void Scanner::CommitToken(const std::string& token)
         case T_Slash:
         case T_Assign:
         case T_Semicolon:
+        case T_EQ:
+        case T_NE:
+        case T_LT:
+        case T_GT:
+        case T_LE:
+        case T_GE:
             token_node = std::make_unique<Node>(nodetag);
             break;
 
@@ -151,11 +168,11 @@ void Scanner::CommitToken(const std::string& token)
 
 NodeTag Scanner::GetTokenNodeTag(const std::string& token)
 {
-    if (token.size() == 1 && token.front() == ';')
-        return T_Semicolon;
-
     if (token.size() == 1 && kSingleOp.find(token.front()) != kSingleOp.end())
         return kSingleOp.at(token.front());
+
+    if (token.size() == 2 && kDoubleOp.find(token) != kDoubleOp.end())
+        return kDoubleOp.at(token);
 
     if (kKeyWords.find(token) != kKeyWords.end())
         return T_KeyWord;
@@ -165,7 +182,7 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
 
     if (IsIdent(token))
         return T_Identifier;
-    
+
     return T_UnknownToken;
 }
 
@@ -208,13 +225,27 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"int", T_Int}, {"print", T_Print}
 };
 
+/*
+ * Single character operators. '!' is listed even though it is not a token
+ * on its own: it only ever introduces '!=', but the scanner still has to
+ * treat it as an operator character and not glue it onto the token before
+ * it. A lone '!' therefore reports itself as an unknown token.
+ */
 const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'+', T_Plus}, {'-', T_Minus}, {'*', T_Star}, {'/', T_Slash},
-    {'=', T_Assign}, {';', T_Semicolon}
+    {'=', T_Assign}, {';', T_Semicolon},
+    {'<', T_LT}, {'>', T_GT},
+    {'!', T_UnknownToken}
+};
+
+const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
+    {"==", T_EQ}, {"!=", T_NE},
+    {"<=", T_LE}, {">=", T_GE}
 };
 
 const std::unordered_set<char> Scanner::kAlphabet = {
     '+', '-', '*', '/', '=', ';', '_', '.',
+    '<', '>', '!',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 

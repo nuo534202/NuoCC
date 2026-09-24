@@ -233,6 +233,12 @@ AstNodePtr Parser::MakeAstNode(AstNodePtr& left,
         case T_Minus:
         case T_Star:
         case T_Slash:
+        case T_EQ:
+        case T_NE:
+        case T_LT:
+        case T_GT:
+        case T_LE:
+        case T_GE:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag());
         case T_Identifier:
@@ -301,10 +307,19 @@ uint8 Parser::GetOpPrecedence(NodeTag tag)
     return it->second;
 }
 
+/*
+ * Operator precedence, following the C language. The values themselves are
+ * meaningless, only their relative order matters: a higher value binds
+ * more tightly.
+ */
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
-    {T_Plus, 2}, {T_Minus, 2},
+    {T_EQ, 10}, {T_NE, 10},
 
-    {T_Star, 3}, {T_Slash, 3}
+    {T_LT, 20}, {T_GT, 20}, {T_LE, 20}, {T_GE, 20},
+
+    {T_Plus, 30}, {T_Minus, 30},
+
+    {T_Star, 40}, {T_Slash, 40}
 };
 
 }   /* namespace nuocc */

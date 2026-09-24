@@ -20,6 +20,7 @@ AsmCodegen::AsmCodegen(const std::string& output_file)
     {
         is_free_[i] = true;
         reg_list_[i] = "%r" + std::to_string(i + 8);
+        breg_list_[i] = "%r" + std::to_string(i + 8) + "b";
     }
 }
 
@@ -177,6 +178,26 @@ reg_idx AsmCodegen::Div(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+reg_idx AsmCodegen::Compare(reg_idx reg1,
+                            reg_idx reg2,
+                            std::string_view set_instr)
+{
+    /*
+     * cmpq computes reg1 - reg2, so the setX instruction reports the
+     * requested relation between the two registers. It only writes the
+     * low byte of reg2, so the remaining bits are masked off to end up
+     * with a clean 0 or 1.
+     */
+    ofs_ << "\tcmpq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
+    ofs_ << "\t" << set_instr << "\t" << breg_list_[reg2] << std::endl;
+    ofs_ << "\tandq\t$255, " << reg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
 void AsmCodegen::PrintInt(reg_idx reg)
 {
     ofs_ << "\tmovq\t" << reg_list_[reg] << ", %rdi" << std::endl;
@@ -275,6 +296,18 @@ reg_idx AsmCodegen::GenAstOp(NodeTag op_type,
             return Mul(left_reg, right_reg);
         case T_Slash:
             return Div(left_reg, right_reg);
+        case T_EQ:
+            return Compare(left_reg, right_reg, "sete");
+        case T_NE:
+            return Compare(left_reg, right_reg, "setne");
+        case T_LT:
+            return Compare(left_reg, right_reg, "setl");
+        case T_GT:
+            return Compare(left_reg, right_reg, "setg");
+        case T_LE:
+            return Compare(left_reg, right_reg, "setle");
+        case T_GE:
+            return Compare(left_reg, right_reg, "setge");
         default:
             break;
     }

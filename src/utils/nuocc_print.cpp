@@ -66,6 +66,24 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Assign:
             out = "=";
             break;
+        case T_EQ:
+            out = "==";
+            break;
+        case T_NE:
+            out = "!=";
+            break;
+        case T_LT:
+            out = "<";
+            break;
+        case T_GT:
+            out = ">";
+            break;
+        case T_LE:
+            out = "<=";
+            break;
+        case T_GE:
+            out = ">=";
+            break;
         case T_IntLit:
             out = "IntLit";
             break;
@@ -83,6 +101,9 @@ std::string NodeTagToString(const NodeTag& tag)
             break;
         case T_Semicolon:
             out = ";";
+            break;
+        case T_EOF:
+            out = "EOF";
             break;
         default:
             break;

@@ -2,4 +2,6 @@
 
 1. Int variable Declaration and Assignment.
 2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division.
-3. Simple `print` statement.
+3. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
+   Less Than Or Equal To, Greater Than Or Equal To.
+4. Simple `print` statement.

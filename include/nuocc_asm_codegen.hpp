@@ -3,6 +3,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "nodes/nuocc_ast_nodes.hpp"
 #include "utils/nuocc_types.hpp"
@@ -40,6 +41,9 @@ private:
     reg_idx Sub(reg_idx reg1, reg_idx reg2);
     reg_idx Mul(reg_idx reg1, reg_idx reg2);
     reg_idx Div(reg_idx reg1, reg_idx reg2);
+    reg_idx Compare(reg_idx reg1,
+                    reg_idx reg2,
+                    std::string_view set_instr);
     void PrintInt(reg_idx reg);
 
     reg_idx GenAstIdent(const AstNodePtr& root);
@@ -51,6 +55,8 @@ private:
 private:
     bool is_free_[kRegSize];
     std::string reg_list_[kRegSize];
+    /* The low byte of each register, required by the setX instructions. */
+    std::string breg_list_[kRegSize];
     std::ofstream ofs_;
 };
 

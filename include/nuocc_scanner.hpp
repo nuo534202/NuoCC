@@ -18,6 +18,7 @@ class Scanner
 private:
     static const std::unordered_map<std::string, NodeTag> kKeyWords;
     static const std::unordered_map<char, NodeTag> kSingleOp;
+    static const std::unordered_map<std::string, NodeTag> kDoubleOp;
     static const std::unordered_set<char> kAlphabet;
 
 public:

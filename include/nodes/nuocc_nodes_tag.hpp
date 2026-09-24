@@ -15,6 +15,14 @@ typedef enum NodeTag
     T_Slash,
     T_Assign,
 
+    /* Comparison Operator */
+    T_EQ,
+    T_NE,
+    T_LT,
+    T_GT,
+    T_LE,
+    T_GE,
+
     /* Literal Type */
     T_IntLit,
     // T_BoolLit,
