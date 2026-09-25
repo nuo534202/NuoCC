@@ -10,6 +10,29 @@
 namespace nuocc
 {
 
+namespace
+{
+
+/*
+ * The simple statements are the ones terminated by a semicolon. The
+ * statements which end in a compound statement, if, while and for, are
+ * not, which is why the terminator is matched by the caller.
+ */
+bool IsSimpleStatement(AstNodeTag tag)
+{
+    switch (tag)
+    {
+        case A_AstPrint:
+        case A_AstDeclare:
+        case A_AstOperator:     /* an assignment */
+            return true;
+        default:
+            return false;
+    }
+}
+
+}   /* namespace */
+
 AstNodePtr Parser::Parse(const std::vector<NodePtr>& token_list)
 {
     idx_t i = 0;
@@ -52,6 +75,10 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
 
         AstNodePtr tree = Statement(token_list, i);
 
+        /* A simple statement is terminated by a semicolon. */
+        if (IsSimpleStatement(tree->GetAstNodeTag()))
+            Match(token_list, i, T_Semicolon, ";");
+
         /* Glue each statement onto the statements parsed before it. */
         if (!left)
         {
@@ -88,6 +115,8 @@ AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
             return IfStatement(token_list, i);
         case T_While:
             return WhileStatement(token_list, i);
+        case T_For:
+            return ForStatement(token_list, i);
         case T_Identifier:
             return AssignStatement(token_list, i);
         default:
@@ -106,8 +135,6 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
 
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
     AstNodePtr root = std::make_unique<AstPrint>(expression);
-
-    Match(token_list, i, T_Semicolon, ";");
 
     return root;
 }
@@ -131,8 +158,6 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     symbol_table_.AddSymbol(symbol_name);
 
     i++;
-
-    Match(token_list, i, T_Semicolon, ";");
 
     return std::make_unique<AstDeclare>(symbol_name);
 }
@@ -162,8 +187,6 @@ AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
 
     AstNodePtr left = BinaryExpression(token_list, i, 0);
     AstNodePtr root = std::make_unique<AstOperator>(left, right, T_Assign);
-
-    Match(token_list, i, T_Semicolon, ";");
 
     return root;
 }
@@ -213,9 +236,47 @@ AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * Parse the parenthesised condition shared by if and while statements. The
- * language has no truth values of its own yet, so the condition has to be
- * a comparison.
+ * for_statement: 'for' '(' preop_statement ';'
+ *                        true_false_expression ';'
+ *                        postop_statement ')' compound_statement  ;
+ *
+ * The post statement is parsed before the body but has to run after it, so
+ * the loop is desugared into an augmented while loop:
+ *
+ *      preop;
+ *      while (condition) {
+ *          body;
+ *          postop;
+ *      }
+ */
+AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_For, "for");
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr preop = Statement(token_list, i);
+    Match(token_list, i, T_Semicolon, ";");
+
+    AstNodePtr condition = BinaryExpression(token_list, i, 0);
+    CheckComparison(condition, "a for statement");
+
+    Match(token_list, i, T_Semicolon, ";");
+
+    AstNodePtr postop = Statement(token_list, i);
+    Match(token_list, i, T_RParen, ")");
+
+    AstNodePtr body = CompoundStatement(token_list, i);
+
+    /* The post statement runs at the end of each pass of the loop. */
+    AstNodePtr loop_body = std::make_unique<AstGlue>(body, postop);
+    AstNodePtr loop = std::make_unique<AstWhile>(condition, loop_body);
+
+    return std::make_unique<AstGlue>(preop, loop);
+}
+
+/*
+ * Parse the parenthesised condition shared by if and while statements.
  */
 AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
     idx_t& i,
@@ -224,7 +285,20 @@ AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_LParen, "(");
 
     AstNodePtr condition = BinaryExpression(token_list, i, 0);
+    CheckComparison(condition, statement);
 
+    Match(token_list, i, T_RParen, ")");
+
+    return condition;
+}
+
+/*
+ * The language has no truth values of its own yet, so every condition has
+ * to be one of the six comparison operators.
+ */
+void Parser::CheckComparison(const AstNodePtr& condition,
+    std::string_view statement)
+{
     if (condition->GetAstNodeTag() != A_AstOperator ||
         !IsComparisonOperator(
             static_cast<const AstOperator *>(condition.get())->GetOpType()))
@@ -233,10 +307,6 @@ AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
         std::cerr << " must be a comparison!" << std::endl;
         std::exit(1);
     }
-
-    Match(token_list, i, T_RParen, ")");
-
-    return condition;
 }
 
 AstNodePtr Parser::BinaryExpression(

@@ -7,3 +7,4 @@
 4. Simple `print` statement.
 5. If-Else Statements.
 6. While Loops.
+7. For Loops.

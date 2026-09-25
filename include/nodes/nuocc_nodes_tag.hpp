@@ -36,6 +36,7 @@ typedef enum NodeTag
     T_If,
     T_Else,
     T_While,
+    T_For,
 
     T_Identifier,
 
