@@ -31,6 +31,7 @@ private:
 
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);
+    void GenWhile(const AstNodePtr& root);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
 

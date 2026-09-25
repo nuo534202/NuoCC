@@ -40,6 +40,12 @@ private:
         idx_t& i);
     AstNodePtr IfStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
+    AstNodePtr WhileStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    AstNodePtr Condition(const std::vector<NodePtr>& token_list,
+        idx_t& i,
+        std::string_view statement);
 
     AstNodePtr BinaryExpression(
         const std::vector<NodePtr>& token_list,

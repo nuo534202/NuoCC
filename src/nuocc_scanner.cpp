@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
 
 namespace nuocc
 {
@@ -132,7 +134,8 @@ void Scanner::CommitToken(const std::string& token)
             break;
 
         case T_IntLit:
-            token_node = std::make_unique<Literal<int, T_IntLit>>(std::stoi(token));
+            token_node = std::make_unique<Literal<int, T_IntLit>>(
+                ToIntLit(token));
             break;
 
         case T_Identifier:
@@ -204,6 +207,35 @@ bool Scanner::IsIntLit(const std::string& token)
     return true;
 }
 
+/*
+ * Convert a token made of digits into its value. The language has no
+ * integer type wider than int yet, so a literal which does not fit is an
+ * error rather than a silent overflow.
+ */
+int32 Scanner::ToIntLit(const std::string& token)
+{
+    long long value = 0;
+    bool in_range = true;
+
+    try
+    {
+        value = std::stoll(token);
+    }
+    catch (const std::out_of_range&)
+    {
+        in_range = false;
+    }
+
+    if (!in_range || value > std::numeric_limits<int32>::max())
+    {
+        std::cerr << "lexical error: integer literal " << token;
+        std::cerr << " is too large!" << std::endl;
+        std::exit(1);
+    }
+
+    return static_cast<int32>(value);
+}
+
 bool Scanner::IsIdent(const std::string& token)
 {
     if (token.empty())
@@ -227,7 +259,8 @@ bool Scanner::IsIdent(const std::string& token)
 
 const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"int", T_Int}, {"print", T_Print},
-    {"if", T_If}, {"else", T_Else}
+    {"if", T_If}, {"else", T_Else},
+    {"while", T_While}
 };
 
 /*

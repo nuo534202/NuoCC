@@ -141,6 +141,10 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             GenIf(root);
             return;
 
+        case A_AstWhile:
+            GenWhile(root);
+            return;
+
         case A_AstOperator:
         {
             const AstOperator *ast_op =
@@ -225,6 +229,32 @@ void AsmCodegen::GenIf(const AstNodePtr& root)
         FreeAllRegister();
         EmitLabel(end_label);
     }
+}
+
+/*
+ * Generate the code for a while loop:
+ *
+ * Lstart:
+ *      <condition>, jumping to Lend when it does not hold
+ *      <body>
+ *      jmp Lstart
+ * Lend:
+ */
+void AsmCodegen::GenWhile(const AstNodePtr& root)
+{
+    label_idx start_label = NewLabel();
+    label_idx end_label = NewLabel();
+
+    EmitLabel(start_label);
+
+    GenCondition(root->GetLeft(), end_label);
+    FreeAllRegister();
+
+    GenStatement(root->GetRight());
+    FreeAllRegister();
+
+    EmitJump(start_label);
+    EmitLabel(end_label);
 }
 
 /*

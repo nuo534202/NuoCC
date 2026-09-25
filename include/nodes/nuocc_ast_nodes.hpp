@@ -146,6 +146,17 @@ private:
 };
 
 /*
+ * A while loop holding the condition in the left child and the compound
+ * statement which is the body of the loop in the right child.
+ */
+class AstWhile : public AstNode
+{
+public:
+    AstWhile(AstNodePtr& condition, AstNodePtr& body);
+    ~AstWhile() = default;
+};
+
+/*
  * The declaration of a global variable.
  */
 class AstDeclare : public AstNode

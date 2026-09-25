@@ -86,6 +86,8 @@ AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
             return DeclareStatement(token_list, i);
         case T_If:
             return IfStatement(token_list, i);
+        case T_While:
+            return WhileStatement(token_list, i);
         case T_Identifier:
             return AssignStatement(token_list, i);
         default:
@@ -177,21 +179,8 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
     Match(token_list, i, T_If, "if");
-    Match(token_list, i, T_LParen, "(");
 
-    AstNodePtr condition = BinaryExpression(token_list, i, 0);
-
-    if (condition->GetAstNodeTag() != A_AstOperator ||
-        !IsComparisonOperator(
-            static_cast<const AstOperator *>(condition.get())->GetOpType()))
-    {
-        std::cerr << "syntax error: an if condition must be a comparison";
-        std::cerr << "!" << std::endl;
-        std::exit(1);
-    }
-
-    Match(token_list, i, T_RParen, ")");
-
+    AstNodePtr condition = Condition(token_list, i, "an if statement");
     AstNodePtr true_branch = CompoundStatement(token_list, i);
     AstNodePtr false_branch = nullptr;
     bool has_else = false;
@@ -207,6 +196,47 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
                                    true_branch,
                                    false_branch,
                                    has_else);
+}
+
+/*
+ * while_statement: 'while' '(' true_false_expression ')' compound_statement  ;
+ */
+AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_While, "while");
+
+    AstNodePtr condition = Condition(token_list, i, "a while statement");
+    AstNodePtr body = CompoundStatement(token_list, i);
+
+    return std::make_unique<AstWhile>(condition, body);
+}
+
+/*
+ * Parse the parenthesised condition shared by if and while statements. The
+ * language has no truth values of its own yet, so the condition has to be
+ * a comparison.
+ */
+AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    std::string_view statement)
+{
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr condition = BinaryExpression(token_list, i, 0);
+
+    if (condition->GetAstNodeTag() != A_AstOperator ||
+        !IsComparisonOperator(
+            static_cast<const AstOperator *>(condition.get())->GetOpType()))
+    {
+        std::cerr << "syntax error: the condition of " << statement;
+        std::cerr << " must be a comparison!" << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_RParen, ")");
+
+    return condition;
 }
 
 AstNodePtr Parser::BinaryExpression(

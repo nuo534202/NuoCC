@@ -150,6 +150,10 @@ bool AstIf::HasElse() const
     return has_else_;
 }
 
+/* AstWhile */
+AstWhile::AstWhile(AstNodePtr& condition, AstNodePtr& body)
+    : AstNode(A_AstWhile, condition, body) {}
+
 /* AstDeclare */
 AstDeclare::AstDeclare(const Symbol& symbol)
     : AstNode(A_AstDeclare),

@@ -68,6 +68,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Else:
             out = "else";
             break;
+        case T_While:
+            out = "while";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;

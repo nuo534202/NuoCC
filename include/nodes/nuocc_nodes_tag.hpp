@@ -35,6 +35,7 @@ typedef enum NodeTag
     T_Print,
     T_If,
     T_Else,
+    T_While,
 
     T_Identifier,
 
@@ -57,6 +58,7 @@ typedef enum AstNodeTag
     A_AstPrint,
     A_AstGlue,
     A_AstIf,
+    A_AstWhile,
     A_AstDeclare
 } AstNodeTag;
 

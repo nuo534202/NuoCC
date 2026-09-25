@@ -40,6 +40,7 @@ private:
 
     NodeTag GetTokenNodeTag(const std::string& token);
     bool IsIntLit(const std::string& token);
+    int32 ToIntLit(const std::string& token);
     bool IsIdent(const std::string& token);
 
 private:
