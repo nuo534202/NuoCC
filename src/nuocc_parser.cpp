@@ -6,6 +6,7 @@
 
 #include "nodes/nuocc_scanner_nodes.hpp"
 #include "utils/nuocc_print.hpp"
+#include "utils/nuocc_runtime.hpp"
 
 namespace nuocc
 {
@@ -24,6 +25,8 @@ bool IsSimpleStatement(AstNodeTag tag)
     {
         case A_AstPrint:
         case A_AstDeclare:
+        case A_AstFuncCall:
+        case A_AstReturn:
         case A_AstOperator:     /* an assignment */
             return true;
         default:
@@ -35,6 +38,14 @@ bool IsSimpleStatement(AstNodeTag tag)
 
 std::vector<AstNodePtr> Parser::Parse(const std::vector<NodePtr>& token_list)
 {
+    /*
+     * printint() is provided by the runtime the generated code is linked
+     * with, so it is already known before any of the program is parsed.
+     */
+    symbol_table_.AddSymbol(Symbol{.name = kPrintIntName,
+                                   .type = PrimitiveType::kVoid,
+                                   .stype = StructuralType::kFunction});
+
     idx_t i = 0;
     std::vector<AstNodePtr> functions;
 
@@ -51,12 +62,12 @@ std::vector<AstNodePtr> Parser::Parse(const std::vector<NodePtr>& token_list)
 }
 
 /*
- * function_declaration: 'void' identifier '(' ')' compound_statement  ;
+ * function_declaration: type identifier '(' ')' compound_statement  ;
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    Match(token_list, i, T_Void, "void");
+    PrimitiveType type = ParseType(token_list, i);
 
     if (TokenTag(token_list[i]) != T_Identifier)
     {
@@ -68,7 +79,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
         static_cast<const Identifier *>(token_list[i].get());
 
     Symbol symbol{.name = ident->GetName(),
-                  .type = PrimitiveType::kVoid,
+                  .type = type,
                   .stype = StructuralType::kFunction};
 
     symbol_table_.AddSymbol(symbol);
@@ -77,7 +88,29 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_LParen, "(");
     Match(token_list, i, T_RParen, ")");
 
+    current_function_type_ = type;
+
     AstNodePtr body = CompoundStatement(token_list, i);
+
+    current_function_type_ = PrimitiveType::kNone;
+
+    /*
+     * A function which returns a value must end with a return statement, as
+     * that is the only way its caller can be given a result.
+     */
+    if (type != PrimitiveType::kVoid)
+    {
+        const AstNodePtr& last = (body && body->GetAstNodeTag() == A_AstGlue)
+                                 ? body->GetRight()
+                                 : body;
+
+        if (!last || last->GetAstNodeTag() != A_AstReturn)
+        {
+            std::cerr << "syntax error: function " << symbol.name;
+            std::cerr << " does not end with a return!" << std::endl;
+            std::exit(1);
+        }
+    }
 
     return std::make_unique<AstFunction>(body, symbol);
 }
@@ -133,9 +166,11 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
  * statement: print_statement
  *      |     declaration
  *      |     assignment_statement
+ *      |     function_call
  *      |     if_statement
  *      |     while_statement
  *      |     for_statement
+ *      |     return_statement
  *      ;
  */
 AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
@@ -146,6 +181,7 @@ AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
             return PrintStatement(token_list, i);
         case T_Int:
         case T_Char:
+        case T_Long:
             return DeclareStatement(token_list, i);
         case T_If:
             return IfStatement(token_list, i);
@@ -153,7 +189,13 @@ AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
             return WhileStatement(token_list, i);
         case T_For:
             return ForStatement(token_list, i);
+        case T_Return:
+            return ReturnStatement(token_list, i);
         case T_Identifier:
+            /* A '(' after the name turns the statement into a call. */
+            if (TokenTag(token_list[i + 1]) == T_LParen)
+                return FuncCall(token_list, i);
+
             return AssignStatement(token_list, i);
         default:
             std::cerr << "syntax error: unexpected token ";
@@ -219,20 +261,11 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    const Identifier *ident =
-        static_cast<const Identifier *>(token_list[i].get());
-
-    std::optional<Symbol> target = symbol_table_.FindSymbol(ident->GetName());
-
-    if (!target)
-    {
-        std::cerr << "syntax error: undeclared variable ";
-        std::cerr << ident->GetName() << "!" << std::endl;
-        std::exit(1);
-    }
+    Symbol target = LookupTyped(token_list[i], StructuralType::kVariable,
+                                "variable");
 
     /* The identifier names the target of the assignment, it is an lvalue. */
-    AstNodePtr lvalue = MakeIdentLeaf(*target, true);
+    AstNodePtr lvalue = MakeIdentLeaf(target, true);
 
     Match(token_list, i, T_Identifier, "a variable name");
     Match(token_list, i, T_Assign, "=");
@@ -243,20 +276,20 @@ AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
      * The variable keeps its own type, so a value which would have to be
      * narrowed to fit it is rejected.
      */
-    TypeMatch match = MatchTypes(value->GetType(), target->type, true);
+    TypeMatch match = MatchTypes(value->GetType(), target.type, true);
 
     if (!match.compatible)
     {
         std::cerr << "syntax error: cannot store this value in ";
-        std::cerr << target->name << "!" << std::endl;
+        std::cerr << target.name << "!" << std::endl;
         std::exit(1);
     }
 
     if (match.widen_left)
-        value = MakeWiden(value, target->type);
+        value = MakeWiden(value, target.type);
 
     return std::make_unique<AstOperator>(value, lvalue, T_Assign,
-                                         target->type);
+                                         target.type);
 }
 
 /*
@@ -344,6 +377,65 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
+ * return_statement: 'return' '(' expression ')'  ;
+ */
+AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    if (current_function_type_ == PrimitiveType::kVoid)
+    {
+        std::cerr << "syntax error: a void function cannot return a value!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_Return, "return");
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr expression = BinaryExpression(token_list, i, 0);
+
+    /* The value has to fit the return type of the enclosing function. */
+    TypeMatch match = MatchTypes(expression->GetType(),
+                                 current_function_type_,
+                                 true);
+
+    if (!match.compatible)
+    {
+        std::cerr << "syntax error: this value does not fit the return type";
+        std::cerr << " of the function!" << std::endl;
+        std::exit(1);
+    }
+
+    if (match.widen_left)
+        expression = MakeWiden(expression, current_function_type_);
+
+    Match(token_list, i, T_RParen, ")");
+
+    return std::make_unique<AstReturn>(expression);
+}
+
+/*
+ * function_call: identifier '(' expression ')'  ;
+ *
+ * The current token is the function's name, so a single token of lookahead
+ * is all it takes to tell a call apart from a variable.
+ */
+AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    Symbol function = LookupTyped(token_list[i], StructuralType::kFunction,
+                                  "function");
+
+    Match(token_list, i, T_Identifier, "a function name");
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr argument = BinaryExpression(token_list, i, 0);
+
+    Match(token_list, i, T_RParen, ")");
+
+    return std::make_unique<AstFuncCall>(argument, function);
+}
+
+/*
  * Parse the parenthesised condition shared by if and while statements.
  */
 AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
@@ -382,7 +474,7 @@ AstNodePtr Parser::BinaryExpression(
     idx_t& i,
     uint8 ptp) /* previous token precedence */
 {
-    AstNodePtr left = ParsePrimary(token_list[i++]);
+    AstNodePtr left = ParsePrimary(token_list, i);
 
     /*
      * Only a binary operator has a non-zero precedence, so the loop
@@ -406,14 +498,15 @@ AstNodePtr Parser::BinaryExpression(
     return left;
 }
 
-AstNodePtr Parser::ParsePrimary(const NodePtr& token)
+AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
+    idx_t& i)
 {
-    switch (TokenTag(token))
+    switch (TokenTag(token_list[i]))
     {
         case T_IntLit:
         {
             const Literal<int, T_IntLit> *lit =
-                static_cast<const Literal<int, T_IntLit>*>(token.get());
+                static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
             int32 value = lit->GetValue();
 
             /*
@@ -425,28 +518,27 @@ AstNodePtr Parser::ParsePrimary(const NodePtr& token)
                                  ? PrimitiveType::kChar
                                  : PrimitiveType::kInt;
 
+            const NodePtr& token = token_list[i];
+            i++;
+
             return MakeIntLitLeaf(token, type);
         }
         case T_Identifier:
         {
-            const Identifier *ident =
-                static_cast<const Identifier *>(token.get());
+            /* A '(' after the name turns this into a function call. */
+            if (TokenTag(token_list[i + 1]) == T_LParen)
+                return FuncCall(token_list, i);
 
-            std::optional<Symbol> symbol =
-                symbol_table_.FindSymbol(ident->GetName());
+            Symbol symbol = LookupTyped(token_list[i],
+                                        StructuralType::kVariable,
+                                        "variable");
+            i++;
 
-            if (!symbol)
-            {
-                std::cerr << "syntax error: undeclared variable ";
-                std::cerr << ident->GetName() << "!" << std::endl;
-                std::exit(1);
-            }
-
-            return MakeIdentLeaf(*symbol, false);
+            return MakeIdentLeaf(symbol, false);
         }
         default:
             std::cerr << "syntax error: unexpected token ";
-            std::cerr << NodeTagToString(TokenTag(token));
+            std::cerr << NodeTagToString(TokenTag(token_list[i]));
             std::cerr << ", expect an expression!" << std::endl;
             std::exit(1);
     }
@@ -463,6 +555,9 @@ PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
         case T_Int:
             i++;
             return PrimitiveType::kInt;
+        case T_Long:
+            i++;
+            return PrimitiveType::kLong;
         case T_Void:
             i++;
             return PrimitiveType::kVoid;
@@ -470,6 +565,31 @@ PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
             std::cerr << "syntax error: expect a type!" << std::endl;
             std::exit(1);
     }
+}
+
+Symbol Parser::LookupTyped(const NodePtr& token,
+    StructuralType wanted,
+    std::string_view what)
+{
+    const Identifier *ident = static_cast<const Identifier *>(token.get());
+
+    std::optional<Symbol> symbol = symbol_table_.FindSymbol(ident->GetName());
+
+    if (!symbol)
+    {
+        std::cerr << "syntax error: undeclared " << what << " ";
+        std::cerr << ident->GetName() << "!" << std::endl;
+        std::exit(1);
+    }
+
+    if (symbol->stype != wanted)
+    {
+        std::cerr << "syntax error: " << ident->GetName();
+        std::cerr << " is not a " << what << "!" << std::endl;
+        std::exit(1);
+    }
+
+    return *symbol;
 }
 
 void Parser::WidenOperands(AstNodePtr& left, AstNodePtr& right)

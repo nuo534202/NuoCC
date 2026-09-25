@@ -49,6 +49,15 @@ private:
         idx_t& i);
     AstNodePtr ForStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
+    AstNodePtr ReturnStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    /*
+     * Parse a function call. The current token is the function's name and
+     * the next one is the opening parenthesis.
+     */
+    AstNodePtr FuncCall(const std::vector<NodePtr>& token_list,
+        idx_t& i);
 
     AstNodePtr Condition(const std::vector<NodePtr>& token_list,
         idx_t& i,
@@ -61,11 +70,20 @@ private:
         idx_t& i,
         uint8 ptp); /* previous token precedence */
 
-    AstNodePtr ParsePrimary(const NodePtr& token);
+    AstNodePtr ParsePrimary(const std::vector<NodePtr>& token_list,
+        idx_t& i);
 
     /* Parse the type which starts a declaration and step over it. */
     PrimitiveType ParseType(const std::vector<NodePtr>& token_list,
                             idx_t& i);
+
+    /*
+     * Return the declaration a name refers to, checking that it really names
+     * a variable or a function as the grammar expects there.
+     */
+    Symbol LookupTyped(const NodePtr& token,
+                       StructuralType wanted,
+                       std::string_view what);
 
     /*
      * Widen the narrower of two operands so that both have the same type.
@@ -95,6 +113,12 @@ private:
 
 private:
     SymbolTable symbol_table_;
+
+    /*
+     * The return type of the function being parsed, kNone while no function
+     * body is open. The caller sets and restores it.
+     */
+    PrimitiveType current_function_type_ = PrimitiveType::kNone;
 };
 
 }   /* namespace nuocc */

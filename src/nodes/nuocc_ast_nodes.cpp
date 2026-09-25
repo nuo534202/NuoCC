@@ -162,4 +162,18 @@ const Symbol& AstFunction::GetSymbol() const
 AstWiden::AstWiden(AstNodePtr& expression, PrimitiveType type)
     : AstNode(A_AstWiden, type, expression) {}
 
+/* AstReturn */
+AstReturn::AstReturn(AstNodePtr& expression)
+    : AstNode(A_AstReturn, PrimitiveType::kNone, expression) {}
+
+/* AstFuncCall */
+AstFuncCall::AstFuncCall(AstNodePtr& argument, const Symbol& symbol)
+    : AstNode(A_AstFuncCall, symbol.type, argument),
+      symbol_(symbol) {}
+
+const Symbol& AstFuncCall::GetSymbol() const
+{
+    return symbol_;
+}
+
 }   /* namespace nuocc*/

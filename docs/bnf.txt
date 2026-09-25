@@ -2,7 +2,7 @@ program: function_declaration
     | function_declaration program
     ;
 
-function_declaration: 'void' identifier '(' ')' compound_statement
+function_declaration: type identifier '(' ')' compound_statement
     ;
 
 compound_statement:
@@ -14,9 +14,11 @@ compound_statement:
 statement: print_statement
     | declaration
     | assignment_statement
+    | function_call
     | if_statement
     | while_statement
     | for_statement
+    | return_statement
     ;
 
 print_statement: 'print' expression ';'
@@ -27,7 +29,14 @@ declaration: type identifier ';'
 
 type: 'char'
     | 'int'
+    | 'long'
     | 'void'
+    ;
+
+function_call: identifier '(' expression ')'
+    ;
+
+return_statement: 'return' '(' expression ')'
     ;
 
 assignment_statement: identifier '=' expression ';'

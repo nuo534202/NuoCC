@@ -37,6 +37,8 @@ private:
     void GenWhile(const AstNodePtr& root);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
+    reg_idx GenCall(const AstNodePtr& root);
+    void GenReturn(reg_idx reg);
 
     void GenGlobSymbol(const Symbol& symbol);
     reg_idx LoadGlobSymbol(const Symbol& symbol);
@@ -78,7 +80,12 @@ private:
     std::string reg_list_[kRegSize];
     /* The low byte of each register, required by the setX instructions. */
     std::string breg_list_[kRegSize];
+    /* The low four bytes of each register, for the int type. */
+    std::string dreg_list_[kRegSize];
     label_idx next_label_;
+    /* The function whose code is being generated. */
+    label_idx function_end_label_;
+    PrimitiveType function_return_type_;
     std::ofstream ofs_;
 };
 

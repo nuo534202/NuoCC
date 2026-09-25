@@ -5,6 +5,9 @@
 #include <iostream>
 #include <unordered_map>
 
+#include "utils/nuocc_runtime.hpp"
+#include "utils/nuocc_type_check.hpp"
+
 namespace nuocc
 {
 
@@ -33,6 +36,8 @@ const std::unordered_map<NodeTag, ComparisonInstr> kComparisonInstr = {
 
 AsmCodegen::AsmCodegen(const std::string& output_file)
     : next_label_(1),
+      function_end_label_(0),
+      function_return_type_(PrimitiveType::kNone),
       ofs_(output_file, std::ios::out | std::ios::trunc)
 {
     if (!ofs_.is_open())
@@ -45,7 +50,8 @@ AsmCodegen::AsmCodegen(const std::string& output_file)
     {
         is_free_[i] = true;
         reg_list_[i] = "%r" + std::to_string(i + 8);
-        breg_list_[i] = "%r" + std::to_string(i + 8) + "b";
+        breg_list_[i] = reg_list_[i] + "b";
+        dreg_list_[i] = reg_list_[i] + "d";
     }
 }
 
@@ -66,35 +72,25 @@ void AsmCodegen::GenProgram(const std::vector<AstNodePtr>& functions)
 
 /*
  * The preamble is what every program needs regardless of the functions it
- * declares: the only thing the language can currently call is printint().
+ * declares. The only thing the language can currently call is printint(),
+ * which is a normal C function linked in with the generated code.
  */
 void AsmCodegen::GenPreamble()
 {
     ofs_ << "\t.text" << std::endl;
-    ofs_ << ".LC0:" << std::endl;
-    ofs_ << "\t.string\t\"%d\\n\"" << std::endl;
-
-    ofs_ << "printint:" << std::endl;
-    ofs_ << "\tpushq\t%rbp" << std::endl;
-    ofs_ << "\tmovq\t%rsp, %rbp" << std::endl;
-    ofs_ << "\tsubq\t$16, %rsp" << std::endl;
-    ofs_ << "\tmovl\t%edi, -4(%rbp)" << std::endl;
-    ofs_ << "\tmovl\t-4(%rbp), %eax" << std::endl;
-    ofs_ << "\tmovl\t%eax, %esi" << std::endl;
-    ofs_ << "\tleaq\t.LC0(%rip), %rdi" << std::endl;
-    ofs_ << "\tmovl\t$0, %eax" << std::endl;
-    ofs_ << "\tcall\tprintf@PLT" << std::endl;
-    ofs_ << "\tnop" << std::endl;
-    ofs_ << "\tleave" << std::endl;
-    ofs_ << "\tret" << std::endl;
-
-    ofs_ << std::endl;
 }
 
 void AsmCodegen::GenFunction(const AstNodePtr& root)
 {
     const AstFunction *function =
         static_cast<const AstFunction*>(root.get());
+
+    /*
+     * Every return statement jumps here, and the node which tells us which
+     * register the result of a return has to end up in.
+     */
+    function_end_label_ = NewLabel();
+    function_return_type_ = function->GetSymbol().type;
 
     GenFunctionPreamble(function->GetSymbol());
 
@@ -103,6 +99,9 @@ void AsmCodegen::GenFunction(const AstNodePtr& root)
     FreeAllRegister();
 
     GenFunctionPostamble();
+
+    function_end_label_ = 0;
+    function_return_type_ = PrimitiveType::kNone;
 }
 
 void AsmCodegen::GenFunctionPreamble(const Symbol& symbol)
@@ -117,7 +116,8 @@ void AsmCodegen::GenFunctionPreamble(const Symbol& symbol)
 
 void AsmCodegen::GenFunctionPostamble()
 {
-    ofs_ << "\tmovl $0, %eax" << std::endl;
+    EmitLabel(function_end_label_);
+
     ofs_ << "\tpopq %rbp" << std::endl;
     ofs_ << "\tret" << std::endl;
 }
@@ -163,6 +163,22 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         case A_AstWhile:
             GenWhile(root);
             return;
+
+        case A_AstReturn:
+        {
+            reg_idx reg = GenExpr(root->GetLeft());
+            GenReturn(reg);
+            FreeRegister(reg);
+            return;
+        }
+
+        case A_AstFuncCall:
+        {
+            /* The result of a call is discarded when it stands alone. */
+            reg_idx reg = GenCall(root);
+            FreeRegister(reg);
+            return;
+        }
 
         case A_AstOperator:
         {
@@ -330,6 +346,8 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 
             return Widen(reg, root->GetLeft()->GetType(), root->GetType());
         }
+        case A_AstFuncCall:
+            return GenCall(root);
         case A_AstOperator:
         {
             const AstOperator *ast_op =
@@ -387,42 +405,143 @@ reg_idx AsmCodegen::GenOperator(NodeTag op_type,
     std::exit(1);
 }
 
+/*
+ * Call a function, passing the value held in one register as its single
+ * argument. The result comes back in %rax, so it is copied straight into a
+ * fresh register.
+ *
+ * The call is allowed to clobber every register, so the ones which still
+ * hold a value have to be saved across it. An odd number of saved
+ * registers would leave the stack misaligned for the call, so it is padded
+ * back to a multiple of sixteen bytes.
+ */
+reg_idx AsmCodegen::GenCall(const AstNodePtr& root)
+{
+    const AstFuncCall *call = static_cast<const AstFuncCall*>(root.get());
+
+    reg_idx arg_reg = GenExpr(root->GetLeft());
+    int32 saved = 0;
+
+    for (reg_idx reg = 0; reg < kRegSize; reg++)
+    {
+        if (!is_free_[reg] && reg != arg_reg)
+        {
+            ofs_ << "\tpushq\t" << reg_list_[reg] << std::endl;
+            saved++;
+        }
+    }
+
+    if (saved % 2 != 0)
+        ofs_ << "\tsubq\t$8, %rsp" << std::endl;
+
+    ofs_ << "\tmovq\t" << reg_list_[arg_reg] << ", %rdi" << std::endl;
+    ofs_ << "\tcall\t" << call->GetSymbol().name << std::endl;
+
+    if (saved % 2 != 0)
+        ofs_ << "\taddq\t$8, %rsp" << std::endl;
+
+    for (reg_idx reg = kRegSize; reg > 0; reg--)
+    {
+        if (!is_free_[reg - 1] && reg - 1 != arg_reg)
+            ofs_ << "\tpopq\t" << reg_list_[reg - 1] << std::endl;
+    }
+
+    reg_idx out_reg = AllocRegister();
+
+    ofs_ << "\tmovq\t%rax, " << reg_list_[out_reg] << std::endl;
+
+    FreeRegister(arg_reg);
+
+    return out_reg;
+}
+
+/*
+ * Return from the function being generated. The result goes in %rax, where
+ * the caller expects to find it, and control jumps to the end label.
+ */
+void AsmCodegen::GenReturn(reg_idx reg)
+{
+    switch (function_return_type_)
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tmovzbl\t" << breg_list_[reg] << ", %eax" << std::endl;
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmovl\t" << dreg_list_[reg] << ", %eax" << std::endl;
+            break;
+        case PrimitiveType::kLong:
+            ofs_ << "\tmovq\t" << reg_list_[reg] << ", %rax" << std::endl;
+            break;
+        default:
+            std::cerr << "Error: bad return type in a return statement!";
+            std::cerr << std::endl;
+            std::exit(1);
+    }
+
+    EmitJump(function_end_label_);
+}
+
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
-    /* A char only needs a single byte of storage, an int needs eight. */
-    if (symbol.type == PrimitiveType::kInt)
-        ofs_ << "\t.comm\t" << symbol.name << ",8,8" << std::endl;
-    else
-        ofs_ << "\t.comm\t" << symbol.name << ",1,1" << std::endl;
+    /* The storage a variable needs is decided by its type. */
+    int32 size = PrimitiveSize(symbol.type);
+
+    ofs_ << "\t.comm\t" << symbol.name << "," << size << "," << size;
+    ofs_ << std::endl;
 }
 
 reg_idx AsmCodegen::LoadGlobSymbol(const Symbol& symbol)
 {
     reg_idx idx = AllocRegister();
 
-    /* movzbq also widens the byte it loads to the full register. */
-    if (symbol.type == PrimitiveType::kInt)
-        ofs_ << "\tmovq\t" << symbol.name << "(%rip), ";
-    else
-        ofs_ << "\tmovzbq\t" << symbol.name << "(%rip), ";
-
-    ofs_ << reg_list_[idx] << std::endl;
+    /*
+     * Every one of these leaves the whole register holding the value: the
+     * widening loads clear the rest of it, and writing to a 32-bit register
+     * clears its upper half.
+     */
+    switch (symbol.type)
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tmovzbq\t" << symbol.name << "(%rip), ";
+            ofs_ << reg_list_[idx] << std::endl;
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmovl\t" << symbol.name << "(%rip), ";
+            ofs_ << dreg_list_[idx] << std::endl;
+            break;
+        case PrimitiveType::kLong:
+            ofs_ << "\tmovq\t" << symbol.name << "(%rip), ";
+            ofs_ << reg_list_[idx] << std::endl;
+            break;
+        default:
+            std::cerr << "Error: bad type for variable ";
+            std::cerr << symbol.name << "!" << std::endl;
+            std::exit(1);
+    }
 
     return idx;
 }
 
 reg_idx AsmCodegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
 {
-    if (symbol.type == PrimitiveType::kInt)
+    switch (symbol.type)
     {
-        ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
-        ofs_ << symbol.name << "(%rip)" << std::endl;
+        case PrimitiveType::kChar:
+            ofs_ << "\tmovb\t" << breg_list_[reg] << ", ";
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmovl\t" << dreg_list_[reg] << ", ";
+            break;
+        case PrimitiveType::kLong:
+            ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
+            break;
+        default:
+            std::cerr << "Error: bad type for variable ";
+            std::cerr << symbol.name << "!" << std::endl;
+            std::exit(1);
     }
-    else
-    {
-        ofs_ << "\tmovb\t" << breg_list_[reg] << ", ";
-        ofs_ << symbol.name << "(%rip)" << std::endl;
-    }
+
+    ofs_ << symbol.name << "(%rip)" << std::endl;
 
     return reg;
 }
@@ -591,7 +710,8 @@ void AsmCodegen::CompareAndJump(NodeTag op_type,
 void AsmCodegen::PrintInt(reg_idx reg)
 {
     ofs_ << "\tmovq\t" << reg_list_[reg] << ", %rdi" << std::endl;
-    ofs_ << "\tcall\tprintint\n" << std::endl;
+    ofs_ << "\tcall\t" << kPrintIntName << std::endl;
+    ofs_ << std::endl;
 
     FreeRegister(reg);
 }

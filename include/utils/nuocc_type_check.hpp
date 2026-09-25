@@ -17,12 +17,19 @@ struct TypeMatch
 };
 
 /*
- * Match the primitive types of the two operands of an operator.
+ * The size in bytes of a primitive type on the target machine. A size of
+ * zero means the type cannot hold a value at all.
+ */
+int32 PrimitiveSize(PrimitiveType type);
+
+/*
+ * Match the primitive types of the two operands of an operator. Two types
+ * are compatible when they are the same or when the narrower one can be
+ * widened to the wider one.
  *
  * When only_widen_left is set the right operand keeps its type, so the
- * two types are rejected when it is the left one which is wider.
- * Assignments use that to stop a wide value from being stored into a
- * narrow variable.
+ * two are rejected when it is the right one which is narrower. That is
+ * what stops a wide value from being stored into a narrow variable.
  */
 TypeMatch MatchTypes(PrimitiveType left,
                      PrimitiveType right,

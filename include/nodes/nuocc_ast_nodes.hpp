@@ -206,4 +206,31 @@ public:
     ~AstWiden() = default;
 };
 
+/*
+ * Return the value of the left child from the enclosing function.
+ */
+class AstReturn : public AstNode
+{
+public:
+    explicit AstReturn(AstNodePtr& expression);
+    ~AstReturn() = default;
+};
+
+/*
+ * Call a function, passing the value of the left child as its single
+ * argument. The type of this node is the return type of the function.
+ */
+class AstFuncCall : public AstNode
+{
+public:
+    AstFuncCall(AstNodePtr& argument, const Symbol& symbol);
+    ~AstFuncCall() = default;
+
+public:
+    const Symbol& GetSymbol() const;
+
+private:
+    Symbol symbol_;
+};
+
 }   /* namespace nuocc */

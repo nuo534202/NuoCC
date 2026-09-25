@@ -3,23 +3,40 @@
 namespace nuocc
 {
 
+int32 PrimitiveSize(PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kChar:
+            return 1;
+        case PrimitiveType::kInt:
+            return 4;
+        case PrimitiveType::kLong:
+            return 8;
+        default:
+            return 0;
+    }
+}
+
 TypeMatch MatchTypes(PrimitiveType left,
     PrimitiveType right,
     bool only_widen_left)
 {
-    /* A void value cannot take part in an expression. */
-    if (left == PrimitiveType::kVoid || right == PrimitiveType::kVoid)
-        return TypeMatch{};
-
     /* The same type on both sides needs no conversion. */
     if (left == right)
         return TypeMatch{.compatible = true};
 
-    /* A char always widens to an int. */
-    if (left == PrimitiveType::kChar && right == PrimitiveType::kInt)
+    int32 left_size = PrimitiveSize(left);
+    int32 right_size = PrimitiveSize(right);
+
+    /* A type with no size, void or none, cannot hold a value. */
+    if (left_size == 0 || right_size == 0)
+        return TypeMatch{};
+
+    if (left_size < right_size)
         return TypeMatch{.compatible = true, .widen_left = true};
 
-    if (left == PrimitiveType::kInt && right == PrimitiveType::kChar)
+    if (right_size < left_size)
     {
         if (only_widen_left)
             return TypeMatch{};
@@ -27,7 +44,7 @@ TypeMatch MatchTypes(PrimitiveType left,
         return TypeMatch{.compatible = true, .widen_right = true};
     }
 
-    /* Anything remaining is compatible for now. */
+    /* Two different types of the same size are compatible as they are. */
     return TypeMatch{.compatible = true};
 }
 

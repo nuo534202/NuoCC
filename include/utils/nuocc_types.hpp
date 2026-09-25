@@ -32,7 +32,8 @@ enum class PrimitiveType : uint8
     kNone = 0,
     kVoid,
     kChar,
-    kInt
+    kInt,
+    kLong
 };
 
 /* What a symbol names. */

@@ -62,6 +62,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Char:
             out = "char";
             break;
+        case T_Long:
+            out = "long";
+            break;
         case T_Print:
             out = "print";
             break;
@@ -79,6 +82,9 @@ std::string NodeTagToString(const NodeTag& tag)
             break;
         case T_Void:
             out = "void";
+            break;
+        case T_Return:
+            out = "return";
             break;
         case T_Identifier:
             out = "Identifier";
