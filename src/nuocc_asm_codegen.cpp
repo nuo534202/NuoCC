@@ -54,21 +54,22 @@ AsmCodegen::~AsmCodegen()
     ofs_.close();
 }
 
-void AsmCodegen::GenProgram(const AstNodePtr& root)
+void AsmCodegen::GenProgram(const std::vector<AstNodePtr>& functions)
 {
+    FreeAllRegister();
+
     GenPreamble();
 
-    GenStatement(root);
-
-    FreeAllRegister();
-
-    GenPostamble();
+    for (const AstNodePtr& function : functions)
+        GenFunction(function);
 }
 
+/*
+ * The preamble is what every program needs regardless of the functions it
+ * declares: the only thing the language can currently call is printint().
+ */
 void AsmCodegen::GenPreamble()
 {
-    FreeAllRegister();
-
     ofs_ << "\t.text" << std::endl;
     ofs_ << ".LC0:" << std::endl;
     ofs_ << "\t.string\t\"%d\\n\"" << std::endl;
@@ -88,15 +89,33 @@ void AsmCodegen::GenPreamble()
     ofs_ << "\tret" << std::endl;
 
     ofs_ << std::endl;
+}
 
-    ofs_ << "\t.globl\tmain" << std::endl;
-    ofs_ << "\t.type\tmain, @function" << std::endl;
-    ofs_ << "main:" << std::endl;
+void AsmCodegen::GenFunction(const AstNodePtr& root)
+{
+    const AstFunction *function =
+        static_cast<const AstFunction*>(root.get());
+
+    GenFunctionPreamble(function->GetSymbol());
+
+    GenStatement(root->GetLeft());
+
+    FreeAllRegister();
+
+    GenFunctionPostamble();
+}
+
+void AsmCodegen::GenFunctionPreamble(const Symbol& name)
+{
+    ofs_ << "\t.text" << std::endl;
+    ofs_ << "\t.globl\t" << name << std::endl;
+    ofs_ << "\t.type\t" << name << ", @function" << std::endl;
+    ofs_ << name << ":" << std::endl;
     ofs_ << "\tpushq\t%rbp" << std::endl;
     ofs_ << "\tmovq\t%rsp, %rbp" << std::endl;
 }
 
-void AsmCodegen::GenPostamble()
+void AsmCodegen::GenFunctionPostamble()
 {
     ofs_ << "\tmovl $0, %eax" << std::endl;
     ofs_ << "\tpopq %rbp" << std::endl;

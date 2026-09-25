@@ -1,4 +1,8 @@
-program: compound_statement
+program: function_declaration
+    | function_declaration program
+    ;
+
+function_declaration: 'void' identifier '(' ')' compound_statement
     ;
 
 compound_statement:

@@ -8,3 +8,5 @@
 5. If-Else Statements.
 6. While Loops.
 7. For Loops.
+8. Function Declarations. Every function is `void` and takes no arguments,
+   so only `main` runs.

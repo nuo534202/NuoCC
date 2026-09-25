@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "nodes/nuocc_ast_nodes.hpp"
 #include "utils/nuocc_types.hpp"
@@ -23,11 +24,13 @@ public:
     ~AsmCodegen();
 
 public:
-    void GenProgram(const AstNodePtr& root);
+    void GenProgram(const std::vector<AstNodePtr>& functions);
 
 private:
     void GenPreamble();
-    void GenPostamble();
+    void GenFunction(const AstNodePtr& root);
+    void GenFunctionPreamble(const Symbol& name);
+    void GenFunctionPostamble();
 
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);

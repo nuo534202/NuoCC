@@ -172,4 +172,21 @@ private:
     Symbol symbol_;
 };
 
+/*
+ * A function declaration. All functions are void and take no arguments for
+ * now, so the left child holding the body is all there is besides the name.
+ */
+class AstFunction : public AstNode
+{
+public:
+    AstFunction(AstNodePtr& body, const Symbol& symbol);
+    ~AstFunction() = default;
+
+public:
+    const Symbol& GetSymbol() const;
+
+private:
+    Symbol symbol_;
+};
+
 }   /* namespace nuocc */

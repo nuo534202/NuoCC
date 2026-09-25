@@ -37,6 +37,7 @@ typedef enum NodeTag
     T_Else,
     T_While,
     T_For,
+    T_Void,
 
     T_Identifier,
 
@@ -60,7 +61,8 @@ typedef enum AstNodeTag
     A_AstGlue,
     A_AstIf,
     A_AstWhile,
-    A_AstDeclare
+    A_AstDeclare,
+    A_AstFunction
 } AstNodeTag;
 
 }   /* namespace nuocc */

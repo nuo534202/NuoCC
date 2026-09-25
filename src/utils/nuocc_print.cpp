@@ -74,6 +74,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_For:
             out = "for";
             break;
+        case T_Void:
+            out = "void";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;

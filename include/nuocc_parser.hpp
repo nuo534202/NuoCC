@@ -21,12 +21,15 @@ private:
 
 public:
     /*
-     * Parse the whole token list and return the abstract syntax tree of
-     * the program. The program is a compound statement.
+     * Parse the whole token list and return the functions which make up
+     * the program. A program is one or more function declarations.
      */
-    AstNodePtr Parse(const std::vector<NodePtr>& token_list);
+    std::vector<AstNodePtr> Parse(const std::vector<NodePtr>& token_list);
 
 private:
+    AstNodePtr FunctionDeclaration(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
     AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
     AstNodePtr Statement(const std::vector<NodePtr>& token_list,

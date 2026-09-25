@@ -1,3 +1,4 @@
+void main()
 { print 12 * 3;
   print
      18 - 2

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "nuocc_asm_codegen.hpp"
 #include "nuocc_parser.hpp"
@@ -29,7 +30,8 @@ int main(int argc, const char **argv)
     nuocc::PRINTTOKENLIST(scanner);
 
     nuocc::Parser parser;
-    nuocc::AstNodePtr program = parser.Parse(scanner.GetTokenList());
+    std::vector<nuocc::AstNodePtr> program
+        = parser.Parse(scanner.GetTokenList());
 
     nuocc::AsmCodegen asm_codegen(kOutputFile);
     asm_codegen.GenProgram(program);

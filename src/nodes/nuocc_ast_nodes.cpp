@@ -164,4 +164,14 @@ const Symbol& AstDeclare::GetSymbol() const
     return symbol_;
 }
 
+/* AstFunction */
+AstFunction::AstFunction(AstNodePtr& body, const Symbol& symbol)
+    : AstNode(A_AstFunction, body),
+      symbol_(symbol) {}
+
+const Symbol& AstFunction::GetSymbol() const
+{
+    return symbol_;
+}
+
 }   /* namespace nuocc*/

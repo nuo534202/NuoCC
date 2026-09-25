@@ -260,7 +260,8 @@ bool Scanner::IsIdent(const std::string& token)
 const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"int", T_Int}, {"print", T_Print},
     {"if", T_If}, {"else", T_Else},
-    {"while", T_While}, {"for", T_For}
+    {"while", T_While}, {"for", T_For},
+    {"void", T_Void}
 };
 
 /*

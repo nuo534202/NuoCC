@@ -33,20 +33,51 @@ bool IsSimpleStatement(AstNodeTag tag)
 
 }   /* namespace */
 
-AstNodePtr Parser::Parse(const std::vector<NodePtr>& token_list)
+std::vector<AstNodePtr> Parser::Parse(const std::vector<NodePtr>& token_list)
 {
     idx_t i = 0;
-    AstNodePtr program = CompoundStatement(token_list, i);
+    std::vector<AstNodePtr> functions;
 
-    if (TokenTag(token_list[i]) != T_EOF)
+    while (TokenTag(token_list[i]) != T_EOF)
+        functions.push_back(FunctionDeclaration(token_list, i));
+
+    if (functions.empty())
     {
-        std::cerr << "syntax error: unexpected token ";
-        std::cerr << NodeTagToString(TokenTag(token_list[i]));
-        std::cerr << " after the program!" << std::endl;
+        std::cerr << "syntax error: the program has no function!" << std::endl;
         std::exit(1);
     }
 
-    return program;
+    return functions;
+}
+
+/*
+ * function_declaration: 'void' identifier '(' ')' compound_statement  ;
+ */
+AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Void, "void");
+
+    if (TokenTag(token_list[i]) != T_Identifier)
+    {
+        std::cerr << "syntax error: expect a function name!" << std::endl;
+        std::exit(1);
+    }
+
+    const Identifier *ident =
+        static_cast<const Identifier *>(token_list[i].get());
+    Symbol symbol_name = ident->GetName();
+
+    symbol_table_.AddSymbol(symbol_name);
+
+    i++;
+
+    Match(token_list, i, T_LParen, "(");
+    Match(token_list, i, T_RParen, ")");
+
+    AstNodePtr body = CompoundStatement(token_list, i);
+
+    return std::make_unique<AstFunction>(body, symbol_name);
 }
 
 /*
