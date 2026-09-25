@@ -59,6 +59,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Int:
             out = "int";
             break;
+        case T_Char:
+            out = "char";
+            break;
         case T_Print:
             out = "print";
             break;

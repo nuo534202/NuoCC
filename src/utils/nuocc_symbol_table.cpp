@@ -3,15 +3,16 @@
 namespace nuocc
 {
 
-idx_t SymbolTable::FindSymbol(const Symbol& symbol)
+std::optional<Symbol> SymbolTable::FindSymbol(const std::string& name) const
 {
-    for (idx_t i = symbols_.size(); i; i--)
+    /* The most recent definition of a name wins. */
+    for (auto it = symbols_.rbegin(); it != symbols_.rend(); ++it)
     {
-        if (symbols_[i - 1] == symbol)
-            return i;
+        if (it->name == name)
+            return *it;
     }
 
-    return 0;
+    return std::nullopt;
 }
 
 void SymbolTable::AddSymbol(const Symbol& symbol)

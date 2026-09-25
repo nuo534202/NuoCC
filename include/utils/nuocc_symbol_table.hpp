@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "utils/nuocc_types.hpp"
@@ -14,10 +16,8 @@ public:
     ~SymbolTable() = default;
 
 public:
-    /*
-     *  return value: the index + 1 of the symbol, 0 if not found
-     */
-    idx_t FindSymbol(const Symbol& symbol);
+    /* Return the symbol with this name, or nothing when it is unknown. */
+    std::optional<Symbol> FindSymbol(const std::string& name) const;
     void AddSymbol(const Symbol& symbol);
 
 private:

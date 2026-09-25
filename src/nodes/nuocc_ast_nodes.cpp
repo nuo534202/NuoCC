@@ -4,47 +4,40 @@ namespace nuocc
 {
 
 /* AstNode */
-AstNode::AstNode(AstNodeTag node_type)
+AstNode::AstNode(AstNodeTag node_type, PrimitiveType type)
     : left_(nullptr),
       mid_(nullptr),
       right_(nullptr),
-      node_type_(node_type) {}
+      node_type_(node_type),
+      type_(type) {}
 
-AstNode::AstNode(AstNodeTag node_type, AstNodePtr& left)
+AstNode::AstNode(AstNodeTag node_type, PrimitiveType type, AstNodePtr& left)
     : left_(std::move(left)),
       mid_(nullptr),
       right_(nullptr),
-      node_type_(node_type) {}
+      node_type_(node_type),
+      type_(type) {}
 
-AstNode::AstNode(AstNodeTag node_type, AstNodePtr& left, AstNodePtr& right)
+AstNode::AstNode(AstNodeTag node_type,
+    PrimitiveType type,
+    AstNodePtr& left,
+    AstNodePtr& right)
     : left_(std::move(left)),
       mid_(nullptr),
       right_(std::move(right)),
-      node_type_(node_type) {}
+      node_type_(node_type),
+      type_(type) {}
 
 AstNode::AstNode(AstNodeTag node_type,
-                 AstNodePtr& left,
-                 AstNodePtr& mid,
-                 AstNodePtr& right)
+    PrimitiveType type,
+    AstNodePtr& left,
+    AstNodePtr& mid,
+    AstNodePtr& right)
     : left_(std::move(left)),
       mid_(std::move(mid)),
       right_(std::move(right)),
-      node_type_(node_type) {}
-
-void AstNode::SetLeft(AstNodePtr& left)
-{
-    left_ = std::move(left);
-}
-
-void AstNode::SetMid(AstNodePtr& mid)
-{
-    mid_ = std::move(mid);
-}
-
-void AstNode::SetRight(AstNodePtr& right)
-{
-    right_ = std::move(right);
-}
+      node_type_(node_type),
+      type_(type) {}
 
 const AstNodePtr& AstNode::GetLeft() const
 {
@@ -66,15 +59,17 @@ AstNodeTag AstNode::GetAstNodeTag() const
     return node_type_;
 }
 
+PrimitiveType AstNode::GetType() const
+{
+    return type_;
+}
+
 /* AstOperator */
-AstOperator::AstOperator()
-    : AstNode(A_AstOperator) {}
-
-AstOperator::AstOperator(NodeTag op_type)
-    : AstNode(A_AstOperator), op_type_(op_type) {}
-
-AstOperator::AstOperator(AstNodePtr& left, AstNodePtr& right, NodeTag op_type)
-    : AstNode(A_AstOperator, left, right),
+AstOperator::AstOperator(AstNodePtr& left,
+    AstNodePtr& right,
+    NodeTag op_type,
+    PrimitiveType type)
+    : AstNode(A_AstOperator, type, left, right),
       op_type_(op_type) {}
 
 NodeTag AstOperator::GetOpType() const
@@ -83,20 +78,12 @@ NodeTag AstOperator::GetOpType() const
 }
 
 /* AstIntLit */
-AstIntLit::AstIntLit() : AstNode(A_AstIntLit) {}
-
-AstIntLit::AstIntLit(int32 value)
-    : AstNode(A_AstIntLit),
+AstIntLit::AstIntLit(AstNodePtr& left,
+    AstNodePtr& right,
+    int32 value,
+    PrimitiveType type)
+    : AstNode(A_AstIntLit, type, left, right),
       value_(value) {}
-
-AstIntLit::AstIntLit(AstNodePtr& left, AstNodePtr& right, int32 value)
-    : AstNode(A_AstIntLit, left, right),
-      value_(value) {}
-
-void AstIntLit::SetValue(int value)
-{
-    value_ = value;
-}
 
 int32 AstIntLit::GetValue() const
 {
@@ -107,17 +94,10 @@ int32 AstIntLit::GetValue() const
 AstIdentifier::AstIdentifier(AstNodePtr& left,
     AstNodePtr& right,
     const Symbol& symbol,
-    idx_t ident_idx,
     bool is_lv_ident)
-    : AstNode(A_AstIdentifier, left, right),
+    : AstNode(A_AstIdentifier, symbol.type, left, right),
       symbol_(symbol),
-      ident_idx_(ident_idx),
       is_lv_ident_(is_lv_ident) {}
-
-idx_t AstIdentifier::GetIdentIdx() const
-{
-    return ident_idx_;
-}
 
 const Symbol& AstIdentifier::GetSymbol() const
 {
@@ -131,18 +111,22 @@ bool AstIdentifier::GetLvIdent() const
 
 /* AstPrint */
 AstPrint::AstPrint(AstNodePtr& expression)
-    : AstNode(A_AstPrint, expression) {}
+    : AstNode(A_AstPrint, PrimitiveType::kNone, expression) {}
 
 /* AstGlue */
 AstGlue::AstGlue(AstNodePtr& left, AstNodePtr& right)
-    : AstNode(A_AstGlue, left, right) {}
+    : AstNode(A_AstGlue, PrimitiveType::kNone, left, right) {}
 
 /* AstIf */
 AstIf::AstIf(AstNodePtr& condition,
     AstNodePtr& true_branch,
     AstNodePtr& false_branch,
     bool has_else)
-    : AstNode(A_AstIf, condition, true_branch, false_branch),
+    : AstNode(A_AstIf,
+              PrimitiveType::kNone,
+              condition,
+              true_branch,
+              false_branch),
       has_else_(has_else) {}
 
 bool AstIf::HasElse() const
@@ -152,11 +136,11 @@ bool AstIf::HasElse() const
 
 /* AstWhile */
 AstWhile::AstWhile(AstNodePtr& condition, AstNodePtr& body)
-    : AstNode(A_AstWhile, condition, body) {}
+    : AstNode(A_AstWhile, PrimitiveType::kNone, condition, body) {}
 
 /* AstDeclare */
 AstDeclare::AstDeclare(const Symbol& symbol)
-    : AstNode(A_AstDeclare),
+    : AstNode(A_AstDeclare, PrimitiveType::kNone),
       symbol_(symbol) {}
 
 const Symbol& AstDeclare::GetSymbol() const
@@ -166,12 +150,16 @@ const Symbol& AstDeclare::GetSymbol() const
 
 /* AstFunction */
 AstFunction::AstFunction(AstNodePtr& body, const Symbol& symbol)
-    : AstNode(A_AstFunction, body),
+    : AstNode(A_AstFunction, PrimitiveType::kNone, body),
       symbol_(symbol) {}
 
 const Symbol& AstFunction::GetSymbol() const
 {
     return symbol_;
 }
+
+/* AstWiden */
+AstWiden::AstWiden(AstNodePtr& expression, PrimitiveType type)
+    : AstNode(A_AstWiden, type, expression) {}
 
 }   /* namespace nuocc*/

@@ -105,12 +105,12 @@ void AsmCodegen::GenFunction(const AstNodePtr& root)
     GenFunctionPostamble();
 }
 
-void AsmCodegen::GenFunctionPreamble(const Symbol& name)
+void AsmCodegen::GenFunctionPreamble(const Symbol& symbol)
 {
     ofs_ << "\t.text" << std::endl;
-    ofs_ << "\t.globl\t" << name << std::endl;
-    ofs_ << "\t.type\t" << name << ", @function" << std::endl;
-    ofs_ << name << ":" << std::endl;
+    ofs_ << "\t.globl\t" << symbol.name << std::endl;
+    ofs_ << "\t.type\t" << symbol.name << ", @function" << std::endl;
+    ofs_ << symbol.name << ":" << std::endl;
     ofs_ << "\tpushq\t%rbp" << std::endl;
     ofs_ << "\tmovq\t%rsp, %rbp" << std::endl;
 }
@@ -187,7 +187,8 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
 
             if (!ident->GetLvIdent())
             {
-                std::cerr << "Error: assignment target " << ident->GetSymbol();
+                std::cerr << "Error: assignment target ";
+                std::cerr << ident->GetSymbol().name;
                 std::cerr << " is not an lvalue!" << std::endl;
                 std::exit(1);
             }
@@ -316,12 +317,18 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             if (ident->GetLvIdent())
             {
                 std::cerr << "Error: lvalue identifier ";
-                std::cerr << ident->GetSymbol();
+                std::cerr << ident->GetSymbol().name;
                 std::cerr << " is used as a value!" << std::endl;
                 std::exit(1);
             }
 
             return LoadGlobSymbol(ident->GetSymbol());
+        }
+        case A_AstWiden:
+        {
+            reg_idx reg = GenExpr(root->GetLeft());
+
+            return Widen(reg, root->GetLeft()->GetType(), root->GetType());
         }
         case A_AstOperator:
         {
@@ -382,14 +389,23 @@ reg_idx AsmCodegen::GenOperator(NodeTag op_type,
 
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
-    ofs_ << "\t.comm\t" << symbol << ",8,8" << std::endl;
+    /* A char only needs a single byte of storage, an int needs eight. */
+    if (symbol.type == PrimitiveType::kInt)
+        ofs_ << "\t.comm\t" << symbol.name << ",8,8" << std::endl;
+    else
+        ofs_ << "\t.comm\t" << symbol.name << ",1,1" << std::endl;
 }
 
 reg_idx AsmCodegen::LoadGlobSymbol(const Symbol& symbol)
 {
     reg_idx idx = AllocRegister();
 
-    ofs_ << "\tmovq\t" << symbol << "(%rip), ";
+    /* movzbq also widens the byte it loads to the full register. */
+    if (symbol.type == PrimitiveType::kInt)
+        ofs_ << "\tmovq\t" << symbol.name << "(%rip), ";
+    else
+        ofs_ << "\tmovzbq\t" << symbol.name << "(%rip), ";
+
     ofs_ << reg_list_[idx] << std::endl;
 
     return idx;
@@ -397,8 +413,16 @@ reg_idx AsmCodegen::LoadGlobSymbol(const Symbol& symbol)
 
 reg_idx AsmCodegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
 {
-    ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
-    ofs_ << symbol << "(%rip)" << std::endl;
+    if (symbol.type == PrimitiveType::kInt)
+    {
+        ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
+        ofs_ << symbol.name << "(%rip)" << std::endl;
+    }
+    else
+    {
+        ofs_ << "\tmovb\t" << breg_list_[reg] << ", ";
+        ofs_ << symbol.name << "(%rip)" << std::endl;
+    }
 
     return reg;
 }
@@ -498,6 +522,18 @@ reg_idx AsmCodegen::Div(reg_idx reg1, reg_idx reg2)
     FreeRegister(reg2);
 
     return reg1;
+}
+
+reg_idx AsmCodegen::Widen(reg_idx reg,
+    PrimitiveType /*old_type*/,
+    PrimitiveType /*new_type*/)
+{
+    /*
+     * Nothing to do on x86-64. A char is loaded with movzbq, which already
+     * zeroes the whole register, and a value computed from chars is just
+     * as clean; storing it back truncates to a byte again.
+     */
+    return reg;
 }
 
 reg_idx AsmCodegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)

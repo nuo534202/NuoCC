@@ -14,15 +14,22 @@ namespace nuocc
  * branch and the optional else branch), a glue node uses the left and
  * the right child, and an operator or a print node only uses the left
  * ones. An unused child stays a null pointer.
+ *
+ * A node which stands for an expression also carries the primitive type
+ * of the value it produces. Statement nodes carry kNone.
  */
 class AstNode
 {
 protected:
     AstNode() = default;
-    AstNode(AstNodeTag node_type);
-    AstNode(AstNodeTag node_type, AstNodePtr& left);
-    AstNode(AstNodeTag node_type, AstNodePtr& left, AstNodePtr& right);
+    AstNode(AstNodeTag node_type, PrimitiveType type);
+    AstNode(AstNodeTag node_type, PrimitiveType type, AstNodePtr& left);
     AstNode(AstNodeTag node_type,
+            PrimitiveType type,
+            AstNodePtr& left,
+            AstNodePtr& right);
+    AstNode(AstNodeTag node_type,
+            PrimitiveType type,
             AstNodePtr& left,
             AstNodePtr& mid,
             AstNodePtr& right);
@@ -31,29 +38,29 @@ public:
     virtual ~AstNode() = default;
 
 public:
-    void SetLeft(AstNodePtr& left);
-    void SetMid(AstNodePtr& mid);
-    void SetRight(AstNodePtr& right);
-
     const AstNodePtr& GetLeft() const;
     const AstNodePtr& GetMid() const;
     const AstNodePtr& GetRight() const;
 
     AstNodeTag GetAstNodeTag() const;
+    PrimitiveType GetType() const;
 
 private:
     AstNodePtr left_;
     AstNodePtr mid_;
     AstNodePtr right_;
     AstNodeTag node_type_;
+    PrimitiveType type_;
 };
 
+/* A binary operator, holding the type of the value it produces. */
 class AstOperator : public AstNode
 {
 public:
-    AstOperator();
-    AstOperator(NodeTag op_type);
-    AstOperator(AstNodePtr& left, AstNodePtr& right, NodeTag op_type);
+    AstOperator(AstNodePtr& left,
+                AstNodePtr& right,
+                NodeTag op_type,
+                PrimitiveType type);
     ~AstOperator() = default;
 
 public:
@@ -63,40 +70,39 @@ private:
     NodeTag op_type_;
 };
 
+/* An integer literal, whose type records whether it fits a char. */
 class AstIntLit : public AstNode
 {
 public:
-    AstIntLit();
-    AstIntLit(int32 value);
-    AstIntLit(AstNodePtr& left, AstNodePtr& right, int32 value);
+    AstIntLit(AstNodePtr& left,
+              AstNodePtr& right,
+              int32 value,
+              PrimitiveType type);
     ~AstIntLit() = default;
 
 public:
-    void SetValue(int value);
     int32 GetValue() const;
 
 private:
     int32 value_;
 };
 
+/* A reference to a variable, either as its value or as an lvalue target. */
 class AstIdentifier : public AstNode
 {
 public:
     AstIdentifier(AstNodePtr& left,
                   AstNodePtr& right,
                   const Symbol& symbol,
-                  idx_t ident_idx,
                   bool is_lv_ident);
     ~AstIdentifier() = default;
 
 public:
-    idx_t GetIdentIdx() const;
     const Symbol& GetSymbol() const;
     bool GetLvIdent() const;
 
 private:
     Symbol symbol_;
-    idx_t ident_idx_;
     bool is_lv_ident_;
 };
 
@@ -187,6 +193,17 @@ public:
 
 private:
     Symbol symbol_;
+};
+
+/*
+ * Widen the value of the left child, which is narrower than the type of
+ * this node, so that the value can be used at the wider type.
+ */
+class AstWiden : public AstNode
+{
+public:
+    AstWiden(AstNodePtr& expression, PrimitiveType type);
+    ~AstWiden() = default;
 };
 
 }   /* namespace nuocc */

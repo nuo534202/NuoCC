@@ -1,6 +1,8 @@
 # Supported Features
 
-1. Int variable Declaration and Assignment.
+1. `char` and `int` variable Declaration and Assignment. A `char` holds
+   0 to 255 and is widened to an `int` where the two are mixed; storing an
+   `int` which does not fit a `char` is refused.
 2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division.
 3. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
    Less Than Or Equal To, Greater Than Or Equal To.

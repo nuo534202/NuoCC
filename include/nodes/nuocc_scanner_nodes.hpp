@@ -60,21 +60,21 @@ public:
     Identifier(const std::string& name) :
         Node(T_Identifier),
         name_(name) {}
-    
+
     Identifier(const Identifier& variable) :
         Node(variable),
         name_(variable.name_) {}
-    
+
     ~Identifier() = default;
 
 public:
-    const Symbol& GetName() const
+    const std::string& GetName() const
     {
         return name_;
     }
 
 private:
-    Symbol name_;
+    std::string name_;
 };
 
 }   /* namespace nuocc */

@@ -66,18 +66,20 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
 
     const Identifier *ident =
         static_cast<const Identifier *>(token_list[i].get());
-    Symbol symbol_name = ident->GetName();
 
-    symbol_table_.AddSymbol(symbol_name);
+    Symbol symbol{.name = ident->GetName(),
+                  .type = PrimitiveType::kVoid,
+                  .stype = StructuralType::kFunction};
 
-    i++;
+    symbol_table_.AddSymbol(symbol);
 
+    Match(token_list, i, T_Identifier, "a function name");
     Match(token_list, i, T_LParen, "(");
     Match(token_list, i, T_RParen, ")");
 
     AstNodePtr body = CompoundStatement(token_list, i);
 
-    return std::make_unique<AstFunction>(body, symbol_name);
+    return std::make_unique<AstFunction>(body, symbol);
 }
 
 /*
@@ -132,6 +134,8 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
  *      |     declaration
  *      |     assignment_statement
  *      |     if_statement
+ *      |     while_statement
+ *      |     for_statement
  *      ;
  */
 AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
@@ -141,6 +145,7 @@ AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
         case T_Print:
             return PrintStatement(token_list, i);
         case T_Int:
+        case T_Char:
             return DeclareStatement(token_list, i);
         case T_If:
             return IfStatement(token_list, i);
@@ -165,32 +170,49 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_Print, "print");
 
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
-    AstNodePtr root = std::make_unique<AstPrint>(expression);
 
-    return root;
+    /* printint() always takes an int, so widen what it is given. */
+    TypeMatch match = MatchTypes(PrimitiveType::kInt,
+                                 expression->GetType(),
+                                 false);
+
+    if (!match.compatible)
+    {
+        std::cerr << "syntax error: this value cannot be printed!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    if (match.widen_right)
+        expression = MakeWiden(expression, PrimitiveType::kInt);
+
+    return std::make_unique<AstPrint>(expression);
 }
 
-/* declaration: 'int' identifier ';'  ; */
+/* declaration: type identifier ';'  ; */
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    Match(token_list, i, T_Int, "int");
+    PrimitiveType type = ParseType(token_list, i);
 
     if (TokenTag(token_list[i]) != T_Identifier)
     {
-        std::cerr << "syntax error: expect an identifier!" << std::endl;
+        std::cerr << "syntax error: expect a variable name!" << std::endl;
         std::exit(1);
     }
 
     const Identifier *ident =
         static_cast<const Identifier *>(token_list[i].get());
-    Symbol symbol_name = ident->GetName();
 
-    symbol_table_.AddSymbol(symbol_name);
+    Symbol symbol{.name = ident->GetName(),
+                  .type = type,
+                  .stype = StructuralType::kVariable};
 
-    i++;
+    symbol_table_.AddSymbol(symbol);
 
-    return std::make_unique<AstDeclare>(symbol_name);
+    Match(token_list, i, T_Identifier, "a variable name");
+
+    return std::make_unique<AstDeclare>(symbol);
 }
 
 /* assignment_statement: identifier '=' expression ';'  ; */
@@ -199,27 +221,42 @@ AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
 {
     const Identifier *ident =
         static_cast<const Identifier *>(token_list[i].get());
-    Symbol symbol_name = ident->GetName();
-    idx_t sym_idx = symbol_table_.FindSymbol(symbol_name);
 
-    if (!sym_idx)
+    std::optional<Symbol> target = symbol_table_.FindSymbol(ident->GetName());
+
+    if (!target)
     {
-        std::cerr << "syntax error: undeclared variable " << symbol_name;
-        std::cerr << "!" << std::endl;
+        std::cerr << "syntax error: undeclared variable ";
+        std::cerr << ident->GetName() << "!" << std::endl;
         std::exit(1);
     }
 
     /* The identifier names the target of the assignment, it is an lvalue. */
-    AstNodePtr right = MakeAstIdentLeaf(token_list[i], sym_idx, true);
+    AstNodePtr lvalue = MakeIdentLeaf(*target, true);
 
-    i++;
-
+    Match(token_list, i, T_Identifier, "a variable name");
     Match(token_list, i, T_Assign, "=");
 
-    AstNodePtr left = BinaryExpression(token_list, i, 0);
-    AstNodePtr root = std::make_unique<AstOperator>(left, right, T_Assign);
+    AstNodePtr value = BinaryExpression(token_list, i, 0);
 
-    return root;
+    /*
+     * The variable keeps its own type, so a value which would have to be
+     * narrowed to fit it is rejected.
+     */
+    TypeMatch match = MatchTypes(value->GetType(), target->type, true);
+
+    if (!match.compatible)
+    {
+        std::cerr << "syntax error: cannot store this value in ";
+        std::cerr << target->name << "!" << std::endl;
+        std::exit(1);
+    }
+
+    if (match.widen_left)
+        value = MakeWiden(value, target->type);
+
+    return std::make_unique<AstOperator>(value, lvalue, T_Assign,
+                                         target->type);
 }
 
 /*
@@ -349,7 +386,8 @@ AstNodePtr Parser::BinaryExpression(
 
     /*
      * Only a binary operator has a non-zero precedence, so the loop
-     * stops as soon as a semicolon, an EOF or any other token shows up.
+     * stops as soon as a semicolon, a right parenthesis, an EOF or any
+     * other token shows up.
      */
     while (GetOpPrecedence(TokenTag(token_list[i])) > ptp)
     {
@@ -359,33 +397,52 @@ AstNodePtr Parser::BinaryExpression(
         i++;
 
         AstNodePtr right = BinaryExpression(token_list, i, op_prec);
-        left = MakeAstNode(left, right, token_list[op_idx]);
+
+        WidenOperands(left, right);
+
+        left = MakeOperatorNode(left, right, token_list[op_idx]);
     }
 
     return left;
 }
 
-AstNodePtr
-Parser::ParsePrimary(const NodePtr& token)
+AstNodePtr Parser::ParsePrimary(const NodePtr& token)
 {
     switch (TokenTag(token))
     {
         case T_IntLit:
-            return MakeAstLeaf(token);
+        {
+            const Literal<int, T_IntLit> *lit =
+                static_cast<const Literal<int, T_IntLit>*>(token.get());
+            int32 value = lit->GetValue();
+
+            /*
+             * A small literal is given the type char so that it can be
+             * stored in a char variable; anything else needs the wider
+             * type and will be rejected there.
+             */
+            PrimitiveType type = (value >= 0 && value < 256)
+                                 ? PrimitiveType::kChar
+                                 : PrimitiveType::kInt;
+
+            return MakeIntLitLeaf(token, type);
+        }
         case T_Identifier:
         {
             const Identifier *ident =
                 static_cast<const Identifier *>(token.get());
-            idx_t sym_idx = symbol_table_.FindSymbol(ident->GetName());
 
-            if (!sym_idx)
+            std::optional<Symbol> symbol =
+                symbol_table_.FindSymbol(ident->GetName());
+
+            if (!symbol)
             {
                 std::cerr << "syntax error: undeclared variable ";
                 std::cerr << ident->GetName() << "!" << std::endl;
                 std::exit(1);
             }
 
-            return MakeAstIdentLeaf(token, sym_idx, false);
+            return MakeIdentLeaf(*symbol, false);
         }
         default:
             std::cerr << "syntax error: unexpected token ";
@@ -393,23 +450,73 @@ Parser::ParsePrimary(const NodePtr& token)
             std::cerr << ", expect an expression!" << std::endl;
             std::exit(1);
     }
-
-    return nullptr;
 }
 
-AstNodePtr Parser::MakeAstNode(AstNodePtr& left,
-                               AstNodePtr& right,
-                               const NodePtr& node)
+PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
+    idx_t& i)
 {
+    switch (TokenTag(token_list[i]))
+    {
+        case T_Char:
+            i++;
+            return PrimitiveType::kChar;
+        case T_Int:
+            i++;
+            return PrimitiveType::kInt;
+        case T_Void:
+            i++;
+            return PrimitiveType::kVoid;
+        default:
+            std::cerr << "syntax error: expect a type!" << std::endl;
+            std::exit(1);
+    }
+}
+
+void Parser::WidenOperands(AstNodePtr& left, AstNodePtr& right)
+{
+    TypeMatch match = MatchTypes(left->GetType(), right->GetType(), false);
+
+    if (!match.compatible)
+    {
+        std::cerr << "syntax error: incompatible types!" << std::endl;
+        std::exit(1);
+    }
+
+    /* Only one of the two ever needs widening. */
+    if (match.widen_left)
+        left = MakeWiden(left, right->GetType());
+
+    if (match.widen_right)
+        right = MakeWiden(right, left->GetType());
+}
+
+AstNodePtr Parser::MakeIntLitLeaf(const NodePtr& token, PrimitiveType type)
+{
+    const Literal<int, T_IntLit> *lit =
+        static_cast<const Literal<int, T_IntLit>*>(token.get());
+
+    AstNodePtr left = nullptr;
+    AstNodePtr right = nullptr;
+
+    return std::make_unique<AstIntLit>(left, right, lit->GetValue(), type);
+}
+
+AstNodePtr Parser::MakeIdentLeaf(const Symbol& symbol, bool is_lv_ident)
+{
+    AstNodePtr left = nullptr;
+    AstNodePtr right = nullptr;
+
+    return std::make_unique<AstIdentifier>(left, right, symbol, is_lv_ident);
+}
+
+AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
+    AstNodePtr& right,
+    const NodePtr& node)
+{
+    PrimitiveType type = left->GetType();
+
     switch (node->GetNodeTag())
     {
-        case T_IntLit:
-        {
-            const Literal<int, T_IntLit>* intlit_node =
-                static_cast<const Literal<int, T_IntLit>*>(node.get());
-            return std::make_unique<AstIntLit>(left, right,
-                                               intlit_node->GetValue());
-        }
         case T_Plus:
         case T_Minus:
         case T_Star:
@@ -421,60 +528,18 @@ AstNodePtr Parser::MakeAstNode(AstNodePtr& left,
         case T_LE:
         case T_GE:
             return std::make_unique<AstOperator>(left, right,
-                                                 node->GetNodeTag());
+                                                 node->GetNodeTag(), type);
         default:
             std::cerr << "code error: token ";
             std::cerr << NodeTagToString(node->GetNodeTag());
             std::cerr << " is not a binary operator!" << std::endl;
             std::exit(1);
     }
-
-    return nullptr;
 }
 
-AstNodePtr Parser::MakeAstLeaf(const NodePtr& node)
+AstNodePtr Parser::MakeWiden(AstNodePtr& expression, PrimitiveType type)
 {
-    AstNodePtr left = nullptr;
-    AstNodePtr right = nullptr;
-
-    return MakeAstNode(left, right, node);
-}
-
-AstNodePtr Parser::MakeAstUnary(AstNodePtr& left,
-    const NodePtr& node)
-{
-    AstNodePtr right = nullptr;
-
-    return MakeAstNode(left, right, node);
-}
-
-AstNodePtr Parser::MakeAstIdent(AstNodePtr& left,
-    AstNodePtr& right,
-    const NodePtr& node,
-    idx_t ident_idx,
-    bool is_lv_ident)
-{
-    const Identifier *ident =
-        static_cast<const Identifier *>(node.get());
-    return std::make_unique<AstIdentifier>(left,
-        right, ident->GetName(), ident_idx, is_lv_ident);
-}
-
-AstNodePtr Parser::MakeAstIdentLeaf(const NodePtr& node,
-    idx_t ident_idx,
-    bool is_lv_ident)
-{
-    AstNodePtr left = nullptr, right = nullptr;
-    return MakeAstIdent(left, right, node, ident_idx, is_lv_ident);
-}
-
-AstNodePtr Parser::MakeAstIdentUnary(AstNodePtr& left,
-    const NodePtr& node,
-    idx_t ident_idx,
-    bool is_lv_ident)
-{
-    AstNodePtr right = nullptr;
-    return MakeAstIdent(left, right, node, ident_idx, is_lv_ident);
+    return std::make_unique<AstWiden>(expression, type);
 }
 
 NodeTag Parser::TokenTag(const NodePtr& token)

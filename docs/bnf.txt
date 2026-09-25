@@ -22,7 +22,12 @@ statement: print_statement
 print_statement: 'print' expression ';'
     ;
 
-declaration: 'int' identifier ';'
+declaration: type identifier ';'
+    ;
+
+type: 'char'
+    | 'int'
+    | 'void'
     ;
 
 assignment_statement: identifier '=' expression ';'

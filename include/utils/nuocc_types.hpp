@@ -23,7 +23,32 @@ using reg_idx = size_t;
 /* assembly label number */
 using label_idx = uint32;
 
-using Symbol = std::string;
+/*
+ * The primitive type of a value. kNone marks the trees which are not
+ * expressions at all, such as statements and declarations.
+ */
+enum class PrimitiveType : uint8
+{
+    kNone = 0,
+    kVoid,
+    kChar,
+    kInt
+};
+
+/* What a symbol names. */
+enum class StructuralType : uint8
+{
+    kVariable = 0,
+    kFunction
+};
+
+/* An entry of the symbol table. */
+struct Symbol
+{
+    std::string name;
+    PrimitiveType type = PrimitiveType::kNone;
+    StructuralType stype = StructuralType::kVariable;
+};
 
 using NodePtr = std::unique_ptr<class Node>;
 using AstNodePtr = std::unique_ptr<class AstNode>;

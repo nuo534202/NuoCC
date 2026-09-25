@@ -57,6 +57,9 @@ private:
     reg_idx Sub(reg_idx reg1, reg_idx reg2);
     reg_idx Mul(reg_idx reg1, reg_idx reg2);
     reg_idx Div(reg_idx reg1, reg_idx reg2);
+    reg_idx Widen(reg_idx reg,
+                  PrimitiveType old_type,
+                  PrimitiveType new_type);
 
     reg_idx CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2);
     void CompareAndJump(NodeTag op_type,

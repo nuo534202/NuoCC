@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -8,6 +9,7 @@
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "nodes/nuocc_nodes.hpp"
 #include "utils/nuocc_symbol_table.hpp"
+#include "utils/nuocc_type_check.hpp"
 #include "utils/nuocc_types.hpp"
 
 namespace nuocc
@@ -61,28 +63,21 @@ private:
 
     AstNodePtr ParsePrimary(const NodePtr& token);
 
-    /*
-     *  You should use MakeAstIdent to make an AstIdentifier node
-     */
-    AstNodePtr MakeAstNode(AstNodePtr& left,
-                           AstNodePtr& right,
-                           const NodePtr& node);
-    AstNodePtr MakeAstLeaf(const NodePtr& node);
-    AstNodePtr MakeAstUnary(AstNodePtr& left,
-                            const NodePtr& node);
+    /* Parse the type which starts a declaration and step over it. */
+    PrimitiveType ParseType(const std::vector<NodePtr>& token_list,
+                            idx_t& i);
 
-    AstNodePtr MakeAstIdent(AstNodePtr& left,
-                            AstNodePtr& right,
-                            const NodePtr& node,
-                            idx_t ident_idx,
-                            bool is_lv_ident);
-    AstNodePtr MakeAstIdentLeaf(const NodePtr& node,
-                                idx_t ident_idx,
-                                bool is_lv_ident);
-    AstNodePtr MakeAstIdentUnary(AstNodePtr& left,
-                                 const NodePtr& node,
-                                 idx_t ident_idx,
-                                 bool is_lv_ident);
+    /*
+     * Widen the narrower of two operands so that both have the same type.
+     */
+    void WidenOperands(AstNodePtr& left, AstNodePtr& right);
+
+    AstNodePtr MakeIntLitLeaf(const NodePtr& token, PrimitiveType type);
+    AstNodePtr MakeIdentLeaf(const Symbol& symbol, bool is_lv_ident);
+    AstNodePtr MakeOperatorNode(AstNodePtr& left,
+                                AstNodePtr& right,
+                                const NodePtr& node);
+    AstNodePtr MakeWiden(AstNodePtr& expression, PrimitiveType type);
 
     /*
      * The tag a token is matched by. A keyword carries its own tag inside
