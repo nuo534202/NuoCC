@@ -23,6 +23,13 @@ struct TypeMatch
 int32 PrimitiveSize(PrimitiveType type);
 
 /*
+ * The type which is a pointer to the given type, and the type a given
+ * pointer type points at. Both die on a type which has no answer.
+ */
+PrimitiveType PointerTo(PrimitiveType type);
+PrimitiveType ValueAt(PrimitiveType type);
+
+/*
  * Match the primitive types of the two operands of an operator. Two types
  * are compatible when they are the same or when the narrower one can be
  * widened to the wider one.

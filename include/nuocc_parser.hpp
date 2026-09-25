@@ -70,6 +70,13 @@ private:
         idx_t& i,
         uint8 ptp); /* previous token precedence */
 
+    /*
+     * Parse an expression which may start with the prefix operators '*'
+     * and '&', and fall back to a primary when it does not.
+     */
+    AstNodePtr PrefixExpression(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
     AstNodePtr ParsePrimary(const std::vector<NodePtr>& token_list,
         idx_t& i);
 

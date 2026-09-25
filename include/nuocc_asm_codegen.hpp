@@ -62,6 +62,9 @@ protected:
     virtual void Return(reg_idx reg) = 0;
     virtual void PrintInt(reg_idx reg) = 0;
 
+    virtual reg_idx AddressOf(const Symbol& symbol) = 0;
+    virtual reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) = 0;
+
     /* The parts of the walk which are the same everywhere. */
 
     void GenStatement(const AstNodePtr& root);

@@ -14,6 +14,8 @@ typedef enum NodeTag
     T_Star,
     T_Slash,
     T_Assign,
+    T_Amper,
+    T_LogAnd,
 
     /* Comparison Operator */
     T_EQ,
@@ -68,7 +70,9 @@ typedef enum AstNodeTag
     A_AstFunction,
     A_AstWiden,
     A_AstReturn,
-    A_AstFuncCall
+    A_AstFuncCall,
+    A_AstAddress,
+    A_AstDeref
 } AstNodeTag;
 
 }   /* namespace nuocc */

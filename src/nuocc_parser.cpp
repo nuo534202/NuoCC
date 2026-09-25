@@ -474,7 +474,7 @@ AstNodePtr Parser::BinaryExpression(
     idx_t& i,
     uint8 ptp) /* previous token precedence */
 {
-    AstNodePtr left = ParsePrimary(token_list, i);
+    AstNodePtr left = PrefixExpression(token_list, i);
 
     /*
      * Only a binary operator has a non-zero precedence, so the loop
@@ -496,6 +496,62 @@ AstNodePtr Parser::BinaryExpression(
     }
 
     return left;
+}
+
+/*
+ * prefix_expression: primary
+ *      |           '*' prefix_expression
+ *      |           '&' prefix_expression
+ *      ;
+ *
+ * The two operators only take the operands they can mean something for:
+ * '&' a variable, and '*' a pointer which an identifier or another '*'
+ * produced. Anything else is rejected rather than turned into a tree the
+ * code generator cannot make sense of.
+ */
+AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    switch (TokenTag(token_list[i]))
+    {
+        case T_Amper:
+        {
+            i++;
+
+            AstNodePtr operand = PrefixExpression(token_list, i);
+
+            if (operand->GetAstNodeTag() != A_AstIdentifier)
+            {
+                std::cerr << "syntax error: & must be followed by a";
+                std::cerr << " variable!" << std::endl;
+                std::exit(1);
+            }
+
+            const AstIdentifier *ident =
+                static_cast<const AstIdentifier *>(operand.get());
+
+            return std::make_unique<AstAddress>(ident->GetSymbol());
+        }
+        case T_Star:
+        {
+            i++;
+
+            AstNodePtr operand = PrefixExpression(token_list, i);
+            AstNodeTag tag = operand->GetAstNodeTag();
+
+            if (tag != A_AstIdentifier && tag != A_AstDeref)
+            {
+                std::cerr << "syntax error: * must be followed by a";
+                std::cerr << " variable or another *!" << std::endl;
+                std::exit(1);
+            }
+
+            return std::make_unique<AstDeref>(operand,
+                                              ValueAt(operand->GetType()));
+        }
+        default:
+            return ParsePrimary(token_list, i);
+    }
 }
 
 AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
@@ -544,27 +600,43 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
     }
 }
 
+/*
+ * Parse the type which starts a declaration, along with the '*' of every
+ * pointer level, and step over all of it.
+ */
 PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
+    PrimitiveType type;
+
     switch (TokenTag(token_list[i]))
     {
         case T_Char:
-            i++;
-            return PrimitiveType::kChar;
+            type = PrimitiveType::kChar;
+            break;
         case T_Int:
-            i++;
-            return PrimitiveType::kInt;
+            type = PrimitiveType::kInt;
+            break;
         case T_Long:
-            i++;
-            return PrimitiveType::kLong;
+            type = PrimitiveType::kLong;
+            break;
         case T_Void:
-            i++;
-            return PrimitiveType::kVoid;
+            type = PrimitiveType::kVoid;
+            break;
         default:
             std::cerr << "syntax error: expect a type!" << std::endl;
             std::exit(1);
     }
+
+    i++;
+
+    while (TokenTag(token_list[i]) == T_Star)
+    {
+        type = PointerTo(type);
+        i++;
+    }
+
+    return type;
 }
 
 Symbol Parser::LookupTyped(const NodePtr& token,

@@ -107,21 +107,22 @@ reg_idx X86Codegen::LoadGlobSymbol(const Symbol& symbol)
     reg_idx idx = AllocRegister();
 
     /*
-     * Every one of these leaves the whole register holding the value: the
-     * widening loads clear the rest of it, and writing to a 32-bit register
-     * clears its upper half.
+     * How much is read is decided by the type's size. Every one of these
+     * leaves the whole register holding the value: the widening loads
+     * clear the rest of it, and writing to a 32-bit register clears its
+     * upper half.
      */
-    switch (symbol.type)
+    switch (PrimitiveSize(symbol.type))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tmovzbq\t" << symbol.name << "(%rip), ";
             ofs_ << reg_list_[idx] << std::endl;
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tmovl\t" << symbol.name << "(%rip), ";
             ofs_ << dreg_list_[idx] << std::endl;
             break;
-        case PrimitiveType::kLong:
+        case 8:
             ofs_ << "\tmovq\t" << symbol.name << "(%rip), ";
             ofs_ << reg_list_[idx] << std::endl;
             break;
@@ -136,15 +137,15 @@ reg_idx X86Codegen::LoadGlobSymbol(const Symbol& symbol)
 
 reg_idx X86Codegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
 {
-    switch (symbol.type)
+    switch (PrimitiveSize(symbol.type))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tmovb\t" << breg_list_[reg] << ", ";
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tmovl\t" << dreg_list_[reg] << ", ";
             break;
-        case PrimitiveType::kLong:
+        case 8:
             ofs_ << "\tmovq\t" << reg_list_[reg] << ", ";
             break;
         default:
@@ -337,6 +338,47 @@ void X86Codegen::PrintInt(reg_idx reg)
     ofs_ << "\tmovq\t" << reg_list_[reg] << ", %rdi" << std::endl;
     ofs_ << "\tcall\t" << kPrintIntName << std::endl;
     ofs_ << std::endl;
+}
+
+/*
+ * Load the address of a global variable into a fresh register.
+ */
+reg_idx X86Codegen::AddressOf(const Symbol& symbol)
+{
+    reg_idx reg = AllocRegister();
+
+    ofs_ << "\tleaq\t" << symbol.name << "(%rip), ";
+    ofs_ << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+/*
+ * Read the value a pointer points at into the same register that holds the
+ * pointer. How much is read is decided by what the pointer points at.
+ */
+reg_idx X86Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
+{
+    switch (ValueAt(pointer_type))
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tmovzbq\t(" << reg_list_[reg] << "), ";
+            ofs_ << reg_list_[reg] << std::endl;
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmovl\t(" << reg_list_[reg] << "), ";
+            ofs_ << dreg_list_[reg] << std::endl;
+            break;
+        case PrimitiveType::kLong:
+            ofs_ << "\tmovq\t(" << reg_list_[reg] << "), ";
+            ofs_ << reg_list_[reg] << std::endl;
+            break;
+        default:
+            std::cerr << "Error: cannot read through this pointer!" << std::endl;
+            std::exit(1);
+    }
+
+    return reg;
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

@@ -233,4 +233,32 @@ private:
     Symbol symbol_;
 };
 
+/*
+ * The address of a variable, produced by the '&' operator. It does not
+ * stand for a value, so it has no child.
+ */
+class AstAddress : public AstNode
+{
+public:
+    explicit AstAddress(const Symbol& symbol);
+    ~AstAddress() = default;
+
+public:
+    const Symbol& GetSymbol() const;
+
+private:
+    Symbol symbol_;
+};
+
+/*
+ * The value a pointer points at, produced by the '*' operator. The left
+ * child holds the pointer, and the type of this node is what it points at.
+ */
+class AstDeref : public AstNode
+{
+public:
+    AstDeref(AstNodePtr& pointer, PrimitiveType type);
+    ~AstDeref() = default;
+};
+
 }   /* namespace nuocc */

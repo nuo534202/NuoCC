@@ -51,6 +51,9 @@ protected:
     void Return(reg_idx reg) override;
     void PrintInt(reg_idx reg) override;
 
+    reg_idx AddressOf(const Symbol& symbol) override;
+    reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) override;
+
 private:
     /* Load a register with the address of a global variable. */
     void EmitGlobAddress(const Symbol& symbol);

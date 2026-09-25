@@ -283,6 +283,18 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 
             return Widen(reg, root->GetLeft()->GetType(), root->GetType());
         }
+        case A_AstAddress:
+        {
+            const AstAddress *address =
+                static_cast<const AstAddress*>(root.get());
+            return AddressOf(address->GetSymbol());
+        }
+        case A_AstDeref:
+        {
+            reg_idx reg = GenExpr(root->GetLeft());
+
+            return Deref(reg, root->GetLeft()->GetType());
+        }
         case A_AstFuncCall:
             return GenCall(root);
         case A_AstOperator:

@@ -33,7 +33,13 @@ enum class PrimitiveType : uint8
     kVoid,
     kChar,
     kInt,
-    kLong
+    kLong,
+    /* A pointer to one of the types above. There is one level of these for
+     * now; a pointer to a pointer has no type of its own yet. */
+    kVoidPtr,
+    kCharPtr,
+    kIntPtr,
+    kLongPtr
 };
 
 /* What a symbol names. */

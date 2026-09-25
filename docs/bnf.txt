@@ -31,6 +31,7 @@ type: 'char'
     | 'int'
     | 'long'
     | 'void'
+    | type '*'
     ;
 
 function_call: identifier '(' expression ')'
@@ -84,13 +85,19 @@ additive_expression:
     ;
 
 multiplicative_expression:
-      primary
-    | multiplicative_expression '*' primary
-    | multiplicative_expression '/' primary
+      prefix_expression
+    | multiplicative_expression '*' prefix_expression
+    | multiplicative_expression '/' prefix_expression
     ;
 
 primary: number
     | identifier
+    | function_call
+    ;
+
+prefix_expression: primary
+    | '*' prefix_expression
+    | '&' prefix_expression
     ;
 
 number: T_INTLIT

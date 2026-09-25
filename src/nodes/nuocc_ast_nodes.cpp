@@ -1,5 +1,7 @@
 #include "nodes/nuocc_ast_nodes.hpp"
 
+#include "utils/nuocc_type_check.hpp"
+
 namespace nuocc
 {
 
@@ -175,5 +177,19 @@ const Symbol& AstFuncCall::GetSymbol() const
 {
     return symbol_;
 }
+
+/* AstAddress */
+AstAddress::AstAddress(const Symbol& symbol)
+    : AstNode(A_AstAddress, PointerTo(symbol.type)),
+      symbol_(symbol) {}
+
+const Symbol& AstAddress::GetSymbol() const
+{
+    return symbol_;
+}
+
+/* AstDeref */
+AstDeref::AstDeref(AstNodePtr& pointer, PrimitiveType type)
+    : AstNode(A_AstDeref, type, pointer) {}
 
 }   /* namespace nuocc*/

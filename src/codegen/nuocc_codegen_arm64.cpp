@@ -169,21 +169,21 @@ reg_idx Arm64Codegen::LoadGlobSymbol(const Symbol& symbol)
     EmitGlobAddress(symbol);
 
     /*
-     * Each of these leaves the whole register holding the value: loading a
-     * byte or four bytes into a w register clears the rest of the x
-     * register it names.
+     * How much is read is decided by the type's size. Loading a byte or
+     * four bytes into a w register clears the rest of the x register it
+     * names, so the whole register holds the value either way.
      */
-    switch (symbol.type)
+    switch (PrimitiveSize(symbol.type))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tldrb\t" << wreg_list_[idx] << ", [" << kScratchReg;
             ofs_ << "]" << std::endl;
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tldr\t" << wreg_list_[idx] << ", [" << kScratchReg;
             ofs_ << "]" << std::endl;
             break;
-        case PrimitiveType::kLong:
+        case 8:
             ofs_ << "\tldr\t" << xreg_list_[idx] << ", [" << kScratchReg;
             ofs_ << "]" << std::endl;
             break;
@@ -200,15 +200,15 @@ reg_idx Arm64Codegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
 {
     EmitGlobAddress(symbol);
 
-    switch (symbol.type)
+    switch (PrimitiveSize(symbol.type))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tstrb\t" << wreg_list_[reg] << ", [";
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tstr\t" << wreg_list_[reg] << ", [";
             break;
-        case PrimitiveType::kLong:
+        case 8:
             ofs_ << "\tstr\t" << xreg_list_[reg] << ", [";
             break;
         default:
@@ -366,6 +366,49 @@ void Arm64Codegen::PrintInt(reg_idx reg)
 {
     ofs_ << "\tmov\tx0, " << xreg_list_[reg] << std::endl;
     ofs_ << "\tbl\t" << kPrintIntName << std::endl;
+}
+
+/*
+ * Load the address of a global variable into a fresh register.
+ */
+reg_idx Arm64Codegen::AddressOf(const Symbol& symbol)
+{
+    reg_idx reg = AllocRegister();
+
+    ofs_ << "\tadrp\t" << xreg_list_[reg] << ", " << symbol.name << "@PAGE";
+    ofs_ << std::endl;
+    ofs_ << "\tadd\t" << xreg_list_[reg] << ", " << xreg_list_[reg] << ", ";
+    ofs_ << symbol.name << "@PAGEOFF" << std::endl;
+
+    return reg;
+}
+
+/*
+ * Read the value a pointer points at into the same register that holds the
+ * pointer. How much is read is decided by what the pointer points at.
+ */
+reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
+{
+    switch (ValueAt(pointer_type))
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tldrb\t" << wreg_list_[reg] << ", [";
+            ofs_ << xreg_list_[reg] << "]" << std::endl;
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tldr\t" << wreg_list_[reg] << ", [";
+            ofs_ << xreg_list_[reg] << "]" << std::endl;
+            break;
+        case PrimitiveType::kLong:
+            ofs_ << "\tldr\t" << xreg_list_[reg] << ", [";
+            ofs_ << xreg_list_[reg] << "]" << std::endl;
+            break;
+        default:
+            std::cerr << "Error: cannot read through this pointer!" << std::endl;
+            std::exit(1);
+    }
+
+    return reg;
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

@@ -32,6 +32,12 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Assign:
             out = "=";
             break;
+        case T_Amper:
+            out = "&";
+            break;
+        case T_LogAnd:
+            out = "&&";
+            break;
         case T_EQ:
             out = "==";
             break;
