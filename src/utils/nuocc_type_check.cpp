@@ -7,6 +7,33 @@
 namespace nuocc
 {
 
+bool IsIntType(PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kChar:
+        case PrimitiveType::kInt:
+        case PrimitiveType::kLong:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool IsPointerType(PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kVoidPtr:
+        case PrimitiveType::kCharPtr:
+        case PrimitiveType::kIntPtr:
+        case PrimitiveType::kLongPtr:
+            return true;
+        default:
+            return false;
+    }
+}
+
 int32 PrimitiveSize(PrimitiveType type)
 {
     switch (type)
@@ -68,34 +95,63 @@ PrimitiveType ValueAt(PrimitiveType type)
     std::exit(1);
 }
 
-TypeMatch MatchTypes(PrimitiveType left,
-    PrimitiveType right,
-    bool only_widen_left)
+namespace
 {
-    /* The same type on both sides needs no conversion. */
-    if (left == right)
-        return TypeMatch{.compatible = true};
 
-    int32 left_size = PrimitiveSize(left);
-    int32 right_size = PrimitiveSize(right);
+/*
+ * Two integer types: the narrower one is widened to the wider one, and one
+ * which is already wider than the type wanted cannot be narrowed to fit.
+ */
+bool ModifyIntType(AstNodePtr& tree, PrimitiveType type, PrimitiveType wanted)
+{
+    if (type == wanted)
+        return true;
 
-    /* A type with no size, void or none, cannot hold a value. */
-    if (left_size == 0 || right_size == 0)
-        return TypeMatch{};
+    if (PrimitiveSize(type) > PrimitiveSize(wanted))
+        return false;
 
-    if (left_size < right_size)
-        return TypeMatch{.compatible = true, .widen_left = true};
+    tree = std::make_unique<AstWiden>(tree, wanted);
 
-    if (right_size < left_size)
+    return true;
+}
+
+}   /* namespace */
+
+bool ModifyType(AstNodePtr& tree,
+    PrimitiveType wanted,
+    std::optional<NodeTag> op)
+{
+    PrimitiveType type = tree->GetType();
+
+    if (IsIntType(type) && IsIntType(wanted))
+        return ModifyIntType(tree, type, wanted);
+
+    /*
+     * A pointer fits a pointer of the same type as long as it does not
+     * take part in an operation: pointer arithmetic is not arithmetic on
+     * the addresses themselves, it is an offset scaled by the size of what
+     * the pointer points at.
+     */
+    if (IsPointerType(type) && !op && type == wanted)
+        return true;
+
+    if (op == T_Plus || op == T_Minus)
     {
-        if (only_widen_left)
-            return TypeMatch{};
-
-        return TypeMatch{.compatible = true, .widen_right = true};
+        if (IsIntType(type) && IsPointerType(wanted))
+        {
+            /*
+             * The integer becomes an offset into what the pointer points
+             * at, so it is scaled by the size of one of those. A size of
+             * one scales by one, which leaves the value alone.
+             */
+            tree = std::make_unique<AstScale>(tree,
+                                              wanted,
+                                              PrimitiveSize(ValueAt(wanted)));
+            return true;
+        }
     }
 
-    /* Two different types of the same size are compatible as they are. */
-    return TypeMatch{.compatible = true};
+    return false;
 }
 
 }   /* namespace nuocc */

@@ -159,11 +159,6 @@ private:
                                 std::string_view what);
 
     /*
-     * Widen the narrower of two operands so that both have the same type.
-     */
-    void WidenOperands(AstNodePtr& left, AstNodePtr& right);
-
-    /*
      * Glue a list of statements into one tree, so that a piece of grammar
      * which stands for several statements still produces a single tree.
      */
@@ -174,7 +169,6 @@ private:
     AstNodePtr MakeOperatorNode(AstNodePtr& left,
                                 AstNodePtr& right,
                                 const NodePtr& node);
-    AstNodePtr MakeWiden(AstNodePtr& expression, PrimitiveType type);
 
     /*
      * The tag a token is matched by. A keyword carries its own tag inside

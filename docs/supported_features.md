@@ -27,4 +27,11 @@
     `*` of a pointer type belongs to the declaration and not to the name,
     so it is written once: `char *b;` and not `char *b, *c;`. A name has
     to be declared before it is used, so a function can only reach the
-    global variables declared above it.
+    global variables declared above it. The variables are stored one
+    after another in the order they are declared.
+11. Pointer Arithmetic. An integer may be added to or subtracted from a
+    pointer, and is scaled by the size of what the pointer points at, so
+    `&c + 1` is the address of the next value of `c`'s type and not the
+    address one byte along. Nothing else may be done with a pointer: it
+    cannot be multiplied, divided or compared yet, and its address cannot
+    be printed.

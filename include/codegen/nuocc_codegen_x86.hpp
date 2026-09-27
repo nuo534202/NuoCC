@@ -25,7 +25,6 @@ protected:
     void EmitLabel(label_idx label) override;
     void EmitJump(label_idx label) override;
 
-    void GenGlobSymbol(const Symbol& symbol) override;
     reg_idx LoadInt(int32 value) override;
     reg_idx LoadGlobSymbol(const Symbol& symbol) override;
     reg_idx StoreGlobSymbol(const Symbol& symbol, reg_idx reg) override;
@@ -37,6 +36,7 @@ protected:
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
+    reg_idx Scale(reg_idx reg, int32 scale) override;
 
     reg_idx CompareAndSet(NodeTag op_type,
                           reg_idx reg1,

@@ -202,19 +202,12 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
 
     /* printint() always takes an int, so widen what it is given. */
-    TypeMatch match = MatchTypes(PrimitiveType::kInt,
-                                 expression->GetType(),
-                                 false);
-
-    if (!match.compatible)
+    if (!ModifyType(expression, PrimitiveType::kInt, std::nullopt))
     {
         std::cerr << "syntax error: this value cannot be printed!";
         std::cerr << std::endl;
         std::exit(1);
     }
-
-    if (match.widen_right)
-        expression = MakeWiden(expression, PrimitiveType::kInt);
 
     return std::make_unique<AstPrint>(expression);
 }
@@ -283,17 +276,12 @@ AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
      * The variable keeps its own type, so a value which would have to be
      * narrowed to fit it is rejected.
      */
-    TypeMatch match = MatchTypes(value->GetType(), target.type, true);
-
-    if (!match.compatible)
+    if (!ModifyType(value, target.type, std::nullopt))
     {
         std::cerr << "syntax error: cannot store this value in ";
         std::cerr << target.name << "!" << std::endl;
         std::exit(1);
     }
-
-    if (match.widen_left)
-        value = MakeWiden(value, target.type);
 
     return std::make_unique<AstOperator>(value, lvalue, T_Assign,
                                          target.type);
@@ -402,19 +390,12 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
 
     /* The value has to fit the return type of the enclosing function. */
-    TypeMatch match = MatchTypes(expression->GetType(),
-                                 current_function_type_,
-                                 true);
-
-    if (!match.compatible)
+    if (!ModifyType(expression, current_function_type_, std::nullopt))
     {
         std::cerr << "syntax error: this value does not fit the return type";
         std::cerr << " of the function!" << std::endl;
         std::exit(1);
     }
-
-    if (match.widen_left)
-        expression = MakeWiden(expression, current_function_type_);
 
     Match(token_list, i, T_RParen, ")");
 
@@ -497,7 +478,24 @@ AstNodePtr Parser::BinaryExpression(
 
         AstNodePtr right = BinaryExpression(token_list, i, op_prec);
 
-        WidenOperands(left, right);
+        /*
+         * Try to make each operand fit the type of the other one. One of
+         * them may have to be widened or scaled, which also means the
+         * other one cannot be made to fit, so the two only clash when
+         * neither of them can.
+         */
+        NodeTag op_type = TokenTag(token_list[op_idx]);
+        PrimitiveType left_type = left->GetType();
+        PrimitiveType right_type = right->GetType();
+
+        bool left_fits = ModifyType(left, right_type, op_type);
+        bool right_fits = ModifyType(right, left_type, op_type);
+
+        if (!left_fits && !right_fits)
+        {
+            std::cerr << "syntax error: incompatible types!" << std::endl;
+            std::exit(1);
+        }
 
         left = MakeOperatorNode(left, right, token_list[op_idx]);
     }
@@ -671,24 +669,6 @@ Symbol Parser::LookupTyped(const NodePtr& token,
     return *symbol;
 }
 
-void Parser::WidenOperands(AstNodePtr& left, AstNodePtr& right)
-{
-    TypeMatch match = MatchTypes(left->GetType(), right->GetType(), false);
-
-    if (!match.compatible)
-    {
-        std::cerr << "syntax error: incompatible types!" << std::endl;
-        std::exit(1);
-    }
-
-    /* Only one of the two ever needs widening. */
-    if (match.widen_left)
-        left = MakeWiden(left, right->GetType());
-
-    if (match.widen_right)
-        right = MakeWiden(right, left->GetType());
-}
-
 AstNodePtr Parser::MakeIntLitLeaf(const NodePtr& token, PrimitiveType type)
 {
     const Literal<int, T_IntLit> *lit =
@@ -734,11 +714,6 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
             std::cerr << " is not a binary operator!" << std::endl;
             std::exit(1);
     }
-}
-
-AstNodePtr Parser::MakeWiden(AstNodePtr& expression, PrimitiveType type)
-{
-    return std::make_unique<AstWiden>(expression, type);
 }
 
 AstNodePtr Parser::GlueStatements(std::vector<AstNodePtr>& statements)

@@ -164,6 +164,16 @@ const Symbol& AstFunction::GetSymbol() const
 AstWiden::AstWiden(AstNodePtr& expression, PrimitiveType type)
     : AstNode(A_AstWiden, type, expression) {}
 
+/* AstScale */
+AstScale::AstScale(AstNodePtr& expression, PrimitiveType type, int32 size)
+    : AstNode(A_AstScale, type, expression),
+      size_(size) {}
+
+int32 AstScale::GetSize() const
+{
+    return size_;
+}
+
 /* AstReturn */
 AstReturn::AstReturn(AstNodePtr& expression)
     : AstNode(A_AstReturn, PrimitiveType::kNone, expression) {}

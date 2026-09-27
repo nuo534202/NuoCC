@@ -209,6 +209,24 @@ public:
 };
 
 /*
+ * Scale the value of the left child by a size, which is what turns an
+ * integer into an offset when it is added to or subtracted from a pointer.
+ * The type of this node is the pointer the offset belongs to.
+ */
+class AstScale : public AstNode
+{
+public:
+    AstScale(AstNodePtr& expression, PrimitiveType type, int32 size);
+    ~AstScale() = default;
+
+public:
+    int32 GetSize() const;
+
+private:
+    int32 size_;
+};
+
+/*
  * Return the value of the left child from the enclosing function.
  */
 class AstReturn : public AstNode

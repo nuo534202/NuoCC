@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 
+#include <bit>
 #include <iostream>
 #include <string_view>
 #include <unordered_map>
@@ -58,13 +59,16 @@ constexpr std::string_view kGlobalPrefix = "_";
 constexpr std::string_view kGlobalPrefix = "";
 #endif
 
-/* The name of a global symbol as the assembler wants it written. */
-std::string GlobName(const std::string& name)
+}   /* namespace */
+
+/*
+ * The name of a global symbol as this assembler wants it written, which is
+ * the name on its own everywhere but on Mach-O.
+ */
+std::string Arm64Codegen::GlobName(const std::string& name) const
 {
     return std::string(kGlobalPrefix) + name;
 }
-
-}   /* namespace */
 
 Arm64Codegen::Arm64Codegen(const std::string& output_file)
     : AsmCodegen(output_file)
@@ -159,15 +163,6 @@ void Arm64Codegen::EmitLoadImmediate(reg_idx reg, int64 value)
         ofs_ << std::endl;
         started = true;
     }
-}
-
-void Arm64Codegen::GenGlobSymbol(const Symbol& symbol)
-{
-    /* The storage a variable needs is decided by its type. */
-    int32 size = PrimitiveSize(symbol.type);
-
-    ofs_ << "\t.comm\t" << GlobName(symbol.name) << "," << size << ",";
-    ofs_ << size << std::endl;
 }
 
 reg_idx Arm64Codegen::LoadInt(int32 value)
@@ -289,6 +284,29 @@ reg_idx Arm64Codegen::Widen(reg_idx reg,
      * from it is just as clean; storing it back truncates again.
      */
     return reg;
+}
+
+/*
+ * Multiply the value in a register by the size of a type. Every size the
+ * language has now is a power of two, so a shift left is enough and
+ * cheaper than a multiply; the multiply is there for the sizes which are
+ * not, which the composite types later on will bring.
+ */
+reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
+{
+    uint32 size = static_cast<uint32>(scale);
+
+    if (std::has_single_bit(size))
+    {
+        ofs_ << "\tlsl\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
+        ofs_ << ", #" << std::countr_zero(size) << std::endl;
+
+        return reg;
+    }
+
+    reg_idx size_reg = LoadInt(scale);
+
+    return Mul(reg, size_reg);
 }
 
 reg_idx Arm64Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)

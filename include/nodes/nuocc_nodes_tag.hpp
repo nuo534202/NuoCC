@@ -70,6 +70,7 @@ typedef enum AstNodeTag
     A_AstDeclare,
     A_AstFunction,
     A_AstWiden,
+    A_AstScale,
     A_AstReturn,
     A_AstFuncCall,
     A_AstAddress,

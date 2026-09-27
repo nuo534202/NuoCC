@@ -1,20 +1,21 @@
 #pragma once
 
+#include <optional>
+
+#include "nodes/nuocc_ast_nodes.hpp"
+#include "nodes/nuocc_nodes_tag.hpp"
 #include "utils/nuocc_types.hpp"
 
 namespace nuocc
 {
 
-/* The outcome of matching the primitive types of two operands. */
-struct TypeMatch
-{
-    /* The two types may appear together in one expression. */
-    bool compatible = false;
-    /* The left operand is the narrower one and has to be widened. */
-    bool widen_left = false;
-    /* The right operand is the narrower one and has to be widened. */
-    bool widen_right = false;
-};
+/*
+ * Whether a type holds an integer of some size, and whether it holds the
+ * address of a value of some other type. The two groups are what the
+ * conversions below are written in terms of.
+ */
+bool IsIntType(PrimitiveType type);
+bool IsPointerType(PrimitiveType type);
 
 /*
  * The size in bytes of a primitive type on the target machine. A size of
@@ -30,16 +31,19 @@ PrimitiveType PointerTo(PrimitiveType type);
 PrimitiveType ValueAt(PrimitiveType type);
 
 /*
- * Match the primitive types of the two operands of an operator. Two types
- * are compatible when they are the same or when the narrower one can be
- * widened to the wider one.
+ * Make the value of a tree fit the type wanted, and replace the tree with
+ * the widened or the scaled one when that is what it takes. Returns false
+ * when there is no way to make it fit, in which case the tree is left
+ * alone.
  *
- * When only_widen_left is set the right operand keeps its type, so the
- * two are rejected when it is the right one which is narrower. That is
- * what stops a wide value from being stored into a narrow variable.
+ * The operator is the one the tree takes part in, if any. It matters
+ * because an integer may only be added to or subtracted from a pointer,
+ * which is where it becomes an offset and has to be scaled. A tree which
+ * takes part in no operation, such as the value of an assignment or of a
+ * return, is given no operator.
  */
-TypeMatch MatchTypes(PrimitiveType left,
-                     PrimitiveType right,
-                     bool only_widen_left);
+bool ModifyType(AstNodePtr& tree,
+                PrimitiveType wanted,
+                std::optional<NodeTag> op);
 
 }   /* namespace nuocc */

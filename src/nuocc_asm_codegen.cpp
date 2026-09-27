@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+#include "utils/nuocc_type_check.hpp"
+
 namespace nuocc
 {
 
@@ -263,6 +265,48 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
  * Generate the code for an expression and return the register which holds
  * its value. The caller owns that register and has to free it.
  */
+/*
+ * Reserve the storage of a global variable.
+ *
+ * The variables are laid out one after another in the data section, in the
+ * order they are declared, so that a program can reach one by adding an
+ * offset to the address of another. A declaration can also stand in the
+ * middle of a function body, which is why the code section is switched
+ * back to once the storage is written.
+ */
+void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
+{
+    ofs_ << "\t.data" << std::endl;
+    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+    ofs_ << GlobName(symbol.name) << ":\t";
+
+    /* How much room the variable needs is decided by its type. */
+    switch (PrimitiveSize(symbol.type))
+    {
+        case 1:
+            ofs_ << ".byte";
+            break;
+        case 4:
+            ofs_ << ".long";
+            break;
+        case 8:
+            ofs_ << ".quad";
+            break;
+        default:
+            std::cerr << "Error: bad type for variable ";
+            std::cerr << symbol.name << "!" << std::endl;
+            std::exit(1);
+    }
+
+    ofs_ << "\t0" << std::endl;
+    ofs_ << "\t.text" << std::endl;
+}
+
+std::string AsmCodegen::GlobName(const std::string& name) const
+{
+    return name;
+}
+
 reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 {
     switch (root->GetAstNodeTag())
@@ -294,6 +338,15 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             reg_idx reg = GenExpr(root->GetLeft());
 
             return Widen(reg, root->GetLeft()->GetType(), root->GetType());
+        }
+        case A_AstScale:
+        {
+            const AstScale *scale =
+                static_cast<const AstScale*>(root.get());
+
+            reg_idx reg = GenExpr(root->GetLeft());
+
+            return Scale(reg, scale->GetSize());
         }
         case A_AstAddress:
         {

@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 
+#include <bit>
 #include <iostream>
 #include <string_view>
 #include <unordered_map>
@@ -82,15 +83,6 @@ void X86Codegen::EmitLabel(label_idx label)
 void X86Codegen::EmitJump(label_idx label)
 {
     ofs_ << "\tjmp\tL" << label << std::endl;
-}
-
-void X86Codegen::GenGlobSymbol(const Symbol& symbol)
-{
-    /* The storage a variable needs is decided by its type. */
-    int32 size = PrimitiveSize(symbol.type);
-
-    ofs_ << "\t.comm\t" << symbol.name << "," << size << "," << size;
-    ofs_ << std::endl;
 }
 
 reg_idx X86Codegen::LoadInt(int32 value)
@@ -211,6 +203,29 @@ reg_idx X86Codegen::Widen(reg_idx reg,
      * from it is just as clean; storing it back truncates again.
      */
     return reg;
+}
+
+/*
+ * Multiply the value in a register by the size of a type. Every size the
+ * language has now is a power of two, so a shift left is enough and
+ * cheaper than a multiply; the multiply is there for the sizes which are
+ * not, which the composite types later on will bring.
+ */
+reg_idx X86Codegen::Scale(reg_idx reg, int32 scale)
+{
+    uint32 size = static_cast<uint32>(scale);
+
+    if (std::has_single_bit(size))
+    {
+        ofs_ << "\tsalq\t$" << std::countr_zero(size) << ", ";
+        ofs_ << reg_list_[reg] << std::endl;
+
+        return reg;
+    }
+
+    reg_idx size_reg = LoadInt(scale);
+
+    return Mul(reg, size_reg);
 }
 
 reg_idx X86Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
