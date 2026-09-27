@@ -31,8 +31,7 @@ int main(int argc, const char **argv)
     nuocc::PRINTTOKENLIST(scanner);
 
     nuocc::Parser parser;
-    std::vector<nuocc::AstNodePtr> program
-        = parser.Parse(scanner.GetTokenList());
+    nuocc::Program program = parser.Parse(scanner.GetTokenList());
 
     std::unique_ptr<nuocc::AsmCodegen> asm_codegen
         = nuocc::MakeCodegen(kOutputFile);

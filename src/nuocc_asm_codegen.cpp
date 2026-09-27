@@ -27,13 +27,25 @@ AsmCodegen::~AsmCodegen()
     ofs_.close();
 }
 
-void AsmCodegen::GenProgram(const std::vector<AstNodePtr>& functions)
+void AsmCodegen::GenProgram(const Program& program)
 {
     FreeAllRegister();
 
     EmitPreamble();
 
-    for (const AstNodePtr& function : functions)
+    /*
+     * The storage for the global variables is emitted before any code, so
+     * that a function can use a variable declared below it.
+     */
+    for (const AstNodePtr& declaration : program.globals)
+    {
+        const AstDeclare *glob =
+            static_cast<const AstDeclare*>(declaration.get());
+
+        GenGlobSymbol(glob->GetSymbol());
+    }
+
+    for (const AstNodePtr& function : program.functions)
     {
         const AstFunction *ast_function =
             static_cast<const AstFunction*>(function.get());

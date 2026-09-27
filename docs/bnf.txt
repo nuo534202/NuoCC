@@ -1,8 +1,32 @@
-program: function_declaration
-    | function_declaration program
+program: global_declaration
+    | global_declaration program
+    ;
+
+global_declaration: function_declaration
+    | var_declaration
     ;
 
 function_declaration: type identifier '(' ')' compound_statement
+    ;
+
+var_declaration: type identifier_list ';'
+    ;
+
+identifier_list: identifier
+    | identifier ',' identifier_list
+    ;
+
+type: type_keyword opt_pointer
+    ;
+
+type_keyword: 'char'
+    | 'int'
+    | 'long'
+    | 'void'
+    ;
+
+opt_pointer: <empty>
+    | '*' opt_pointer
     ;
 
 compound_statement:
@@ -24,14 +48,7 @@ statement: print_statement
 print_statement: 'print' expression ';'
     ;
 
-declaration: type identifier ';'
-    ;
-
-type: 'char'
-    | 'int'
-    | 'long'
-    | 'void'
-    | type '*'
+declaration: type identifier_list ';'
     ;
 
 function_call: identifier '(' expression ')'

@@ -26,7 +26,11 @@ public:
     virtual ~AsmCodegen();
 
 public:
-    void GenProgram(const std::vector<AstNodePtr>& functions);
+    /*
+     * Generate the code of the whole program: the storage for the global
+     * variables first, then the code of every function.
+     */
+    void GenProgram(const Program& program);
 
 protected:
     /* What every target has to provide. */

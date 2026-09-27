@@ -11,32 +11,7 @@
 namespace nuocc
 {
 
-namespace
-{
-
-/*
- * The simple statements are the ones terminated by a semicolon. The
- * statements which end in a compound statement, if, while and for, are
- * not, which is why the terminator is matched by the caller.
- */
-bool IsSimpleStatement(AstNodeTag tag)
-{
-    switch (tag)
-    {
-        case A_AstPrint:
-        case A_AstDeclare:
-        case A_AstFuncCall:
-        case A_AstReturn:
-        case A_AstOperator:     /* an assignment */
-            return true;
-        default:
-            return false;
-    }
-}
-
-}   /* namespace */
-
-std::vector<AstNodePtr> Parser::Parse(const std::vector<NodePtr>& token_list)
+Program Parser::Parse(const std::vector<NodePtr>& token_list)
 {
     /*
      * printint() is provided by the runtime the generated code is linked
@@ -47,44 +22,56 @@ std::vector<AstNodePtr> Parser::Parse(const std::vector<NodePtr>& token_list)
                                    .stype = StructuralType::kFunction});
 
     idx_t i = 0;
-    std::vector<AstNodePtr> functions;
+    Program program;
 
     while (TokenTag(token_list[i]) != T_EOF)
-        functions.push_back(FunctionDeclaration(token_list, i));
+        GlobalDeclaration(token_list, i, program);
 
-    if (functions.empty())
+    if (program.functions.empty())
     {
         std::cerr << "syntax error: the program has no function!" << std::endl;
         std::exit(1);
     }
 
-    return functions;
+    return program;
+}
+
+/*
+ * global_declaration: function_declaration | var_declaration  ;
+ */
+void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    Program& program)
+{
+    PrimitiveType type = ParseType(token_list, i);
+    std::string name = MatchIdentifier(token_list, i, "a name");
+
+    if (TokenTag(token_list[i]) == T_LParen)
+    {
+        program.functions.push_back(
+            FunctionDeclaration(token_list, i, type, name));
+        return;
+    }
+
+    IdentifierList(token_list, i, type, name, program.globals);
+
+    Match(token_list, i, T_Semicolon, ";");
 }
 
 /*
  * function_declaration: type identifier '(' ')' compound_statement  ;
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
-    idx_t& i)
+    idx_t& i,
+    PrimitiveType type,
+    const std::string& name)
 {
-    PrimitiveType type = ParseType(token_list, i);
-
-    if (TokenTag(token_list[i]) != T_Identifier)
-    {
-        std::cerr << "syntax error: expect a function name!" << std::endl;
-        std::exit(1);
-    }
-
-    const Identifier *ident =
-        static_cast<const Identifier *>(token_list[i].get());
-
-    Symbol symbol{.name = ident->GetName(),
+    Symbol symbol{.name = name,
                   .type = type,
                   .stype = StructuralType::kFunction};
 
     symbol_table_.AddSymbol(symbol);
 
-    Match(token_list, i, T_Identifier, "a function name");
     Match(token_list, i, T_LParen, "(");
     Match(token_list, i, T_RParen, ")");
 
@@ -139,20 +126,20 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
         if (TokenTag(token_list[i]) == T_RBrace)
             break;
 
-        AstNodePtr tree = Statement(token_list, i);
+        ParsedStatement statement = Statement(token_list, i);
 
-        /* A simple statement is terminated by a semicolon. */
-        if (IsSimpleStatement(tree->GetAstNodeTag()))
+        /* A statement which needs one is terminated by a semicolon. */
+        if (statement.semicolon)
             Match(token_list, i, T_Semicolon, ";");
 
         /* Glue each statement onto the statements parsed before it. */
         if (!left)
         {
-            left = std::move(tree);
+            left = std::move(statement.tree);
         }
         else
         {
-            AstNodePtr glued = std::make_unique<AstGlue>(left, tree);
+            AstNodePtr glued = std::make_unique<AstGlue>(left, statement.tree);
             left = std::move(glued);
         }
     }
@@ -173,30 +160,31 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
  *      |     return_statement
  *      ;
  */
-AstNodePtr Parser::Statement(const std::vector<NodePtr>& token_list, idx_t& i)
+ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
 {
     switch (TokenTag(token_list[i]))
     {
         case T_Print:
-            return PrintStatement(token_list, i);
+            return {PrintStatement(token_list, i), true};
         case T_Int:
         case T_Char:
         case T_Long:
-            return DeclareStatement(token_list, i);
+            return {DeclareStatement(token_list, i), true};
         case T_If:
-            return IfStatement(token_list, i);
+            return {IfStatement(token_list, i), false};
         case T_While:
-            return WhileStatement(token_list, i);
+            return {WhileStatement(token_list, i), false};
         case T_For:
-            return ForStatement(token_list, i);
+            return {ForStatement(token_list, i), false};
         case T_Return:
-            return ReturnStatement(token_list, i);
+            return {ReturnStatement(token_list, i), true};
         case T_Identifier:
             /* A '(' after the name turns the statement into a call. */
             if (TokenTag(token_list[i + 1]) == T_LParen)
-                return FuncCall(token_list, i);
+                return {FuncCall(token_list, i), true};
 
-            return AssignStatement(token_list, i);
+            return {AssignStatement(token_list, i), true};
         default:
             std::cerr << "syntax error: unexpected token ";
             std::cerr << NodeTagToString(TokenTag(token_list[i])) << "!";
@@ -231,30 +219,49 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
     return std::make_unique<AstPrint>(expression);
 }
 
-/* declaration: type identifier ';'  ; */
+/* declaration: type identifier_list ';'  ; */
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
     PrimitiveType type = ParseType(token_list, i);
 
-    if (TokenTag(token_list[i]) != T_Identifier)
+    std::string name = MatchIdentifier(token_list, i, "a variable name");
+
+    /* The declaration may name more than one variable of that type. */
+    std::vector<AstNodePtr> declarations;
+    IdentifierList(token_list, i, type, name, declarations);
+
+    return GlueStatements(declarations);
+}
+
+/*
+ * identifier_list: identifier | identifier ',' identifier_list  ;
+ */
+void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    PrimitiveType type,
+    const std::string& name,
+    std::vector<AstNodePtr>& declarations)
+{
+    std::string current = name;
+
+    while (true)
     {
-        std::cerr << "syntax error: expect a variable name!" << std::endl;
-        std::exit(1);
+        Symbol symbol{.name = current,
+                      .type = type,
+                      .stype = StructuralType::kVariable};
+
+        symbol_table_.AddSymbol(symbol);
+
+        declarations.push_back(std::make_unique<AstDeclare>(symbol));
+
+        /* A ',' continues the list with another name of the same type. */
+        if (TokenTag(token_list[i]) != T_Comma)
+            break;
+
+        i++;
+        current = MatchIdentifier(token_list, i, "a variable name");
     }
-
-    const Identifier *ident =
-        static_cast<const Identifier *>(token_list[i].get());
-
-    Symbol symbol{.name = ident->GetName(),
-                  .type = type,
-                  .stype = StructuralType::kVariable};
-
-    symbol_table_.AddSymbol(symbol);
-
-    Match(token_list, i, T_Identifier, "a variable name");
-
-    return std::make_unique<AstDeclare>(symbol);
 }
 
 /* assignment_statement: identifier '=' expression ';'  ; */
@@ -356,7 +363,7 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_For, "for");
     Match(token_list, i, T_LParen, "(");
 
-    AstNodePtr preop = Statement(token_list, i);
+    ParsedStatement preop = Statement(token_list, i);
     Match(token_list, i, T_Semicolon, ";");
 
     AstNodePtr condition = BinaryExpression(token_list, i, 0);
@@ -364,16 +371,16 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
 
     Match(token_list, i, T_Semicolon, ";");
 
-    AstNodePtr postop = Statement(token_list, i);
+    ParsedStatement postop = Statement(token_list, i);
     Match(token_list, i, T_RParen, ")");
 
     AstNodePtr body = CompoundStatement(token_list, i);
 
     /* The post statement runs at the end of each pass of the loop. */
-    AstNodePtr loop_body = std::make_unique<AstGlue>(body, postop);
+    AstNodePtr loop_body = std::make_unique<AstGlue>(body, postop.tree);
     AstNodePtr loop = std::make_unique<AstWhile>(condition, loop_body);
 
-    return std::make_unique<AstGlue>(preop, loop);
+    return std::make_unique<AstGlue>(preop.tree, loop);
 }
 
 /*
@@ -734,6 +741,25 @@ AstNodePtr Parser::MakeWiden(AstNodePtr& expression, PrimitiveType type)
     return std::make_unique<AstWiden>(expression, type);
 }
 
+AstNodePtr Parser::GlueStatements(std::vector<AstNodePtr>& statements)
+{
+    AstNodePtr tree = nullptr;
+
+    for (AstNodePtr& statement : statements)
+    {
+        if (!tree)
+        {
+            tree = std::move(statement);
+            continue;
+        }
+
+        AstNodePtr glued = std::make_unique<AstGlue>(tree, statement);
+        tree = std::move(glued);
+    }
+
+    return tree;
+}
+
 NodeTag Parser::TokenTag(const NodePtr& token)
 {
     if (token->GetNodeTag() == T_KeyWord)
@@ -770,6 +796,26 @@ void Parser::Match(const std::vector<NodePtr>& token_list,
     }
 
     i++;
+}
+
+std::string Parser::MatchIdentifier(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    std::string_view what)
+{
+    if (TokenTag(token_list[i]) != T_Identifier)
+    {
+        std::cerr << "syntax error: expect " << what << "!" << std::endl;
+        std::exit(1);
+    }
+
+    const Identifier *ident =
+        static_cast<const Identifier *>(token_list[i].get());
+
+    std::string name = ident->GetName();
+
+    i++;
+
+    return name;
 }
 
 uint8 Parser::GetOpPrecedence(NodeTag tag)

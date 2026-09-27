@@ -163,7 +163,9 @@ public:
 };
 
 /*
- * The declaration of a global variable.
+ * The declaration of a variable. Every variable is a global one for now,
+ * whether it is declared at the top level of the program or in the body of
+ * a function.
  */
 class AstDeclare : public AstNode
 {

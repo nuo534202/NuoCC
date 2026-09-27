@@ -110,6 +110,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Semicolon:
             out = ";";
             break;
+        case T_Comma:
+            out = ",";
+            break;
         case T_EOF:
             out = "EOF";
             break;

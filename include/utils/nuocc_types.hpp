@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace nuocc
 {
@@ -59,5 +60,18 @@ struct Symbol
 
 using NodePtr = std::unique_ptr<class Node>;
 using AstNodePtr = std::unique_ptr<class AstNode>;
+
+/*
+ * The whole program. What a declaration at the top level declares is kept
+ * apart: the storage for a global variable is emitted once before any
+ * code, while each function is emitted where it stands.
+ */
+struct Program
+{
+    /* Every function of the program, in the order it was declared. */
+    std::vector<AstNodePtr> functions;
+    /* Every global variable, in the order it was declared. */
+    std::vector<AstNodePtr> globals;
+};
 
 }   /* namespace nuocc */

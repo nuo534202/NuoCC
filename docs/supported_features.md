@@ -11,12 +11,20 @@
 4. Taking the Address of a variable with `&`, and reading through a
    pointer with `*`. Only the `&` of a variable and the `*` of a pointer
    are accepted, and a pointer to a pointer has no type of its own yet.
-4. Simple `print` statement.
-5. If-Else Statements.
-6. While Loops.
-7. For Loops.
-8. Function Declarations and Calls. A function takes no parameters and
+5. Simple `print` statement.
+6. If-Else Statements.
+7. While Loops.
+8. For Loops.
+9. Function Declarations and Calls. A function takes no parameters and
    returns `void`, `char`, `int` or `long`, so at most one argument may be
    passed and it is not yet visible to the function. A function which
    returns a value must end with a `return` statement, and a void function
    cannot return one.
+10. Global Variables. A declaration outside every function declares a
+    variable which every function can use. One declaration may name
+    several variables of the same type, written `int x, y, z;`, and the
+    same is allowed for the variables declared inside a function. The
+    `*` of a pointer type belongs to the declaration and not to the name,
+    so it is written once: `char *b;` and not `char *b, *c;`. A name has
+    to be declared before it is used, so a function can only reach the
+    global variables declared above it.

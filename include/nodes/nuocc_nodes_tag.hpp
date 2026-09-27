@@ -51,6 +51,7 @@ typedef enum NodeTag
     T_LParen,
     T_RParen,
     T_Semicolon,
+    T_Comma,
     T_EOF,
 
     /* Parser/AST Tags */
