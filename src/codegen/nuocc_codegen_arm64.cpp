@@ -42,9 +42,27 @@ constexpr char kScratchReg[] = "x17";
 /* The stack frame of a function: the frame pointer and the return address,
  * then the four registers this target allocates. */
 constexpr int kFrameSize = 48;
-constexpr int kSavedFrameOffset = 0;
 constexpr int kSavedRegs1Offset = 16;
 constexpr int kSavedRegs2Offset = 32;
+
+/*
+ * Mach-O decorates the name of every global symbol with a leading
+ * underscore, ELF leaves the name alone. This is the only difference
+ * between the two as far as a name is concerned, and it is decided by the
+ * system the compiler runs on, which is the one whose assembler will read
+ * the output.
+ */
+#ifdef __APPLE__
+constexpr std::string_view kGlobalPrefix = "_";
+#else
+constexpr std::string_view kGlobalPrefix = "";
+#endif
+
+/* The name of a global symbol as the assembler wants it written. */
+std::string GlobName(const std::string& name)
+{
+    return std::string(kGlobalPrefix) + name;
+}
 
 }   /* namespace */
 
@@ -68,9 +86,8 @@ void Arm64Codegen::EmitPreamble()
 void Arm64Codegen::EmitFunctionPreamble(const Symbol& symbol)
 {
     ofs_ << "\t.text" << std::endl;
-    ofs_ << "\t.globl\t" << symbol.name << std::endl;
-    ofs_ << "\t.type\t" << symbol.name << ", %function" << std::endl;
-    ofs_ << symbol.name << ":" << std::endl;
+    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+    ofs_ << GlobName(symbol.name) << ":" << std::endl;
 
     /* The stack has to stay a multiple of sixteen bytes at every call. */
     ofs_ << "\tstp\tx29, x30, [sp, #-" << kFrameSize << "]!" << std::endl;
@@ -110,10 +127,10 @@ void Arm64Codegen::EmitJump(label_idx label)
  */
 void Arm64Codegen::EmitGlobAddress(const Symbol& symbol)
 {
-    ofs_ << "\tadrp\t" << kScratchReg << ", " << symbol.name << "@PAGE";
-    ofs_ << std::endl;
+    ofs_ << "\tadrp\t" << kScratchReg << ", " << GlobName(symbol.name);
+    ofs_ << "@PAGE" << std::endl;
     ofs_ << "\tadd\t" << kScratchReg << ", " << kScratchReg << ", ";
-    ofs_ << symbol.name << "@PAGEOFF" << std::endl;
+    ofs_ << GlobName(symbol.name) << "@PAGEOFF" << std::endl;
 }
 
 /*
@@ -149,8 +166,8 @@ void Arm64Codegen::GenGlobSymbol(const Symbol& symbol)
     /* The storage a variable needs is decided by its type. */
     int32 size = PrimitiveSize(symbol.type);
 
-    ofs_ << "\t.comm\t" << symbol.name << "," << size << "," << size;
-    ofs_ << std::endl;
+    ofs_ << "\t.comm\t" << GlobName(symbol.name) << "," << size << ",";
+    ofs_ << size << std::endl;
 }
 
 reg_idx Arm64Codegen::LoadInt(int32 value)
@@ -330,7 +347,7 @@ reg_idx Arm64Codegen::Call(const Symbol& symbol, reg_idx arg_reg)
     reg_idx out_reg = AllocRegister();
 
     ofs_ << "\tmov\tx0, " << xreg_list_[arg_reg] << std::endl;
-    ofs_ << "\tbl\t" << symbol.name << std::endl;
+    ofs_ << "\tbl\t" << GlobName(symbol.name) << std::endl;
     ofs_ << "\tmov\t" << xreg_list_[out_reg] << ", x0" << std::endl;
 
     return out_reg;
@@ -365,7 +382,7 @@ void Arm64Codegen::Return(reg_idx reg)
 void Arm64Codegen::PrintInt(reg_idx reg)
 {
     ofs_ << "\tmov\tx0, " << xreg_list_[reg] << std::endl;
-    ofs_ << "\tbl\t" << kPrintIntName << std::endl;
+    ofs_ << "\tbl\t" << GlobName(kPrintIntName) << std::endl;
 }
 
 /*
@@ -375,10 +392,10 @@ reg_idx Arm64Codegen::AddressOf(const Symbol& symbol)
 {
     reg_idx reg = AllocRegister();
 
-    ofs_ << "\tadrp\t" << xreg_list_[reg] << ", " << symbol.name << "@PAGE";
-    ofs_ << std::endl;
+    ofs_ << "\tadrp\t" << xreg_list_[reg] << ", " << GlobName(symbol.name);
+    ofs_ << "@PAGE" << std::endl;
     ofs_ << "\tadd\t" << xreg_list_[reg] << ", " << xreg_list_[reg] << ", ";
-    ofs_ << symbol.name << "@PAGEOFF" << std::endl;
+    ofs_ << GlobName(symbol.name) << "@PAGEOFF" << std::endl;
 
     return reg;
 }
