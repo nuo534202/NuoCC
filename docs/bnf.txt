@@ -41,8 +41,7 @@ compound_statement:
 
 statement: print_statement
     | declaration
-    | assignment_statement
-    | function_call
+    | expression_statement
     | if_statement
     | while_statement
     | for_statement
@@ -65,7 +64,7 @@ opt_expression: <empty>
 return_statement: 'return' '(' expression ')'
     ;
 
-assignment_statement: identifier '=' expression ';'
+expression_statement: expression ';'
     ;
 
 if_statement: if_head
@@ -84,6 +83,22 @@ for_statement: 'for' '(' statement ';'
     ;
 
 identifier: T_IDENT
+    ;
+
+/*
+ * '=' binds less tightly than every other operator and to the right, so
+ * that a= b= 3 stores into b first and then into a. Only a variable and
+ * the location a pointer holds can stand on its left.
+ */
+expression: assignment_expression
+    ;
+
+assignment_expression: equality_expression
+    | lvalue '=' assignment_expression
+    ;
+
+lvalue: identifier
+    | '*' prefix_expression
     ;
 
 true_false_expression: equality_expression

@@ -528,6 +528,39 @@ reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
     return reg;
 }
 
+/*
+ * Write a value through a pointer, the other way round from Deref(). How
+ * much is written is decided by the type of the value, so that storing
+ * into a char does not run over the value stored next to it.
+ */
+void Arm64Codegen::StoreDeref(reg_idx value_reg,
+    reg_idx address_reg,
+    PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tstrb\t" << wreg_list_[value_reg] << ", [";
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tstr\t" << wreg_list_[value_reg] << ", [";
+            break;
+        case PrimitiveType::kLong:
+        case PrimitiveType::kVoidPtr:
+        case PrimitiveType::kCharPtr:
+        case PrimitiveType::kIntPtr:
+        case PrimitiveType::kLongPtr:
+            ofs_ << "\tstr\t" << xreg_list_[value_reg] << ", [";
+            break;
+        default:
+            std::cerr << "Error: cannot write through this pointer!";
+            std::cerr << std::endl;
+            std::exit(1);
+    }
+
+    ofs_ << xreg_list_[address_reg] << "]" << std::endl;
+}
+
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)
 {
     return std::make_unique<Arm64Codegen>(output_file);

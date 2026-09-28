@@ -79,6 +79,9 @@ protected:
 
     virtual reg_idx AddressOf(const Symbol& symbol) = 0;
     virtual reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) = 0;
+    virtual void StoreDeref(reg_idx value_reg,
+                            reg_idx address_reg,
+                            PrimitiveType type) = 0;
 
     /* The parts of the walk which are the same everywhere. */
 
@@ -96,6 +99,7 @@ protected:
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);
+    reg_idx GenAssign(const AstNodePtr& root);
     reg_idx GenOperator(NodeTag op_type, reg_idx left_reg, reg_idx right_reg);
 
     reg_idx AllocRegister();

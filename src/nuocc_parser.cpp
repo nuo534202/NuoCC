@@ -161,13 +161,16 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
 /*
  * statement: print_statement
  *      |     declaration
- *      |     assignment_statement
- *      |     function_call
+ *      |     expression_statement
  *      |     if_statement
  *      |     while_statement
  *      |     for_statement
  *      |     return_statement
  *      ;
+ *
+ * An assignment is an expression and not a statement of its own, because
+ * '=' is a binary operator: `x= 1;` is the expression `x= 1` followed by
+ * the semicolon every expression statement ends with.
  */
 ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
     idx_t& i)
@@ -188,17 +191,9 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {ForStatement(token_list, i), false};
         case T_Return:
             return {ReturnStatement(token_list, i), true};
-        case T_Identifier:
-            /* A '(' after the name turns the statement into a call. */
-            if (TokenTag(token_list[i + 1]) == T_LParen)
-                return {FuncCall(token_list, i), true};
-
-            return {AssignStatement(token_list, i), true};
         default:
-            std::cerr << "syntax error: unexpected token ";
-            std::cerr << NodeTagToString(TokenTag(token_list[i])) << "!";
-            std::cerr << std::endl;
-            std::exit(1);
+            /* This covers an assignment, a call and any other expression. */
+            return {BinaryExpression(token_list, i, 0), true};
     }
 }
 
@@ -270,36 +265,6 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
         i++;
         current = MatchIdentifier(token_list, i, "a variable name");
     }
-}
-
-/* assignment_statement: identifier '=' expression ';'  ; */
-AstNodePtr Parser::AssignStatement(const std::vector<NodePtr>& token_list,
-    idx_t& i)
-{
-    Symbol target = LookupTyped(token_list[i], StructuralType::kVariable,
-                                "variable");
-
-    /* The identifier names the target of the assignment, it is an lvalue. */
-    AstNodePtr lvalue = MakeIdentLeaf(target, true);
-
-    Match(token_list, i, T_Identifier, "a variable name");
-    Match(token_list, i, T_Assign, "=");
-
-    AstNodePtr value = BinaryExpression(token_list, i, 0);
-
-    /*
-     * The variable keeps its own type, so a value which would have to be
-     * narrowed to fit it is rejected.
-     */
-    if (!ModifyType(value, target.type, std::nullopt))
-    {
-        std::cerr << "syntax error: cannot store this value in ";
-        std::cerr << target.name << "!" << std::endl;
-        std::exit(1);
-    }
-
-    return std::make_unique<AstOperator>(value, lvalue, T_Assign,
-                                         target.type);
 }
 
 /*
@@ -529,11 +494,15 @@ AstNodePtr Parser::BinaryExpression(
     AstNodePtr left = PrefixExpression(token_list, i);
 
     /*
-     * Only a binary operator has a non-zero precedence, so the loop
-     * stops as soon as a semicolon, a right parenthesis, an EOF or any
-     * other token shows up.
+     * Only a binary operator has a non-zero precedence, so the loop stops
+     * as soon as a semicolon, a right parenthesis, an EOF or any other
+     * token shows up. A right associative operator also carries on when
+     * its precedence only matches, which is what makes `a= b= 3` store
+     * into b first instead of into a.
      */
-    while (GetOpPrecedence(TokenTag(token_list[i])) > ptp)
+    while (GetOpPrecedence(TokenTag(token_list[i])) > ptp ||
+           (IsRightAssociative(TokenTag(token_list[i])) &&
+            GetOpPrecedence(TokenTag(token_list[i])) == ptp))
     {
         idx_t op_idx = i;
         uint8 op_prec = GetOpPrecedence(TokenTag(token_list[op_idx]));
@@ -541,24 +510,56 @@ AstNodePtr Parser::BinaryExpression(
         i++;
 
         AstNodePtr right = BinaryExpression(token_list, i, op_prec);
-
-        /*
-         * Try to make each operand fit the type of the other one. One of
-         * them may have to be widened or scaled, which also means the
-         * other one cannot be made to fit, so the two only clash when
-         * neither of them can.
-         */
         NodeTag op_type = TokenTag(token_list[op_idx]);
-        PrimitiveType left_type = left->GetType();
-        PrimitiveType right_type = right->GetType();
 
-        bool left_fits = ModifyType(left, right_type, op_type);
-        bool right_fits = ModifyType(right, left_type, op_type);
-
-        if (!left_fits && !right_fits)
+        if (op_type == T_Assign)
         {
-            std::cerr << "syntax error: incompatible types!" << std::endl;
-            std::exit(1);
+            /*
+             * An assignment is the one operator whose two operands are not
+             * made to agree with each other: the target keeps the type it
+             * was declared with, and it is the value which has to fit it.
+             *
+             * The two are then switched around, so that the value ends up
+             * in the left child and the target in the right one. That is
+             * the order the code generator wants: the value has to be
+             * worked out before the location it is stored in.
+             */
+            if (!IsLvalue(left->GetAstNodeTag()))
+            {
+                std::cerr << "syntax error: an assignment can only store";
+                std::cerr << " into a variable or into a * pointer!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
+            if (!ModifyType(right, left->GetType(), std::nullopt))
+            {
+                std::cerr << "syntax error: this value does not fit the";
+                std::cerr << " target of the assignment!" << std::endl;
+                std::exit(1);
+            }
+
+            std::swap(left, right);
+        }
+        else
+        {
+            /*
+             * Try to make each operand fit the type of the other one. One
+             * of them may have to be widened or scaled, which also means
+             * the other one cannot be made to fit, so the two only clash
+             * when neither of them can.
+             */
+            PrimitiveType left_type = left->GetType();
+            PrimitiveType right_type = right->GetType();
+
+            bool left_fits = ModifyType(left, right_type, op_type);
+            bool right_fits = ModifyType(right, left_type, op_type);
+
+            if (!left_fits && !right_fits)
+            {
+                std::cerr << "syntax error: incompatible types!" << std::endl;
+                std::exit(1);
+            }
         }
 
         left = MakeOperatorNode(left, right, token_list[op_idx]);
@@ -659,7 +660,7 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
                                         "variable");
             i++;
 
-            return MakeIdentLeaf(symbol, false);
+            return MakeIdentLeaf(symbol);
         }
         default:
             std::cerr << "syntax error: unexpected token ";
@@ -744,12 +745,12 @@ AstNodePtr Parser::MakeIntLitLeaf(const NodePtr& token, PrimitiveType type)
     return std::make_unique<AstIntLit>(left, right, lit->GetValue(), type);
 }
 
-AstNodePtr Parser::MakeIdentLeaf(const Symbol& symbol, bool is_lv_ident)
+AstNodePtr Parser::MakeIdentLeaf(const Symbol& symbol)
 {
     AstNodePtr left = nullptr;
     AstNodePtr right = nullptr;
 
-    return std::make_unique<AstIdentifier>(left, right, symbol, is_lv_ident);
+    return std::make_unique<AstIdentifier>(left, right, symbol);
 }
 
 AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
@@ -770,6 +771,7 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_GT:
         case T_LE:
         case T_GE:
+        case T_Assign:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag(), type);
         default:
@@ -857,6 +859,23 @@ std::string Parser::MatchIdentifier(const std::vector<NodePtr>& token_list,
     return name;
 }
 
+bool Parser::IsRightAssociative(NodeTag tag)
+{
+    return tag == T_Assign;
+}
+
+bool Parser::IsLvalue(AstNodeTag tag)
+{
+    switch (tag)
+    {
+        case A_AstIdentifier:
+        case A_AstDeref:
+            return true;
+        default:
+            return false;
+    }
+}
+
 uint8 Parser::GetOpPrecedence(NodeTag tag)
 {
     auto it = kOpPrecedence.find(tag);
@@ -892,16 +911,19 @@ int32 Parser::AllocateLocal(PrimitiveType type)
 /*
  * Operator precedence, following the C language. The values themselves are
  * meaningless, only their relative order matters: a higher value binds
- * more tightly.
+ * more tightly. '=' binds the least tightly of all, so that everything on
+ * its right is stored and not compared or added.
  */
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
-    {T_EQ, 10}, {T_NE, 10},
+    {T_Assign, 10},
 
-    {T_LT, 20}, {T_GT, 20}, {T_LE, 20}, {T_GE, 20},
+    {T_EQ, 20}, {T_NE, 20},
 
-    {T_Plus, 30}, {T_Minus, 30},
+    {T_LT, 30}, {T_GT, 30}, {T_LE, 30}, {T_GE, 30},
 
-    {T_Star, 40}, {T_Slash, 40}
+    {T_Plus, 40}, {T_Minus, 40},
+
+    {T_Star, 50}, {T_Slash, 50}
 };
 
 }   /* namespace nuocc */

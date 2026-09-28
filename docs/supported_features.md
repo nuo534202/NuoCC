@@ -8,9 +8,13 @@
 2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division.
 3. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
    Less Than Or Equal To, Greater Than Or Equal To.
-4. Taking the Address of a variable with `&`, and reading through a
-   pointer with `*`. Only the `&` of a variable and the `*` of a pointer
-   are accepted, and a pointer to a pointer has no type of its own yet.
+4. Taking the Address of a variable with `&`, and reading or writing
+   through a pointer with `*`. A pointer may be the target of an
+   assignment: `*y= 14;` stores into the location `y` points at, and only
+   into that location, so writing through a `char` pointer does not run
+   over the value stored next to it. Only the `&` of a variable and the
+   `*` of a pointer are accepted, and a pointer to a pointer has no type
+   of its own yet.
 5. Simple `print` statement.
 6. If-Else Statements.
 7. While Loops.
@@ -41,3 +45,10 @@
 13. Function Parameters. A function may bind one typed parameter, such as
     `int add(int value)`, and callers may pass an expression of a compatible
     type. Parameterless functions may be called with empty parentheses.
+14. Assignment Expressions. An assignment is an expression which yields the
+    value stored, so `x= 5` may be used wherever a value may, as in
+    `print x= 5;`. `=` binds less tightly than every other operator and to
+    the right, so `c= a= 7` stores into `a` first and then into `c`. What
+    may stand on its left is a variable or the location a pointer holds,
+    and the value has to fit the target the same way it has to fit a
+    variable.

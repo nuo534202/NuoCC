@@ -123,47 +123,16 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             return;
         }
 
+        /*
+         * An expression standing on its own, which is how an assignment
+         * becomes a statement, and how the result of a call comes to be
+         * discarded: the value is worked out and then thrown away.
+         */
+        case A_AstOperator:
         case A_AstFuncCall:
         {
-            /* The result of a call is discarded when it stands alone. */
-            reg_idx reg = GenCall(root);
+            reg_idx reg = GenExpr(root);
             FreeRegister(reg);
-            return;
-        }
-
-        case A_AstOperator:
-        {
-            const AstOperator *ast_op =
-                static_cast<const AstOperator*>(root.get());
-
-            if (ast_op->GetOpType() != T_Assign)
-                break;
-
-            /* The left child is the value to store, the right one the target. */
-            const AstNodePtr& target = root->GetRight();
-
-            if (!target || target->GetAstNodeTag() != A_AstIdentifier)
-            {
-                std::cerr << "Error: assignment target is not an identifier!";
-                std::cerr << std::endl;
-                std::exit(1);
-            }
-
-            const AstIdentifier *ident =
-                static_cast<const AstIdentifier*>(target.get());
-
-            if (!ident->GetLvIdent())
-            {
-                std::cerr << "Error: assignment target ";
-                std::cerr << ident->GetSymbol().name;
-                std::cerr << " is not an lvalue!" << std::endl;
-                std::exit(1);
-            }
-
-            reg_idx value_reg = GenExpr(root->GetLeft());
-
-            StoreSymbol(ident->GetSymbol(), value_reg);
-            FreeRegister(value_reg);
             return;
         }
 
@@ -262,10 +231,6 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
 }
 
 /*
- * Generate the code for an expression and return the register which holds
- * its value. The caller owns that register and has to free it.
- */
-/*
  * Reserve the storage of a global variable.
  *
  * The variables are laid out one after another in the data section, in the
@@ -306,6 +271,10 @@ std::string AsmCodegen::GlobName(const std::string& name) const
     return name;
 }
 
+/*
+ * Generate the code for an expression and return the register which holds
+ * its value. The caller owns that register and has to free it.
+ */
 reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 {
     switch (root->GetAstNodeTag())
@@ -320,15 +289,6 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
         {
             const AstIdentifier *ident =
                 static_cast<const AstIdentifier*>(root.get());
-
-            /* An lvalue only names a location, it holds no value. */
-            if (ident->GetLvIdent())
-            {
-                std::cerr << "Error: lvalue identifier ";
-                std::cerr << ident->GetSymbol().name;
-                std::cerr << " is used as a value!" << std::endl;
-                std::exit(1);
-            }
 
             return LoadSymbol(ident->GetSymbol());
         }
@@ -368,11 +328,7 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             NodeTag op_type = ast_op->GetOpType();
 
             if (op_type == T_Assign)
-            {
-                std::cerr << "Error: an assignment is not an expression!";
-                std::cerr << std::endl;
-                std::exit(1);
-            }
+                return GenAssign(root);
 
             reg_idx left_reg = GenExpr(root->GetLeft());
             reg_idx right_reg = GenExpr(root->GetRight());
@@ -406,6 +362,51 @@ reg_idx AsmCodegen::GenCall(const AstNodePtr& root)
         FreeRegister(*arg_reg);
 
     return out_reg;
+}
+
+/*
+ * Generate the code for an assignment and return the register which holds
+ * the value stored, so that an assignment can be used as an expression.
+ *
+ * The value is worked out first and the place it goes in second: the tree
+ * holds the value in its left child and the place in its right one, the
+ * two having been switched around when the '=' was parsed. The place is
+ * never evaluated as a value of its own. A variable is stored to by name,
+ * and a pointer only gives up the address it holds, which the value is
+ * then written through.
+ */
+reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
+{
+    reg_idx value_reg = GenExpr(root->GetLeft());
+
+    const AstNodePtr& target = root->GetRight();
+
+    switch (target->GetAstNodeTag())
+    {
+        case A_AstIdentifier:
+        {
+            const AstIdentifier *ident =
+                static_cast<const AstIdentifier*>(target.get());
+
+            StoreSymbol(ident->GetSymbol(), value_reg);
+            return value_reg;
+        }
+        case A_AstDeref:
+        {
+            /* The child of the dereference is the pointer, not the value. */
+            reg_idx address_reg = GenExpr(target->GetLeft());
+
+            StoreDeref(value_reg, address_reg, target->GetType());
+            FreeRegister(address_reg);
+            return value_reg;
+        }
+        default:
+            break;
+    }
+
+    std::cerr << "Error: node " << target->GetAstNodeTag();
+    std::cerr << " cannot be assigned to!" << std::endl;
+    std::exit(1);
 }
 
 reg_idx AsmCodegen::GenOperator(NodeTag op_type,

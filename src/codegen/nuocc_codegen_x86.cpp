@@ -99,6 +99,14 @@ void X86Codegen::EmitFunctionPostamble()
 {
     EmitLabel(function_end_label_);
 
+    /*
+     * The frame pointer is where the stack pointer was before the frame of
+     * the function was made, so it has to be given back before the saved
+     * frame pointer is popped: a function which made room for locals and
+     * popped without doing this would return to whatever its own frame
+     * happens to hold.
+     */
+    ofs_ << "\tmovq\t%rbp, %rsp" << std::endl;
     ofs_ << "\tpopq %rbp" << std::endl;
     ofs_ << "\tret" << std::endl;
 }
@@ -481,6 +489,39 @@ reg_idx X86Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
     }
 
     return reg;
+}
+
+/*
+ * Write a value through a pointer, the other way round from Deref(). How
+ * much is written is decided by the type of the value, so that storing
+ * into a char does not run over the value stored next to it.
+ */
+void X86Codegen::StoreDeref(reg_idx value_reg,
+    reg_idx address_reg,
+    PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tmovb\t" << breg_list_[value_reg] << ", ";
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmovl\t" << dreg_list_[value_reg] << ", ";
+            break;
+        case PrimitiveType::kLong:
+        case PrimitiveType::kVoidPtr:
+        case PrimitiveType::kCharPtr:
+        case PrimitiveType::kIntPtr:
+        case PrimitiveType::kLongPtr:
+            ofs_ << "\tmovq\t" << reg_list_[value_reg] << ", ";
+            break;
+        default:
+            std::cerr << "Error: cannot write through this pointer!";
+            std::cerr << std::endl;
+            std::exit(1);
+    }
+
+    ofs_ << "(" << reg_list_[address_reg] << ")" << std::endl;
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

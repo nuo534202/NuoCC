@@ -88,23 +88,24 @@ private:
     int32 value_;
 };
 
-/* A reference to a variable, either as its value or as an lvalue target. */
+/*
+ * A reference to a variable. Reading one loads the value it holds; a
+ * variable written to is not read at all, as the assignment which stores
+ * into it reaches it by name and not through a register.
+ */
 class AstIdentifier : public AstNode
 {
 public:
     AstIdentifier(AstNodePtr& left,
                   AstNodePtr& right,
-                  const Symbol& symbol,
-                  bool is_lv_ident);
+                  const Symbol& symbol);
     ~AstIdentifier() = default;
 
 public:
     const Symbol& GetSymbol() const;
-    bool GetLvIdent() const;
 
 private:
     Symbol symbol_;
-    bool is_lv_ident_;
 };
 
 /*

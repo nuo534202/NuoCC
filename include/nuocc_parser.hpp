@@ -98,8 +98,6 @@ private:
         idx_t& i);
     AstNodePtr DeclareStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
-    AstNodePtr AssignStatement(const std::vector<NodePtr>& token_list,
-        idx_t& i);
     AstNodePtr IfStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
     AstNodePtr WhileStatement(const std::vector<NodePtr>& token_list,
@@ -171,7 +169,7 @@ private:
     AstNodePtr GlueStatements(std::vector<AstNodePtr>& statements);
 
     AstNodePtr MakeIntLitLeaf(const NodePtr& token, PrimitiveType type);
-    AstNodePtr MakeIdentLeaf(const Symbol& symbol, bool is_lv_ident);
+    AstNodePtr MakeIdentLeaf(const Symbol& symbol);
     AstNodePtr MakeOperatorNode(AstNodePtr& left,
                                 AstNodePtr& right,
                                 const NodePtr& node);
@@ -182,6 +180,21 @@ private:
      */
     static NodeTag TokenTag(const NodePtr& token);
     static bool IsComparisonOperator(NodeTag tag);
+
+    /*
+     * Whether an operator binds more tightly to the expression on its right
+     * than to the one on its left. '=' is the only one: in `a= b= 3` the 3
+     * is stored in b first, and the result of that is stored in a, so the
+     * operator on the right has to bind first.
+     */
+    static bool IsRightAssociative(NodeTag tag);
+
+    /*
+     * Whether a tree names a location which can be stored into. Only a
+     * variable and the location a pointer holds can, so these are the two
+     * trees which may stand on the left of an assignment.
+     */
+    static bool IsLvalue(AstNodeTag tag);
 
     void Match(const std::vector<NodePtr>& token_list,
                idx_t& i,

@@ -95,20 +95,13 @@ int32 AstIntLit::GetValue() const
 /* AstIdentifier */
 AstIdentifier::AstIdentifier(AstNodePtr& left,
     AstNodePtr& right,
-    const Symbol& symbol,
-    bool is_lv_ident)
+    const Symbol& symbol)
     : AstNode(A_AstIdentifier, symbol.type, left, right),
-      symbol_(symbol),
-      is_lv_ident_(is_lv_ident) {}
+      symbol_(symbol) {}
 
 const Symbol& AstIdentifier::GetSymbol() const
 {
     return symbol_;
-}
-
-bool AstIdentifier::GetLvIdent() const
-{
-    return is_lv_ident_;
 }
 
 /* AstPrint */

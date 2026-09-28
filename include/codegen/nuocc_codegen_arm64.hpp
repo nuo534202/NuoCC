@@ -63,6 +63,9 @@ protected:
 
     reg_idx AddressOf(const Symbol& symbol) override;
     reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) override;
+    void StoreDeref(reg_idx value_reg,
+                    reg_idx address_reg,
+                    PrimitiveType type) override;
 
 private:
     /* Load a register with the address of a global variable. */
