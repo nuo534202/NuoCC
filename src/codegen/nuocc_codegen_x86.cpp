@@ -135,10 +135,11 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
     reg_idx idx = AllocRegister();
 
     /*
-     * How much is read is decided by the type's size. Every one of these
-     * leaves the whole register holding the value: the widening loads
-     * clear the rest of it, and writing to a 32-bit register clears its
-     * upper half.
+     * How much is read is decided by the type's size, and every one of
+     * these leaves the whole register holding the value. A char is
+     * unsigned, so it is read with the zero extending load; an int is
+     * signed, and reading it without the sign would turn a negative value
+     * into a large positive one.
      */
     if (symbol.storage == StorageClass::kLocal)
     {
@@ -147,12 +148,15 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
         {
             case 1:
                 ofs_ << "\tmovzbq\t-" << offset << "(%rbp), ";
+                ofs_ << reg_list_[idx] << std::endl;
                 break;
             case 4:
-                ofs_ << "\tmovl\t-" << offset << "(%rbp), ";
+                ofs_ << "\tmovslq\t-" << offset << "(%rbp), ";
+                ofs_ << reg_list_[idx] << std::endl;
                 break;
             case 8:
                 ofs_ << "\tmovq\t-" << offset << "(%rbp), ";
+                ofs_ << reg_list_[idx] << std::endl;
                 break;
             default:
                 std::cerr << "Error: bad type for variable ";
@@ -160,9 +164,6 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
                 std::exit(1);
         }
 
-        ofs_ << (PrimitiveSize(symbol.type) == 4 ? dreg_list_[idx]
-                                                  : reg_list_[idx])
-             << std::endl;
         return idx;
     }
 
@@ -173,8 +174,8 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
             ofs_ << reg_list_[idx] << std::endl;
             break;
         case 4:
-            ofs_ << "\tmovl\t" << symbol.name << "(%rip), ";
-            ofs_ << dreg_list_[idx] << std::endl;
+            ofs_ << "\tmovslq\t" << symbol.name << "(%rip), ";
+            ofs_ << reg_list_[idx] << std::endl;
             break;
         case 8:
             ofs_ << "\tmovq\t" << symbol.name << "(%rip), ";
@@ -278,6 +279,165 @@ reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+/*
+ * The bitwise operations. Each of them writes the result over reg2 and
+ * gives reg1 back, exactly like Add() and the rest.
+ */
+reg_idx X86Codegen::And(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\tandq\t" << reg_list_[reg1] << ", ";
+    ofs_ << reg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx X86Codegen::Or(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\torq\t" << reg_list_[reg1] << ", ";
+    ofs_ << reg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx X86Codegen::Xor(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\txorq\t" << reg_list_[reg1] << ", ";
+    ofs_ << reg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+/*
+ * A shift takes the number of bits to shift by in %cl, so the value in
+ * reg2 is moved there first. The result is left in reg1, the register
+ * which held the value being shifted.
+ */
+reg_idx X86Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\tmovb\t" << breg_list_[reg2] << ", %cl" << std::endl;
+    ofs_ << "\tshlq\t%cl, " << reg_list_[reg1] << std::endl;
+
+    FreeRegister(reg2);
+
+    return reg1;
+}
+
+reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\tmovb\t" << breg_list_[reg2] << ", %cl" << std::endl;
+    ofs_ << "\tshrq\t%cl, " << reg_list_[reg1] << std::endl;
+
+    FreeRegister(reg2);
+
+    return reg1;
+}
+
+reg_idx X86Codegen::Negate(reg_idx reg)
+{
+    ofs_ << "\tnegq\t" << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+reg_idx X86Codegen::Invert(reg_idx reg)
+{
+    ofs_ << "\tnotq\t" << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+/*
+ * A value is false when it is zero and true otherwise. test sets the flags
+ * from the value anded with itself, and sete and setnz then write the
+ * answer into the low byte, which movzbq extends to a clean 0 or 1.
+ */
+reg_idx X86Codegen::LogNot(reg_idx reg)
+{
+    ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+    ofs_ << "\tsete\t" << breg_list_[reg] << std::endl;
+    ofs_ << "\tmovzbq\t" << breg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+reg_idx X86Codegen::ToBool(reg_idx reg)
+{
+    ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+    ofs_ << "\tsetnz\t" << breg_list_[reg] << std::endl;
+    ofs_ << "\tmovzbq\t" << breg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+/*
+ * Add one to, or take one from, the value a variable holds in memory
+ * without moving it into a register first, which x86-64 can do in one
+ * instruction.
+ */
+void X86Codegen::EmitIncDecMemory(const Symbol& symbol, int32 delta)
+{
+    ofs_ << "\t" << (delta > 0 ? "inc" : "dec");
+
+    switch (PrimitiveSize(symbol.type))
+    {
+        case 1:
+            ofs_ << "b";
+            break;
+        case 4:
+            ofs_ << "l";
+            break;
+        case 8:
+            ofs_ << "q";
+            break;
+        default:
+            std::cerr << "Error: bad type for variable ";
+            std::cerr << symbol.name << "!" << std::endl;
+            std::exit(1);
+    }
+
+    ofs_ << "\t";
+
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = symbol.stack_offset + PrimitiveSize(symbol.type);
+        ofs_ << "-" << offset << "(%rbp)" << std::endl;
+        return;
+    }
+
+    ofs_ << symbol.name << "(%rip)" << std::endl;
+}
+
+reg_idx X86Codegen::IncDec(const Symbol& symbol, int32 delta, bool post)
+{
+    /*
+     * Which value the expression yields is the only difference between the
+     * two sides: written after the variable it yields the value held
+     * before the change, written before it the value held afterwards.
+     */
+    if (post)
+    {
+        reg_idx reg = LoadSymbol(symbol);
+
+        EmitIncDecMemory(symbol, delta);
+
+        return reg;
+    }
+
+    EmitIncDecMemory(symbol, delta);
+
+    return LoadSymbol(symbol);
+}
+
 reg_idx X86Codegen::Widen(reg_idx reg,
     PrimitiveType /*old_type*/,
     PrimitiveType /*new_type*/)
@@ -363,6 +523,17 @@ void X86Codegen::CompareAndJump(NodeTag op_type,
     ofs_ << "\t" << it->second.jump << "\tL" << label << std::endl;
 
     FreeAllRegister();
+}
+
+/*
+ * Jump when the value in a register is zero. test sets the flags from the
+ * value anded with itself, and je is taken when that result was zero.
+ */
+void X86Codegen::JumpIfZero(reg_idx reg, label_idx label)
+{
+    ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+    ofs_ << "\tje\tL" << label << std::endl;
 }
 
 /*
@@ -476,8 +647,8 @@ reg_idx X86Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
             ofs_ << reg_list_[reg] << std::endl;
             break;
         case PrimitiveType::kInt:
-            ofs_ << "\tmovl\t(" << reg_list_[reg] << "), ";
-            ofs_ << dreg_list_[reg] << std::endl;
+            ofs_ << "\tmovslq\t(" << reg_list_[reg] << "), ";
+            ofs_ << reg_list_[reg] << std::endl;
             break;
         case PrimitiveType::kLong:
             ofs_ << "\tmovq\t(" << reg_list_[reg] << "), ";
