@@ -158,9 +158,18 @@ void Scanner::CommitToken(const std::string& token)
         case T_RBrace:
         case T_LParen:
         case T_RParen:
+        case T_LShift:
+        case T_RShift:
+        case T_Inc:
+        case T_Dec:
         case T_Amper:
         case T_Comma:
         case T_LogAnd:
+        case T_LogOr:
+        case T_Or:
+        case T_Xor:
+        case T_Invert:
+        case T_LogNot:
             token_node = std::make_unique<Node>(nodetag);
             break;
 
@@ -268,10 +277,8 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
 };
 
 /*
- * Single character operators. '!' is listed even though it is not a token
- * on its own: it only ever introduces '!=', but the scanner still has to
- * treat it as an operator character and not glue it onto the token before
- * it. A lone '!' therefore reports itself as an unknown token.
+ * Single character operators. Some of these characters also begin a two
+ * character operator, which kDoubleOp below is asked about first.
  */
 const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'+', T_Plus}, {'-', T_Minus}, {'*', T_Star}, {'/', T_Slash},
@@ -279,19 +286,20 @@ const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'<', T_LT}, {'>', T_GT},
     {'{', T_LBrace}, {'}', T_RBrace},
     {'(', T_LParen}, {')', T_RParen},
-    {'&', T_Amper},
-    {'!', T_UnknownToken}
+    {'&', T_Amper}, {'|', T_Or}, {'^', T_Xor},
+    {'~', T_Invert}, {'!', T_LogNot}
 };
 
 const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
     {"==", T_EQ}, {"!=", T_NE},
-    {"<=", T_LE}, {">=", T_GE},
-    {"&&", T_LogAnd}
+    {"<=", T_LE}, {">=", T_GE}, {"<<", T_LShift}, {">>", T_RShift},
+    {"&&", T_LogAnd}, {"||", T_LogOr},
+    {"++", T_Inc}, {"--", T_Dec}
 };
 
 const std::unordered_set<char> Scanner::kAlphabet = {
     '+', '-', '*', '/', '=', ';', ',', '_', '.',
-    '<', '>', '!', '{', '}', '(', ')', '&',
+    '<', '>', '!', '{', '}', '(', ')', '&', '|', '^', '~',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 

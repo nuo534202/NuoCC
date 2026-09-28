@@ -210,4 +210,30 @@ const Symbol& AstAddress::GetSymbol() const
 AstDeref::AstDeref(AstNodePtr& pointer, PrimitiveType type)
     : AstNode(A_AstDeref, type, pointer) {}
 
+/* AstUnary */
+AstUnary::AstUnary(AstNodePtr& expression, AstNodeTag tag, PrimitiveType type)
+    : AstNode(tag, type, expression) {}
+
+/* AstIncDec */
+AstIncDec::AstIncDec(const Symbol& symbol, int32 delta, bool post)
+    : AstNode(A_AstIncDec, symbol.type),
+      symbol_(symbol),
+      delta_(delta),
+      post_(post) {}
+
+const Symbol& AstIncDec::GetSymbol() const
+{
+    return symbol_;
+}
+
+int32 AstIncDec::GetDelta() const
+{
+    return delta_;
+}
+
+bool AstIncDec::IsPost() const
+{
+    return post_;
+}
+
 }   /* namespace nuocc*/

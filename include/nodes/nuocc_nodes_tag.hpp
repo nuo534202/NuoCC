@@ -16,6 +16,15 @@ typedef enum NodeTag
     T_Assign,
     T_Amper,
     T_LogAnd,
+    T_LogOr,
+    T_Or,
+    T_Xor,
+    T_LShift,
+    T_RShift,
+    T_Inc,
+    T_Dec,
+    T_Invert,
+    T_LogNot,
 
     /* Comparison Operator */
     T_EQ,
@@ -74,7 +83,12 @@ typedef enum AstNodeTag
     A_AstReturn,
     A_AstFuncCall,
     A_AstAddress,
-    A_AstDeref
+    A_AstDeref,
+    A_AstNegate,
+    A_AstInvert,
+    A_AstLogNot,
+    A_AstToBool,
+    A_AstIncDec
 } AstNodeTag;
 
 }   /* namespace nuocc */

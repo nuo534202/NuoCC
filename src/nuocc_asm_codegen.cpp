@@ -124,12 +124,14 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         }
 
         /*
-         * An expression standing on its own, which is how an assignment
-         * becomes a statement, and how the result of a call comes to be
-         * discarded: the value is worked out and then thrown away.
+         * An expression standing on its own, which is how an assignment or
+         * an increment becomes a statement, and how the result of a call
+         * comes to be discarded: the value is worked out and then thrown
+         * away.
          */
         case A_AstOperator:
         case A_AstFuncCall:
+        case A_AstIncDec:
         {
             reg_idx reg = GenExpr(root);
             FreeRegister(reg);
@@ -221,13 +223,26 @@ void AsmCodegen::GenWhile(const AstNodePtr& root)
 void AsmCodegen::GenCondition(const AstNodePtr& condition,
     label_idx false_label)
 {
-    const AstOperator *ast_op =
-        static_cast<const AstOperator*>(condition.get());
+    /*
+     * A comparison compares its two operands and jumps when it does not
+     * hold. Any other condition has been turned into a boolean value, so
+     * all that is left is to ask whether that value is zero.
+     */
+    if (condition->GetAstNodeTag() == A_AstOperator)
+    {
+        const AstOperator *ast_op =
+            static_cast<const AstOperator*>(condition.get());
 
-    reg_idx left_reg = GenExpr(condition->GetLeft());
-    reg_idx right_reg = GenExpr(condition->GetRight());
+        reg_idx left_reg = GenExpr(condition->GetLeft());
+        reg_idx right_reg = GenExpr(condition->GetRight());
 
-    CompareAndJump(ast_op->GetOpType(), left_reg, right_reg, false_label);
+        CompareAndJump(ast_op->GetOpType(), left_reg, right_reg, false_label);
+        return;
+    }
+
+    reg_idx reg = GenExpr(condition);
+
+    JumpIfZero(reg, false_label);
 }
 
 /*
@@ -318,6 +333,25 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             reg_idx reg = GenExpr(root->GetLeft());
 
             return Deref(reg, root->GetLeft()->GetType());
+        }
+        /*
+         * A unary operation works on the value its child leaves in a
+         * register, and the tag of the node says which one it is.
+         */
+        case A_AstNegate:
+            return Negate(GenExpr(root->GetLeft()));
+        case A_AstInvert:
+            return Invert(GenExpr(root->GetLeft()));
+        case A_AstLogNot:
+            return LogNot(GenExpr(root->GetLeft()));
+        case A_AstToBool:
+            return ToBool(GenExpr(root->GetLeft()));
+        case A_AstIncDec:
+        {
+            const AstIncDec *inc =
+                static_cast<const AstIncDec*>(root.get());
+
+            return IncDec(inc->GetSymbol(), inc->GetDelta(), inc->IsPost());
         }
         case A_AstFuncCall:
             return GenCall(root);
@@ -423,6 +457,25 @@ reg_idx AsmCodegen::GenOperator(NodeTag op_type,
             return Mul(left_reg, right_reg);
         case T_Slash:
             return Div(left_reg, right_reg);
+        case T_Amper:
+            return And(left_reg, right_reg);
+        case T_Or:
+            return Or(left_reg, right_reg);
+        case T_Xor:
+            return Xor(left_reg, right_reg);
+        case T_LShift:
+            return ShiftLeft(left_reg, right_reg);
+        case T_RShift:
+            return ShiftRight(left_reg, right_reg);
+        /*
+         * The operands of '&&' and '||' have already been turned into the
+         * zero or one which says whether they hold, so combining them is
+         * the bitwise operation on those two values.
+         */
+        case T_LogAnd:
+            return And(left_reg, right_reg);
+        case T_LogOr:
+            return Or(left_reg, right_reg);
         case T_EQ:
         case T_NE:
         case T_LT:

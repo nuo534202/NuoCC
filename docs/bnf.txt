@@ -86,14 +86,15 @@ identifier: T_IDENT
     ;
 
 /*
- * '=' binds less tightly than every other operator and to the right, so
- * that a= b= 3 stores into b first and then into a. Only a variable and
- * the location a pointer holds can stand on its left.
+ * The operators, from the loosest to the tightest. '=' binds less tightly
+ * than every other one and to the right, so that a= b= 3 stores into b
+ * first and then into a. Only a variable and the location a pointer holds
+ * can stand on its left.
  */
 expression: assignment_expression
     ;
 
-assignment_expression: equality_expression
+assignment_expression: logical_or_expression
     | lvalue '=' assignment_expression
     ;
 
@@ -101,7 +102,36 @@ lvalue: identifier
     | '*' prefix_expression
     ;
 
-true_false_expression: equality_expression
+logical_or_expression:
+      logical_and_expression
+    | logical_or_expression '||' logical_and_expression
+    ;
+
+logical_and_expression:
+      or_expression
+    | logical_and_expression '&&' or_expression
+    ;
+
+or_expression:
+      xor_expression
+    | or_expression '|' xor_expression
+    ;
+
+xor_expression:
+      amper_expression
+    | xor_expression '^' amper_expression
+    ;
+
+amper_expression:
+      equality_expression
+    | amper_expression '&' equality_expression
+    ;
+
+/*
+ * A condition is any expression. A comparison already says whether it
+ * holds; any other value holds when it is not zero.
+ */
+true_false_expression: expression
     ;
 
 equality_expression:
@@ -111,11 +141,17 @@ equality_expression:
     ;
 
 relational_expression:
+      shift_expression
+    | relational_expression '<' shift_expression
+    | relational_expression '>' shift_expression
+    | relational_expression '<=' shift_expression
+    | relational_expression '>=' shift_expression
+    ;
+
+shift_expression:
       additive_expression
-    | relational_expression '<' additive_expression
-    | relational_expression '>' additive_expression
-    | relational_expression '<=' additive_expression
-    | relational_expression '>=' additive_expression
+    | shift_expression '<<' additive_expression
+    | shift_expression '>>' additive_expression
     ;
 
 additive_expression:
@@ -130,14 +166,30 @@ multiplicative_expression:
     | multiplicative_expression '/' prefix_expression
     ;
 
+/*
+ * The prefix operators apply to whatever they are written before, and '++'
+ * and '--' also apply to a name they are written after. An increment or a
+ * decrement has to have somewhere to put the new value, so it only takes
+ * the name of a variable.
+ */
+prefix_expression: postfix_expression
+    | '*' prefix_expression
+    | '&' prefix_expression
+    | '-' prefix_expression
+    | '~' prefix_expression
+    | '!' prefix_expression
+    | '++' prefix_expression
+    | '--' prefix_expression
+    ;
+
+postfix_expression: primary
+    | identifier '++'
+    | identifier '--'
+    ;
+
 primary: number
     | identifier
     | function_call
-    ;
-
-prefix_expression: primary
-    | '*' prefix_expression
-    | '&' prefix_expression
     ;
 
 number: T_INTLIT

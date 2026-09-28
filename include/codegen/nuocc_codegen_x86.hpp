@@ -36,10 +36,21 @@ protected:
     reg_idx Sub(reg_idx reg1, reg_idx reg2) override;
     reg_idx Mul(reg_idx reg1, reg_idx reg2) override;
     reg_idx Div(reg_idx reg1, reg_idx reg2) override;
+    reg_idx And(reg_idx reg1, reg_idx reg2) override;
+    reg_idx Or(reg_idx reg1, reg_idx reg2) override;
+    reg_idx Xor(reg_idx reg1, reg_idx reg2) override;
+    reg_idx ShiftLeft(reg_idx reg1, reg_idx reg2) override;
+    reg_idx ShiftRight(reg_idx reg1, reg_idx reg2) override;
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
     reg_idx Scale(reg_idx reg, int32 scale) override;
+
+    reg_idx Negate(reg_idx reg) override;
+    reg_idx Invert(reg_idx reg) override;
+    reg_idx LogNot(reg_idx reg) override;
+    reg_idx ToBool(reg_idx reg) override;
+    reg_idx IncDec(const Symbol& symbol, int32 delta, bool post) override;
 
     reg_idx CompareAndSet(NodeTag op_type,
                           reg_idx reg1,
@@ -48,6 +59,7 @@ protected:
                         reg_idx reg1,
                         reg_idx reg2,
                         label_idx label) override;
+    void JumpIfZero(reg_idx reg, label_idx label) override;
 
     reg_idx Call(const Symbol& symbol,
                  std::optional<reg_idx> arg_reg) override;
@@ -61,6 +73,9 @@ protected:
                     PrimitiveType type) override;
 
 private:
+    /* Alter the value a variable holds in memory by one. */
+    void EmitIncDecMemory(const Symbol& symbol, int32 delta);
+
     std::string reg_list_[kRegSize];
     /* The low byte of each register, required by the setX instructions. */
     std::string breg_list_[kRegSize];

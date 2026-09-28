@@ -289,4 +289,41 @@ public:
     ~AstDeref() = default;
 };
 
+/*
+ * A unary operation on the value of the left child. The tag of the node
+ * says which one: A_AstNegate flips the sign of an integer, A_AstInvert
+ * flips every one of its bits, A_AstLogNot answers whether it is zero, and
+ * A_AstToBool turns any value into the zero or one which the condition of
+ * a selection or a loop statement tests.
+ */
+class AstUnary : public AstNode
+{
+public:
+    AstUnary(AstNodePtr& expression, AstNodeTag tag, PrimitiveType type);
+    ~AstUnary() = default;
+};
+
+/*
+ * The increment or the decrement of a variable, written '++' or '--'. The
+ * delta is what is added, and post records whether the operator was
+ * written after the variable, in which case the value of the expression is
+ * the one the variable held before.
+ */
+class AstIncDec : public AstNode
+{
+public:
+    AstIncDec(const Symbol& symbol, int32 delta, bool post);
+    ~AstIncDec() = default;
+
+public:
+    const Symbol& GetSymbol() const;
+    int32 GetDelta() const;
+    bool IsPost() const;
+
+private:
+    Symbol symbol_;
+    int32 delta_;
+    bool post_;
+};
+
 }   /* namespace nuocc */

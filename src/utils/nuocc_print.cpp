@@ -38,6 +38,33 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_LogAnd:
             out = "&&";
             break;
+        case T_LogOr:
+            out = "||";
+            break;
+        case T_Or:
+            out = "|";
+            break;
+        case T_Xor:
+            out = "^";
+            break;
+        case T_LShift:
+            out = "<<";
+            break;
+        case T_RShift:
+            out = ">>";
+            break;
+        case T_Inc:
+            out = "++";
+            break;
+        case T_Dec:
+            out = "--";
+            break;
+        case T_Invert:
+            out = "~";
+            break;
+        case T_LogNot:
+            out = "!";
+            break;
         case T_EQ:
             out = "==";
             break;

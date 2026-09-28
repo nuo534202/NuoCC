@@ -59,10 +59,29 @@ protected:
     virtual reg_idx Sub(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Mul(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Div(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx And(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx Or(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx Xor(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx ShiftLeft(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx ShiftRight(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Widen(reg_idx reg,
                           PrimitiveType old_type,
                           PrimitiveType new_type) = 0;
     virtual reg_idx Scale(reg_idx reg, int32 scale) = 0;
+
+    /* The unary operations, each of them on the value in one register. */
+    virtual reg_idx Negate(reg_idx reg) = 0;
+    virtual reg_idx Invert(reg_idx reg) = 0;
+    virtual reg_idx LogNot(reg_idx reg) = 0;
+    virtual reg_idx ToBool(reg_idx reg) = 0;
+
+    /*
+     * Add delta to the value a variable holds, and leave either the value
+     * it held before or the one it holds afterwards in a register, which is
+     * what an increment or a decrement written after or before the variable
+     * yields.
+     */
+    virtual reg_idx IncDec(const Symbol& symbol, int32 delta, bool post) = 0;
 
     virtual reg_idx CompareAndSet(NodeTag op_type,
                                   reg_idx reg1,
@@ -71,6 +90,12 @@ protected:
                                 reg_idx reg1,
                                 reg_idx reg2,
                                 label_idx label) = 0;
+
+    /*
+     * Jump when the value in a register is zero, which is the question a
+     * condition which is not a comparison asks.
+     */
+    virtual void JumpIfZero(reg_idx reg, label_idx label) = 0;
 
     virtual reg_idx Call(const Symbol& symbol,
                          std::optional<reg_idx> arg_reg) = 0;

@@ -279,7 +279,7 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
 {
     Match(token_list, i, T_If, "if");
 
-    AstNodePtr condition = Condition(token_list, i, "an if statement");
+    AstNodePtr condition = Condition(token_list, i);
     AstNodePtr true_branch = CompoundStatement(token_list, i);
     AstNodePtr false_branch = nullptr;
     bool has_else = false;
@@ -305,7 +305,7 @@ AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
 {
     Match(token_list, i, T_While, "while");
 
-    AstNodePtr condition = Condition(token_list, i, "a while statement");
+    AstNodePtr condition = Condition(token_list, i);
     AstNodePtr body = CompoundStatement(token_list, i);
 
     return std::make_unique<AstWhile>(condition, body);
@@ -335,10 +335,9 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_Semicolon, ";");
 
     AstNodePtr condition = BinaryExpression(token_list, i, 0);
-    CheckComparison(condition, "a for statement");
+    MakeCondition(condition);
 
     Match(token_list, i, T_Semicolon, ";");
-
     ParsedStatement postop = Statement(token_list, i);
     Match(token_list, i, T_RParen, ")");
 
@@ -456,13 +455,12 @@ std::optional<Symbol> Parser::FunctionParameter(
  * Parse the parenthesised condition shared by if and while statements.
  */
 AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
-    idx_t& i,
-    std::string_view statement)
+    idx_t& i)
 {
     Match(token_list, i, T_LParen, "(");
 
     AstNodePtr condition = BinaryExpression(token_list, i, 0);
-    CheckComparison(condition, statement);
+    MakeCondition(condition);
 
     Match(token_list, i, T_RParen, ")");
 
@@ -470,20 +468,20 @@ AstNodePtr Parser::Condition(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * The language has no truth values of its own yet, so every condition has
- * to be one of the six comparison operators.
+ * A condition has to be either false or true. A comparison already is, so
+ * it is left alone; anything else is an integer, and an integer is false
+ * when it is zero and true otherwise, so it is converted into a boolean.
  */
-void Parser::CheckComparison(const AstNodePtr& condition,
-    std::string_view statement)
+void Parser::MakeCondition(AstNodePtr& expression)
 {
-    if (condition->GetAstNodeTag() != A_AstOperator ||
-        !IsComparisonOperator(
-            static_cast<const AstOperator *>(condition.get())->GetOpType()))
-    {
-        std::cerr << "syntax error: the condition of " << statement;
-        std::cerr << " must be a comparison!" << std::endl;
-        std::exit(1);
-    }
+    if (expression->GetAstNodeTag() == A_AstOperator &&
+        IsComparisonOperator(
+            static_cast<const AstOperator *>(expression.get())->GetOpType()))
+        return;
+
+    expression = std::make_unique<AstUnary>(expression,
+                                            A_AstToBool,
+                                            PrimitiveType::kInt);
 }
 
 AstNodePtr Parser::BinaryExpression(
@@ -562,6 +560,20 @@ AstNodePtr Parser::BinaryExpression(
             }
         }
 
+        /*
+         * '&&' and '||' answer a question about their operands and not
+         * about their bits, so each side becomes the zero or one which
+         * says whether it holds: the bitwise operations which follow then
+         * give the right answer, as those are the only values left.
+         */
+        if (op_type == T_LogAnd || op_type == T_LogOr)
+        {
+            left = std::make_unique<AstUnary>(left, A_AstToBool,
+                                              PrimitiveType::kInt);
+            right = std::make_unique<AstUnary>(right, A_AstToBool,
+                                               PrimitiveType::kInt);
+        }
+
         left = MakeOperatorNode(left, right, token_list[op_idx]);
     }
 
@@ -619,6 +631,81 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
             return std::make_unique<AstDeref>(operand,
                                               ValueAt(operand->GetType()));
         }
+        case T_Minus:
+        {
+            i++;
+
+            AstNodePtr operand = PrefixExpression(token_list, i);
+
+            /*
+             * A char is unsigned, so there is no such thing as a negative
+             * one: the value is widened to an int before the sign flips.
+             */
+            if (!ModifyType(operand, PrimitiveType::kInt, std::nullopt))
+            {
+                std::cerr << "syntax error: - needs a number!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
+            return std::make_unique<AstUnary>(operand,
+                                              A_AstNegate,
+                                              operand->GetType());
+        }
+        case T_Invert:
+        {
+            i++;
+
+            AstNodePtr operand = PrefixExpression(token_list, i);
+
+            /* Only the bits of an integer can be flipped. */
+            if (!IsIntType(operand->GetType()))
+            {
+                std::cerr << "syntax error: ~ needs an integer value!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
+            return std::make_unique<AstUnary>(operand,
+                                              A_AstInvert,
+                                              operand->GetType());
+        }
+        case T_LogNot:
+        {
+            i++;
+
+            AstNodePtr operand = PrefixExpression(token_list, i);
+
+            /* Only an integer can be asked whether it is zero. */
+            if (!IsIntType(operand->GetType()))
+            {
+                std::cerr << "syntax error: ! needs an integer value!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
+            return std::make_unique<AstUnary>(operand,
+                                              A_AstLogNot,
+                                              PrimitiveType::kInt);
+        }
+        case T_Inc:
+        case T_Dec:
+        {
+            bool increment = TokenTag(token_list[i]) == T_Inc;
+            i++;
+
+            /*
+             * The value has somewhere to go back to, so an increment or a
+             * decrement needs a variable and not an expression.
+             */
+            Symbol symbol = LookupTyped(token_list[i],
+                                        StructuralType::kVariable,
+                                        "variable");
+            i++;
+
+            return std::make_unique<AstIncDec>(symbol, increment ? 1 : -1,
+                                               false);
+        }
         default:
             return ParsePrimary(token_list, i);
     }
@@ -659,6 +746,21 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
                                         StructuralType::kVariable,
                                         "variable");
             i++;
+
+            /*
+             * A '++' or a '--' after the name makes this a postfix
+             * operator, which yields the value held before the change.
+             */
+            if (TokenTag(token_list[i]) == T_Inc ||
+                TokenTag(token_list[i]) == T_Dec)
+            {
+                bool increment = TokenTag(token_list[i]) == T_Inc;
+                i++;
+
+                return std::make_unique<AstIncDec>(symbol,
+                                                   increment ? 1 : -1,
+                                                   true);
+            }
 
             return MakeIdentLeaf(symbol);
         }
@@ -713,6 +815,17 @@ Symbol Parser::LookupTyped(const NodePtr& token,
     StructuralType wanted,
     std::string_view what)
 {
+    /*
+     * Only a name can be looked up, so a literal or an operator standing
+     * where one is expected is refused rather than read as a name.
+     */
+    if (token->GetNodeTag() != T_Identifier)
+    {
+        std::cerr << "syntax error: expect a " << what << " name!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
     const Identifier *ident = static_cast<const Identifier *>(token.get());
 
     std::optional<Symbol> symbol = symbol_table_.FindSymbol(ident->GetName());
@@ -771,6 +884,13 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_GT:
         case T_LE:
         case T_GE:
+        case T_LShift:
+        case T_RShift:
+        case T_Or:
+        case T_Xor:
+        case T_Amper:
+        case T_LogAnd:
+        case T_LogOr:
         case T_Assign:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag(), type);
@@ -917,13 +1037,25 @@ int32 Parser::AllocateLocal(PrimitiveType type)
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
     {T_Assign, 10},
 
-    {T_EQ, 20}, {T_NE, 20},
+    {T_LogOr, 20},
 
-    {T_LT, 30}, {T_GT, 30}, {T_LE, 30}, {T_GE, 30},
+    {T_LogAnd, 30},
 
-    {T_Plus, 40}, {T_Minus, 40},
+    {T_Or, 40},
 
-    {T_Star, 50}, {T_Slash, 50}
+    {T_Xor, 50},
+
+    {T_Amper, 60},
+
+    {T_EQ, 70}, {T_NE, 70},
+
+    {T_LT, 80}, {T_GT, 80}, {T_LE, 80}, {T_GE, 80},
+
+    {T_LShift, 90}, {T_RShift, 90},
+
+    {T_Plus, 100}, {T_Minus, 100},
+
+    {T_Star, 110}, {T_Slash, 110}
 };
 
 }   /* namespace nuocc */

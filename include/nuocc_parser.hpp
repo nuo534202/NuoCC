@@ -120,10 +120,13 @@ private:
         Symbol& function);
 
     AstNodePtr Condition(const std::vector<NodePtr>& token_list,
-        idx_t& i,
-        std::string_view statement);
-    void CheckComparison(const AstNodePtr& condition,
-                         std::string_view statement);
+        idx_t& i);
+
+    /*
+     * Turn an expression into a condition: a comparison already says
+     * whether it holds, any other value is false when it is zero.
+     */
+    void MakeCondition(AstNodePtr& expression);
 
     AstNodePtr BinaryExpression(
         const std::vector<NodePtr>& token_list,
