@@ -213,7 +213,7 @@ reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
                 ofs_ << "\tldrb\t" << wreg_list_[idx] << ", [x29, #";
                 break;
             case 4:
-                ofs_ << "\tldr\t" << wreg_list_[idx] << ", [x29, #";
+                ofs_ << "\tldrsw\t" << xreg_list_[idx] << ", [x29, #";
                 break;
             case 8:
                 ofs_ << "\tldr\t" << xreg_list_[idx] << ", [x29, #";
@@ -230,9 +230,11 @@ reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
     EmitGlobAddress(symbol);
 
     /*
-     * How much is read is decided by the type's size. Loading a byte or
-     * four bytes into a w register clears the rest of the x register it
-     * names, so the whole register holds the value either way.
+     * How much is read is decided by the type's size, and the whole
+     * register ends up holding the value. A char is unsigned, so it is
+     * read with the zero extending load; an int is signed, and reading it
+     * without the sign would turn a negative value into a large positive
+     * one.
      */
     switch (PrimitiveSize(symbol.type))
     {
@@ -241,8 +243,8 @@ reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
             ofs_ << "]" << std::endl;
             break;
         case 4:
-            ofs_ << "\tldr\t" << wreg_list_[idx] << ", [" << kScratchReg;
-            ofs_ << "]" << std::endl;
+            ofs_ << "\tldrsw\t" << xreg_list_[idx] << ", [";
+            ofs_ << kScratchReg << "]" << std::endl;
             break;
         case 8:
             ofs_ << "\tldr\t" << xreg_list_[idx] << ", [" << kScratchReg;
@@ -346,6 +348,135 @@ reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+/*
+ * The bitwise operations. Each of them writes the result over reg2 and
+ * gives reg1 back, exactly like Add() and the rest.
+ */
+reg_idx Arm64Codegen::And(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\tand\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
+    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx Arm64Codegen::Or(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\torr\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
+    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\teor\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
+    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+/*
+ * A shift takes the number of bits to shift by in the low bits of a
+ * register, which is where that value already is.
+ */
+reg_idx Arm64Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
+{
+    ofs_ << "\tlsl\t" << xreg_list_[reg2] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
+{
+    /* 'lsr' shifts zeroes in, 'asr' would keep the sign. */
+    ofs_ << "\tlsr\t" << xreg_list_[reg2] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
+
+    FreeRegister(reg1);
+
+    return reg2;
+}
+
+reg_idx Arm64Codegen::Negate(reg_idx reg)
+{
+    ofs_ << "\tneg\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
+    ofs_ << std::endl;
+
+    return reg;
+}
+
+reg_idx Arm64Codegen::Invert(reg_idx reg)
+{
+    ofs_ << "\tmvn\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
+    ofs_ << std::endl;
+
+    return reg;
+}
+
+/*
+ * A value is false when it is zero and true otherwise. 'cmp' against the
+ * zero register sets the flags, and 'cset' then writes the answer, which
+ * is a clean zero or one on its own.
+ */
+reg_idx Arm64Codegen::LogNot(reg_idx reg)
+{
+    ofs_ << "\tcmp\t" << xreg_list_[reg] << ", xzr" << std::endl;
+    ofs_ << "\tcset\t" << xreg_list_[reg] << ", eq" << std::endl;
+
+    return reg;
+}
+
+reg_idx Arm64Codegen::ToBool(reg_idx reg)
+{
+    ofs_ << "\tcmp\t" << xreg_list_[reg] << ", xzr" << std::endl;
+    ofs_ << "\tcset\t" << xreg_list_[reg] << ", ne" << std::endl;
+
+    return reg;
+}
+
+/*
+ * AArch64 has no instruction which alters a value in memory, so the value
+ * is loaded, altered and stored back, which needs a second register to
+ * hold the new value while the old one is still around.
+ */
+reg_idx Arm64Codegen::IncDec(const Symbol& symbol, int32 delta, bool post)
+{
+    int32 amount = delta > 0 ? delta : -delta;
+
+    reg_idx old_reg = LoadSymbol(symbol);
+    reg_idx new_reg = AllocRegister();
+
+    ofs_ << "\t" << (delta > 0 ? "add" : "sub") << "\t";
+    ofs_ << xreg_list_[new_reg] << ", " << xreg_list_[old_reg];
+    ofs_ << ", #" << amount << std::endl;
+
+    StoreSymbol(symbol, new_reg);
+
+    /*
+     * Written after the variable the expression yields the value it held
+     * before the change, written before it the value it holds now.
+     */
+    if (post)
+    {
+        FreeRegister(new_reg);
+        return old_reg;
+    }
+
+    FreeRegister(old_reg);
+
+    return new_reg;
+}
+
 reg_idx Arm64Codegen::Widen(reg_idx reg,
     PrimitiveType /*old_type*/,
     PrimitiveType /*new_type*/)
@@ -426,6 +557,15 @@ void Arm64Codegen::CompareAndJump(NodeTag op_type,
     ofs_ << "\tb." << it->second.inverse << "\tL" << label << std::endl;
 
     FreeAllRegister();
+}
+
+/*
+ * Jump when the value in a register is zero, which AArch64 can do in one
+ * instruction of its own.
+ */
+void Arm64Codegen::JumpIfZero(reg_idx reg, label_idx label)
+{
+    ofs_ << "\tcbz\t" << xreg_list_[reg] << ", L" << label << std::endl;
 }
 
 /*
@@ -513,7 +653,7 @@ reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
         case PrimitiveType::kInt:
-            ofs_ << "\tldr\t" << wreg_list_[reg] << ", [";
+            ofs_ << "\tldrsw\t" << xreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
         case PrimitiveType::kLong:
