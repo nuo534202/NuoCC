@@ -13,6 +13,7 @@ AsmCodegen::AsmCodegen(const std::string& output_file)
     : next_label_(1),
       function_end_label_(0),
       function_return_type_(PrimitiveType::kNone),
+      function_local_size_(0),
       ofs_(output_file, std::ios::out | std::ios::trunc)
 {
     if (!ofs_.is_open())
@@ -58,8 +59,11 @@ void AsmCodegen::GenProgram(const Program& program)
          */
         function_end_label_ = NewLabel();
         function_return_type_ = ast_function->GetSymbol().type;
+        function_local_size_ = ast_function->GetLocalSize();
 
-        EmitFunctionPreamble(ast_function->GetSymbol());
+        EmitFunctionPreamble(ast_function->GetSymbol(),
+                             function_local_size_,
+                             ast_function->GetParameter());
 
         GenStatement(function->GetLeft());
 
@@ -69,6 +73,7 @@ void AsmCodegen::GenProgram(const Program& program)
 
         function_end_label_ = 0;
         function_return_type_ = PrimitiveType::kNone;
+        function_local_size_ = 0;
     }
 }
 
@@ -100,12 +105,7 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         }
 
         case A_AstDeclare:
-        {
-            const AstDeclare *decl =
-                static_cast<const AstDeclare*>(root.get());
-            GenGlobSymbol(decl->GetSymbol());
             return;
-        }
 
         case A_AstIf:
             GenIf(root);
@@ -162,7 +162,7 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
 
             reg_idx value_reg = GenExpr(root->GetLeft());
 
-            StoreGlobSymbol(ident->GetSymbol(), value_reg);
+            StoreSymbol(ident->GetSymbol(), value_reg);
             FreeRegister(value_reg);
             return;
         }
@@ -270,9 +270,8 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
  *
  * The variables are laid out one after another in the data section, in the
  * order they are declared, so that a program can reach one by adding an
- * offset to the address of another. A declaration can also stand in the
- * middle of a function body, which is why the code section is switched
- * back to once the storage is written.
+ * offset to the address of another. The code section is restored after
+ * each global declaration.
  */
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
@@ -331,7 +330,7 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
                 std::exit(1);
             }
 
-            return LoadGlobSymbol(ident->GetSymbol());
+            return LoadSymbol(ident->GetSymbol());
         }
         case A_AstWiden:
         {
@@ -390,17 +389,21 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 }
 
 /*
- * Call a function, passing the value held in one register as its single
- * argument. The target decides where the result comes back from.
+ * Call a function with its optional argument. The target decides where the
+ * result comes back from.
  */
 reg_idx AsmCodegen::GenCall(const AstNodePtr& root)
 {
     const AstFuncCall *call = static_cast<const AstFuncCall*>(root.get());
 
-    reg_idx arg_reg = GenExpr(root->GetLeft());
+    std::optional<reg_idx> arg_reg;
+    if (root->GetLeft())
+        arg_reg = GenExpr(root->GetLeft());
+
     reg_idx out_reg = Call(call->GetSymbol(), arg_reg);
 
-    FreeRegister(arg_reg);
+    if (arg_reg)
+        FreeRegister(*arg_reg);
 
     return out_reg;
 }

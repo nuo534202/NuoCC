@@ -1,4 +1,4 @@
-int fred() {
+int fred(int ignored) {
   return(20);
 }
 

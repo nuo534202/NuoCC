@@ -61,7 +61,8 @@ private:
         Program& program);
 
     /*
-     * function_declaration: type identifier '(' ')' compound_statement  ;
+     * function_declaration: type identifier '(' opt_parameter ')'
+     *                       compound_statement  ;
      *
      * The type and the name have already been parsed by the caller.
      */
@@ -77,16 +78,16 @@ private:
      *
      * The type and the first name have already been parsed by the caller,
      * so what is left is every ', name' which follows. Each name is
-     * declared as a variable of that type, at the top level of the program
-     * or in the body of a function alike: for now both are global
-     * variables. The semicolon which ends the declaration is left to the
+     * declared as a variable of that type, either at the top level of the
+     * program or in the current function. The semicolon is left to the
      * caller, the same way it is for every other statement.
      */
     void IdentifierList(const std::vector<NodePtr>& token_list,
                         idx_t& i,
                         PrimitiveType type,
                         const std::string& name,
-                        std::vector<AstNodePtr>& declarations);
+                        std::vector<AstNodePtr>& declarations,
+                        StorageClass storage);
 
     AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
@@ -113,7 +114,12 @@ private:
      * the next one is the opening parenthesis.
      */
     AstNodePtr FuncCall(const std::vector<NodePtr>& token_list,
-        idx_t& i);
+                        idx_t& i);
+
+    std::optional<Symbol> FunctionParameter(
+        const std::vector<NodePtr>& token_list,
+        idx_t& i,
+        Symbol& function);
 
     AstNodePtr Condition(const std::vector<NodePtr>& token_list,
         idx_t& i,
@@ -183,6 +189,7 @@ private:
                std::string_view name);
 
     uint8 GetOpPrecedence(NodeTag tag);
+    int32 AllocateLocal(PrimitiveType type);
 
 private:
     SymbolTable symbol_table_;
@@ -192,6 +199,7 @@ private:
      * body is open. The caller sets and restores it.
      */
     PrimitiveType current_function_type_ = PrimitiveType::kNone;
+    int32 local_stack_size_ = 0;
 };
 
 }   /* namespace nuocc */

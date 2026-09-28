@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,7 +37,9 @@ protected:
     /* What every target has to provide. */
 
     virtual void EmitPreamble() = 0;
-    virtual void EmitFunctionPreamble(const Symbol& symbol) = 0;
+    virtual void EmitFunctionPreamble(const Symbol& symbol,
+                                      int32 local_size,
+                                      const std::optional<Symbol>& parameter) = 0;
     virtual void EmitFunctionPostamble() = 0;
     virtual void EmitLabel(label_idx label) = 0;
     virtual void EmitJump(label_idx label) = 0;
@@ -49,8 +52,8 @@ protected:
     virtual std::string GlobName(const std::string& name) const;
 
     virtual reg_idx LoadInt(int32 value) = 0;
-    virtual reg_idx LoadGlobSymbol(const Symbol& symbol) = 0;
-    virtual reg_idx StoreGlobSymbol(const Symbol& symbol, reg_idx reg) = 0;
+    virtual reg_idx LoadSymbol(const Symbol& symbol) = 0;
+    virtual reg_idx StoreSymbol(const Symbol& symbol, reg_idx reg) = 0;
 
     virtual reg_idx Add(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Sub(reg_idx reg1, reg_idx reg2) = 0;
@@ -69,7 +72,8 @@ protected:
                                 reg_idx reg2,
                                 label_idx label) = 0;
 
-    virtual reg_idx Call(const Symbol& symbol, reg_idx arg_reg) = 0;
+    virtual reg_idx Call(const Symbol& symbol,
+                         std::optional<reg_idx> arg_reg) = 0;
     virtual void Return(reg_idx reg) = 0;
     virtual void PrintInt(reg_idx reg) = 0;
 
@@ -109,6 +113,7 @@ protected:
     /* The function whose code is being generated. */
     label_idx function_end_label_;
     PrimitiveType function_return_type_;
+    int32 function_local_size_;
     std::ofstream ofs_;
 };
 

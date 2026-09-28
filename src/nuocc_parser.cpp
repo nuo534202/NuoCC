@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 
+#include <algorithm>
 #include <iostream>
 
 #include "nodes/nuocc_scanner_nodes.hpp"
@@ -19,7 +20,8 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
      */
     symbol_table_.AddSymbol(Symbol{.name = kPrintIntName,
                                    .type = PrimitiveType::kVoid,
-                                   .stype = StructuralType::kFunction});
+                                   .stype = StructuralType::kFunction,
+                                   .parameter_type = PrimitiveType::kInt});
 
     idx_t i = 0;
     Program program;
@@ -53,13 +55,15 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
         return;
     }
 
-    IdentifierList(token_list, i, type, name, program.globals);
+    IdentifierList(token_list, i, type, name, program.globals,
+                   StorageClass::kGlobal);
 
     Match(token_list, i, T_Semicolon, ";");
 }
 
 /*
- * function_declaration: type identifier '(' ')' compound_statement  ;
+ * function_declaration: type identifier '(' opt_parameter ')'
+ *                       compound_statement  ;
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
@@ -70,16 +74,21 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
                   .type = type,
                   .stype = StructuralType::kFunction};
 
-    symbol_table_.AddSymbol(symbol);
-
+    local_stack_size_ = 0;
     Match(token_list, i, T_LParen, "(");
+    std::optional<Symbol> parameter = FunctionParameter(token_list, i, symbol);
+    symbol_table_.AddSymbol(symbol);
+    const idx_t symbol_mark = symbol_table_.Mark();
+    if (parameter)
+        symbol_table_.AddSymbol(*parameter);
     Match(token_list, i, T_RParen, ")");
 
     current_function_type_ = type;
-
     AstNodePtr body = CompoundStatement(token_list, i);
 
     current_function_type_ = PrimitiveType::kNone;
+    const int32 local_size = local_stack_size_;
+    symbol_table_.Restore(symbol_mark);
 
     /*
      * A function which returns a value must end with a return statement, as
@@ -99,7 +108,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
         }
     }
 
-    return std::make_unique<AstFunction>(body, symbol);
+    return std::make_unique<AstFunction>(body, symbol, local_size, parameter);
 }
 
 /*
@@ -222,7 +231,8 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 
     /* The declaration may name more than one variable of that type. */
     std::vector<AstNodePtr> declarations;
-    IdentifierList(token_list, i, type, name, declarations);
+    IdentifierList(token_list, i, type, name, declarations,
+                   StorageClass::kLocal);
 
     return GlueStatements(declarations);
 }
@@ -234,7 +244,8 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
     idx_t& i,
     PrimitiveType type,
     const std::string& name,
-    std::vector<AstNodePtr>& declarations)
+    std::vector<AstNodePtr>& declarations,
+    StorageClass storage)
 {
     std::string current = name;
 
@@ -242,7 +253,11 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
     {
         Symbol symbol{.name = current,
                       .type = type,
-                      .stype = StructuralType::kVariable};
+                      .stype = StructuralType::kVariable,
+                      .storage = storage,
+                      .stack_offset = storage == StorageClass::kLocal
+                                          ? AllocateLocal(type)
+                                          : 0};
 
         symbol_table_.AddSymbol(symbol);
 
@@ -403,7 +418,7 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * function_call: identifier '(' expression ')'  ;
+ * function_call: identifier '(' opt_expression ')'  ;
  *
  * The current token is the function's name, so a single token of lookahead
  * is all it takes to tell a call apart from a variable.
@@ -416,11 +431,60 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
     Match(token_list, i, T_Identifier, "a function name");
     Match(token_list, i, T_LParen, "(");
 
-    AstNodePtr argument = BinaryExpression(token_list, i, 0);
+    AstNodePtr argument = nullptr;
+    if (TokenTag(token_list[i]) != T_RParen)
+        argument = BinaryExpression(token_list, i, 0);
+
+    if (function.parameter_type == PrimitiveType::kNone)
+    {
+        if (argument)
+        {
+            std::cerr << "syntax error: function " << function.name;
+            std::cerr << " does not take an argument!" << std::endl;
+            std::exit(1);
+        }
+    }
+    else
+    {
+        if (!argument || !ModifyType(argument, function.parameter_type,
+                                     std::nullopt))
+        {
+            std::cerr << "syntax error: invalid argument for function ";
+            std::cerr << function.name << "!" << std::endl;
+            std::exit(1);
+        }
+    }
 
     Match(token_list, i, T_RParen, ")");
 
     return std::make_unique<AstFuncCall>(argument, function);
+}
+
+std::optional<Symbol> Parser::FunctionParameter(
+    const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    Symbol& function)
+{
+    if (TokenTag(token_list[i]) == T_RParen)
+        return std::nullopt;
+
+    PrimitiveType type = ParseType(token_list, i);
+    if (type == PrimitiveType::kVoid)
+    {
+        std::cerr << "syntax error: a parameter needs a value type!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    std::string name = MatchIdentifier(token_list, i, "a parameter name");
+    function.parameter_type = type;
+
+    Symbol parameter{.name = name,
+                     .type = type,
+                     .stype = StructuralType::kVariable,
+                     .storage = StorageClass::kLocal,
+                     .stack_offset = AllocateLocal(type)};
+    return parameter;
 }
 
 /*
@@ -802,6 +866,27 @@ uint8 Parser::GetOpPrecedence(NodeTag tag)
         return 0;
 
     return it->second;
+}
+
+int32 Parser::AllocateLocal(PrimitiveType type)
+{
+    const int32 size = PrimitiveSize(type);
+    if (size == 0)
+    {
+        std::cerr << "syntax error: a variable needs a value type!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    const int32 alignment = std::min<int32>(size, 8);
+    const int32 remainder = local_stack_size_ % alignment;
+
+    if (remainder != 0)
+        local_stack_size_ += alignment - remainder;
+
+    const int32 offset = local_stack_size_;
+    local_stack_size_ += size;
+    return offset;
 }
 
 /*

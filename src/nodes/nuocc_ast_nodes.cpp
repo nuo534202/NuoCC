@@ -151,13 +151,28 @@ const Symbol& AstDeclare::GetSymbol() const
 }
 
 /* AstFunction */
-AstFunction::AstFunction(AstNodePtr& body, const Symbol& symbol)
+AstFunction::AstFunction(AstNodePtr& body,
+    const Symbol& symbol,
+    int32 local_size,
+    const std::optional<Symbol>& parameter)
     : AstNode(A_AstFunction, PrimitiveType::kNone, body),
-      symbol_(symbol) {}
+      symbol_(symbol),
+      local_size_(local_size),
+      parameter_(parameter) {}
 
 const Symbol& AstFunction::GetSymbol() const
 {
     return symbol_;
+}
+
+int32 AstFunction::GetLocalSize() const
+{
+    return local_size_;
+}
+
+const std::optional<Symbol>& AstFunction::GetParameter() const
+{
+    return parameter_;
 }
 
 /* AstWiden */

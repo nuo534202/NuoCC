@@ -42,7 +42,7 @@ constexpr char kScratchReg[] = "x17";
 
 /* The stack frame of a function: the frame pointer and the return address,
  * then the four registers this target allocates. */
-constexpr int kFrameSize = 48;
+constexpr int kBaseFrameSize = 48;
 constexpr int kSavedRegs1Offset = 16;
 constexpr int kSavedRegs2Offset = 32;
 
@@ -87,19 +87,44 @@ void Arm64Codegen::EmitPreamble()
     ofs_ << "\t.text" << std::endl;
 }
 
-void Arm64Codegen::EmitFunctionPreamble(const Symbol& symbol)
+void Arm64Codegen::EmitFunctionPreamble(
+    const Symbol& symbol,
+    int32 local_size,
+    const std::optional<Symbol>& parameter)
 {
     ofs_ << "\t.text" << std::endl;
     ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
     ofs_ << GlobName(symbol.name) << ":" << std::endl;
 
     /* The stack has to stay a multiple of sixteen bytes at every call. */
-    ofs_ << "\tstp\tx29, x30, [sp, #-" << kFrameSize << "]!" << std::endl;
+    frame_size_ = ((kBaseFrameSize + local_size + 15) / 16) * 16;
+    ofs_ << "\tsub\tsp, sp, #" << frame_size_ << std::endl;
+    ofs_ << "\tstp\tx29, x30, [sp]" << std::endl;
     ofs_ << "\tmov\tx29, sp" << std::endl;
     ofs_ << "\tstp\t" << xreg_list_[0] << ", " << xreg_list_[1];
     ofs_ << ", [sp, #" << kSavedRegs1Offset << "]" << std::endl;
     ofs_ << "\tstp\t" << xreg_list_[2] << ", " << xreg_list_[3];
     ofs_ << ", [sp, #" << kSavedRegs2Offset << "]" << std::endl;
+
+    if (parameter)
+    {
+        const int32 offset = kBaseFrameSize + parameter->stack_offset;
+        switch (PrimitiveSize(parameter->type))
+        {
+            case 1:
+                ofs_ << "\tstrb\tw0, [x29, #" << offset << "]" << std::endl;
+                break;
+            case 4:
+                ofs_ << "\tstr\tw0, [x29, #" << offset << "]" << std::endl;
+                break;
+            case 8:
+                ofs_ << "\tstr\tx0, [x29, #" << offset << "]" << std::endl;
+                break;
+            default:
+                std::cerr << "Error: invalid parameter type!" << std::endl;
+                std::exit(1);
+        }
+    }
 }
 
 void Arm64Codegen::EmitFunctionPostamble()
@@ -110,7 +135,8 @@ void Arm64Codegen::EmitFunctionPostamble()
     ofs_ << ", [sp, #" << kSavedRegs1Offset << "]" << std::endl;
     ofs_ << "\tldp\t" << xreg_list_[2] << ", " << xreg_list_[3];
     ofs_ << ", [sp, #" << kSavedRegs2Offset << "]" << std::endl;
-    ofs_ << "\tldp\tx29, x30, [sp], #" << kFrameSize << std::endl;
+    ofs_ << "\tldp\tx29, x30, [sp]" << std::endl;
+    ofs_ << "\tadd\tsp, sp, #" << frame_size_ << std::endl;
     ofs_ << "\tret" << std::endl;
 }
 
@@ -174,9 +200,32 @@ reg_idx Arm64Codegen::LoadInt(int32 value)
     return reg;
 }
 
-reg_idx Arm64Codegen::LoadGlobSymbol(const Symbol& symbol)
+reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
 {
     reg_idx idx = AllocRegister();
+
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = kBaseFrameSize + symbol.stack_offset;
+        switch (PrimitiveSize(symbol.type))
+        {
+            case 1:
+                ofs_ << "\tldrb\t" << wreg_list_[idx] << ", [x29, #";
+                break;
+            case 4:
+                ofs_ << "\tldr\t" << wreg_list_[idx] << ", [x29, #";
+                break;
+            case 8:
+                ofs_ << "\tldr\t" << xreg_list_[idx] << ", [x29, #";
+                break;
+            default:
+                std::cerr << "Error: bad type for variable " << symbol.name;
+                std::cerr << "!" << std::endl;
+                std::exit(1);
+        }
+        ofs_ << offset << "]" << std::endl;
+        return idx;
+    }
 
     EmitGlobAddress(symbol);
 
@@ -208,8 +257,31 @@ reg_idx Arm64Codegen::LoadGlobSymbol(const Symbol& symbol)
     return idx;
 }
 
-reg_idx Arm64Codegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
+reg_idx Arm64Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
 {
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = kBaseFrameSize + symbol.stack_offset;
+        switch (PrimitiveSize(symbol.type))
+        {
+            case 1:
+                ofs_ << "\tstrb\t" << wreg_list_[reg] << ", [x29, #";
+                break;
+            case 4:
+                ofs_ << "\tstr\t" << wreg_list_[reg] << ", [x29, #";
+                break;
+            case 8:
+                ofs_ << "\tstr\t" << xreg_list_[reg] << ", [x29, #";
+                break;
+            default:
+                std::cerr << "Error: bad type for variable " << symbol.name;
+                std::cerr << "!" << std::endl;
+                std::exit(1);
+        }
+        ofs_ << offset << "]" << std::endl;
+        return reg;
+    }
+
     EmitGlobAddress(symbol);
 
     switch (PrimitiveSize(symbol.type))
@@ -360,11 +432,13 @@ void Arm64Codegen::CompareAndJump(NodeTag op_type,
  * Call a function. The value registers are callee saved, so whatever an
  * expression is still holding survives the call on its own.
  */
-reg_idx Arm64Codegen::Call(const Symbol& symbol, reg_idx arg_reg)
+reg_idx Arm64Codegen::Call(const Symbol& symbol,
+    std::optional<reg_idx> arg_reg)
 {
     reg_idx out_reg = AllocRegister();
 
-    ofs_ << "\tmov\tx0, " << xreg_list_[arg_reg] << std::endl;
+    if (arg_reg)
+        ofs_ << "\tmov\tx0, " << xreg_list_[*arg_reg] << std::endl;
     ofs_ << "\tbl\t" << GlobName(symbol.name) << std::endl;
     ofs_ << "\tmov\t" << xreg_list_[out_reg] << ", x0" << std::endl;
 
@@ -409,6 +483,14 @@ void Arm64Codegen::PrintInt(reg_idx reg)
 reg_idx Arm64Codegen::AddressOf(const Symbol& symbol)
 {
     reg_idx reg = AllocRegister();
+
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = kBaseFrameSize + symbol.stack_offset;
+        ofs_ << "\tadd\t" << xreg_list_[reg] << ", x29, #";
+        ofs_ << offset << std::endl;
+        return reg;
+    }
 
     ofs_ << "\tadrp\t" << xreg_list_[reg] << ", " << GlobName(symbol.name);
     ofs_ << "@PAGE" << std::endl;

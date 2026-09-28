@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "nuocc_asm_codegen.hpp"
@@ -21,7 +22,9 @@ public:
 
 protected:
     void EmitPreamble() override;
-    void EmitFunctionPreamble(const Symbol& symbol) override;
+    void EmitFunctionPreamble(const Symbol& symbol,
+                              int32 local_size,
+                              const std::optional<Symbol>& parameter) override;
     void EmitFunctionPostamble() override;
     void EmitLabel(label_idx label) override;
     void EmitJump(label_idx label) override;
@@ -33,8 +36,8 @@ protected:
     std::string GlobName(const std::string& name) const override;
 
     reg_idx LoadInt(int32 value) override;
-    reg_idx LoadGlobSymbol(const Symbol& symbol) override;
-    reg_idx StoreGlobSymbol(const Symbol& symbol, reg_idx reg) override;
+    reg_idx LoadSymbol(const Symbol& symbol) override;
+    reg_idx StoreSymbol(const Symbol& symbol, reg_idx reg) override;
 
     reg_idx Add(reg_idx reg1, reg_idx reg2) override;
     reg_idx Sub(reg_idx reg1, reg_idx reg2) override;
@@ -53,7 +56,8 @@ protected:
                         reg_idx reg2,
                         label_idx label) override;
 
-    reg_idx Call(const Symbol& symbol, reg_idx arg_reg) override;
+    reg_idx Call(const Symbol& symbol,
+                 std::optional<reg_idx> arg_reg) override;
     void Return(reg_idx reg) override;
     void PrintInt(reg_idx reg) override;
 
@@ -67,6 +71,8 @@ private:
     void EmitLoadImmediate(reg_idx reg, int64 value);
 
 private:
+    int32 frame_size_ = 0;
+
     std::string xreg_list_[kRegSize];
     std::string wreg_list_[kRegSize];
 };

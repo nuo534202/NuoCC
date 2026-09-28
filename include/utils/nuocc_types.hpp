@@ -50,12 +50,21 @@ enum class StructuralType : uint8
     kFunction
 };
 
+enum class StorageClass : uint8
+{
+    kGlobal = 0,
+    kLocal
+};
+
 /* An entry of the symbol table. */
 struct Symbol
 {
     std::string name;
     PrimitiveType type = PrimitiveType::kNone;
     StructuralType stype = StructuralType::kVariable;
+    StorageClass storage = StorageClass::kGlobal;
+    int32 stack_offset = 0;
+    PrimitiveType parameter_type = PrimitiveType::kNone;
 };
 
 using NodePtr = std::unique_ptr<class Node>;

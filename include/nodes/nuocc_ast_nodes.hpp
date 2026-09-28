@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "utils/nuocc_types.hpp"
@@ -163,9 +164,8 @@ public:
 };
 
 /*
- * The declaration of a variable. Every variable is a global one for now,
- * whether it is declared at the top level of the program or in the body of
- * a function.
+ * The declaration of a variable. Its symbol records whether the storage is
+ * global or belongs to the current function's stack frame.
  */
 class AstDeclare : public AstNode
 {
@@ -181,20 +181,27 @@ private:
 };
 
 /*
- * A function declaration. All functions are void and take no arguments for
- * now, so the left child holding the body is all there is besides the name.
+ * A function declaration. The left child holds the body, and local_size is
+ * the space required by its parameter and local variables.
  */
 class AstFunction : public AstNode
 {
 public:
-    AstFunction(AstNodePtr& body, const Symbol& symbol);
+    AstFunction(AstNodePtr& body,
+                const Symbol& symbol,
+                int32 local_size,
+                const std::optional<Symbol>& parameter);
     ~AstFunction() = default;
 
 public:
     const Symbol& GetSymbol() const;
+    int32 GetLocalSize() const;
+    const std::optional<Symbol>& GetParameter() const;
 
 private:
     Symbol symbol_;
+    int32 local_size_;
+    std::optional<Symbol> parameter_;
 };
 
 /*
@@ -237,8 +244,8 @@ public:
 };
 
 /*
- * Call a function, passing the value of the left child as its single
- * argument. The type of this node is the return type of the function.
+ * Call a function. The optional left child holds its one argument, and the
+ * type of this node is the return type of the function.
  */
 class AstFuncCall : public AstNode
 {

@@ -57,7 +57,10 @@ void X86Codegen::EmitPreamble()
     ofs_ << "\t.text" << std::endl;
 }
 
-void X86Codegen::EmitFunctionPreamble(const Symbol& symbol)
+void X86Codegen::EmitFunctionPreamble(
+    const Symbol& symbol,
+    int32 local_size,
+    const std::optional<Symbol>& parameter)
 {
     ofs_ << "\t.text" << std::endl;
     ofs_ << "\t.globl\t" << symbol.name << std::endl;
@@ -65,6 +68,31 @@ void X86Codegen::EmitFunctionPreamble(const Symbol& symbol)
     ofs_ << symbol.name << ":" << std::endl;
     ofs_ << "\tpushq\t%rbp" << std::endl;
     ofs_ << "\tmovq\t%rsp, %rbp" << std::endl;
+
+    const int32 frame_size = (local_size + 15) / 16 * 16;
+    if (frame_size != 0)
+        ofs_ << "\tsubq\t$" << frame_size << ", %rsp" << std::endl;
+
+    if (parameter)
+    {
+        const int32 offset = parameter->stack_offset +
+                             PrimitiveSize(parameter->type);
+        switch (PrimitiveSize(parameter->type))
+        {
+            case 1:
+                ofs_ << "\tmovb\t%dil, -" << offset << "(%rbp)" << std::endl;
+                break;
+            case 4:
+                ofs_ << "\tmovl\t%edi, -" << offset << "(%rbp)" << std::endl;
+                break;
+            case 8:
+                ofs_ << "\tmovq\t%rdi, -" << offset << "(%rbp)" << std::endl;
+                break;
+            default:
+                std::cerr << "Error: invalid parameter type!" << std::endl;
+                std::exit(1);
+        }
+    }
 }
 
 void X86Codegen::EmitFunctionPostamble()
@@ -94,7 +122,7 @@ reg_idx X86Codegen::LoadInt(int32 value)
     return reg;
 }
 
-reg_idx X86Codegen::LoadGlobSymbol(const Symbol& symbol)
+reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
 {
     reg_idx idx = AllocRegister();
 
@@ -104,6 +132,32 @@ reg_idx X86Codegen::LoadGlobSymbol(const Symbol& symbol)
      * clear the rest of it, and writing to a 32-bit register clears its
      * upper half.
      */
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = symbol.stack_offset + PrimitiveSize(symbol.type);
+        switch (PrimitiveSize(symbol.type))
+        {
+            case 1:
+                ofs_ << "\tmovzbq\t-" << offset << "(%rbp), ";
+                break;
+            case 4:
+                ofs_ << "\tmovl\t-" << offset << "(%rbp), ";
+                break;
+            case 8:
+                ofs_ << "\tmovq\t-" << offset << "(%rbp), ";
+                break;
+            default:
+                std::cerr << "Error: bad type for variable ";
+                std::cerr << symbol.name << "!" << std::endl;
+                std::exit(1);
+        }
+
+        ofs_ << (PrimitiveSize(symbol.type) == 4 ? dreg_list_[idx]
+                                                  : reg_list_[idx])
+             << std::endl;
+        return idx;
+    }
+
     switch (PrimitiveSize(symbol.type))
     {
         case 1:
@@ -127,8 +181,31 @@ reg_idx X86Codegen::LoadGlobSymbol(const Symbol& symbol)
     return idx;
 }
 
-reg_idx X86Codegen::StoreGlobSymbol(const Symbol& symbol, reg_idx reg)
+reg_idx X86Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
 {
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = symbol.stack_offset + PrimitiveSize(symbol.type);
+        switch (PrimitiveSize(symbol.type))
+        {
+            case 1:
+                ofs_ << "\tmovb\t" << breg_list_[reg] << ", -";
+                break;
+            case 4:
+                ofs_ << "\tmovl\t" << dreg_list_[reg] << ", -";
+                break;
+            case 8:
+                ofs_ << "\tmovq\t" << reg_list_[reg] << ", -";
+                break;
+            default:
+                std::cerr << "Error: bad type for variable ";
+                std::cerr << symbol.name << "!" << std::endl;
+                std::exit(1);
+        }
+        ofs_ << offset << "(%rbp)" << std::endl;
+        return reg;
+    }
+
     switch (PrimitiveSize(symbol.type))
     {
         case 1:
@@ -286,14 +363,15 @@ void X86Codegen::CompareAndJump(NodeTag op_type,
  * of saved registers would leave the stack misaligned for the call, so it
  * is padded back to a multiple of sixteen bytes.
  */
-reg_idx X86Codegen::Call(const Symbol& symbol, reg_idx arg_reg)
+reg_idx X86Codegen::Call(const Symbol& symbol,
+    std::optional<reg_idx> arg_reg)
 {
     const bool *is_free = FreeRegisters();
     int32 saved = 0;
 
     for (reg_idx reg = 0; reg < kRegSize; reg++)
     {
-        if (!is_free[reg] && reg != arg_reg)
+        if (!is_free[reg] && (!arg_reg || reg != *arg_reg))
         {
             ofs_ << "\tpushq\t" << reg_list_[reg] << std::endl;
             saved++;
@@ -303,7 +381,8 @@ reg_idx X86Codegen::Call(const Symbol& symbol, reg_idx arg_reg)
     if (saved % 2 != 0)
         ofs_ << "\tsubq\t$8, %rsp" << std::endl;
 
-    ofs_ << "\tmovq\t" << reg_list_[arg_reg] << ", %rdi" << std::endl;
+    if (arg_reg)
+        ofs_ << "\tmovq\t" << reg_list_[*arg_reg] << ", %rdi" << std::endl;
     ofs_ << "\tcall\t" << symbol.name << std::endl;
 
     if (saved % 2 != 0)
@@ -311,7 +390,7 @@ reg_idx X86Codegen::Call(const Symbol& symbol, reg_idx arg_reg)
 
     for (reg_idx reg = kRegSize; reg > 0; reg--)
     {
-        if (!is_free[reg - 1] && reg - 1 != arg_reg)
+        if (!is_free[reg - 1] && (!arg_reg || reg - 1 != *arg_reg))
             ofs_ << "\tpopq\t" << reg_list_[reg - 1] << std::endl;
     }
 
@@ -361,6 +440,14 @@ void X86Codegen::PrintInt(reg_idx reg)
 reg_idx X86Codegen::AddressOf(const Symbol& symbol)
 {
     reg_idx reg = AllocRegister();
+
+    if (symbol.storage == StorageClass::kLocal)
+    {
+        const int32 offset = symbol.stack_offset + PrimitiveSize(symbol.type);
+        ofs_ << "\tleaq\t-" << offset << "(%rbp), ";
+        ofs_ << reg_list_[reg] << std::endl;
+        return reg;
+    }
 
     ofs_ << "\tleaq\t" << symbol.name << "(%rip), ";
     ofs_ << reg_list_[reg] << std::endl;

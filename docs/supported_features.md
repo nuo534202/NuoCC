@@ -15,11 +15,11 @@
 6. If-Else Statements.
 7. While Loops.
 8. For Loops.
-9. Function Declarations and Calls. A function takes no parameters and
-   returns `void`, `char`, `int` or `long`, so at most one argument may be
-   passed and it is not yet visible to the function. A function which
-   returns a value must end with a `return` statement, and a void function
-   cannot return one.
+9. Function Declarations and Calls. A function returns `void`, `char`, `int`
+   or `long` and takes zero or one parameter. The parameter is visible in the
+   function body, and an argument must match its type after widening. A
+   function which returns a value must end with a `return` statement, and a
+   void function cannot return one.
 10. Global Variables. A declaration outside every function declares a
     variable which every function can use. One declaration may name
     several variables of the same type, written `int x, y, z;`, and the
@@ -35,3 +35,9 @@
     address one byte along. Nothing else may be done with a pointer: it
     cannot be multiplied, divided or compared yet, and its address cannot
     be printed.
+12. Function-local Variables. Variables declared inside a function are
+    stored in that function's stack frame, are released when the function
+    returns, and may have the same name as a variable in another function.
+13. Function Parameters. A function may bind one typed parameter, such as
+    `int add(int value)`, and callers may pass an expression of a compatible
+    type. Parameterless functions may be called with empty parentheses.

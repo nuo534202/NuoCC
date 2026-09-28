@@ -20,4 +20,14 @@ void SymbolTable::AddSymbol(const Symbol& symbol)
     symbols_.push_back(symbol);
 }
 
+idx_t SymbolTable::Mark() const
+{
+    return symbols_.size();
+}
+
+void SymbolTable::Restore(idx_t mark)
+{
+    symbols_.resize(mark);
+}
+
 }   /* namespace nuocc */
