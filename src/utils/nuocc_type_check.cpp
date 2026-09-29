@@ -55,6 +55,14 @@ int32 PrimitiveSize(PrimitiveType type)
     }
 }
 
+int32 SymbolStorageSize(const Symbol& symbol)
+{
+    if (symbol.stype != StructuralType::kArray)
+        return PrimitiveSize(symbol.type);
+
+    return PrimitiveSize(symbol.type) * symbol.element_count;
+}
+
 PrimitiveType PointerTo(PrimitiveType type)
 {
     switch (type)

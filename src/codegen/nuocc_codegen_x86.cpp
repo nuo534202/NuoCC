@@ -622,7 +622,13 @@ reg_idx X86Codegen::AddressOf(const Symbol& symbol)
 
     if (symbol.storage == StorageClass::kLocal)
     {
-        const int32 offset = symbol.stack_offset + PrimitiveSize(symbol.type);
+        /*
+         * The frame grows downwards from the frame pointer, so the address
+         * asked for is the lowest one the symbol's room covers: a value
+         * starts at the bottom of its room, and an array at the bottom of
+         * all of its elements together.
+         */
+        const int32 offset = symbol.stack_offset + SymbolStorageSize(symbol);
         ofs_ << "\tleaq\t-" << offset << "(%rbp), ";
         ofs_ << reg_list_[reg] << std::endl;
         return reg;

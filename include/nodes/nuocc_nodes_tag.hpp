@@ -59,6 +59,8 @@ typedef enum NodeTag
     T_RBrace,
     T_LParen,
     T_RParen,
+    T_LBracket,
+    T_RBracket,
     T_Semicolon,
     T_Comma,
     T_EOF,

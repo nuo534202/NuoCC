@@ -257,6 +257,23 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
     ofs_ << "\t.data" << std::endl;
     ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+
+    if (symbol.stype == StructuralType::kArray)
+    {
+        /*
+         * An array is one block of room holding every element, all of
+         * them starting out zero. The block is aligned to one element so
+         * that each of them lands on an address of its own size, and the
+         * label has to come after that alignment or it would point at the
+         * padding in front of the array.
+         */
+        ofs_ << "\t.balign\t" << PrimitiveSize(symbol.type) << std::endl;
+        ofs_ << GlobName(symbol.name) << ":" << std::endl;
+        ofs_ << "\t.space\t" << SymbolStorageSize(symbol) << std::endl;
+        ofs_ << "\t.text" << std::endl;
+        return;
+    }
+
     ofs_ << GlobName(symbol.name) << ":\t";
 
     /* How much room the variable needs is decided by its type. */

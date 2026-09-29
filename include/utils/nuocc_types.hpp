@@ -47,7 +47,14 @@ enum class PrimitiveType : uint8
 enum class StructuralType : uint8
 {
     kVariable = 0,
-    kFunction
+    kFunction,
+    /*
+     * An array. Its `type` is the type of one element rather than of the
+     * array itself, so that every element is found with the type checks
+     * an expression is written with; `element_count` is how many of them
+     * the declaration asked for.
+     */
+    kArray
 };
 
 enum class StorageClass : uint8
@@ -65,6 +72,8 @@ struct Symbol
     StorageClass storage = StorageClass::kGlobal;
     int32 stack_offset = 0;
     PrimitiveType parameter_type = PrimitiveType::kNone;
+    /* The number of elements of an array, and zero for anything else. */
+    int32 element_count = 0;
 };
 
 using NodePtr = std::unique_ptr<class Node>;

@@ -43,6 +43,13 @@ public:
     const AstNodePtr& GetMid() const;
     const AstNodePtr& GetRight() const;
 
+    /*
+     * Move the left child out of this node, which is left without one. It
+     * is how '&' of a dereference takes back the expression the '*' was
+     * written before, as '&*p' is p itself.
+     */
+    AstNodePtr ReleaseLeft();
+
     AstNodeTag GetAstNodeTag() const;
     PrimitiveType GetType() const;
 

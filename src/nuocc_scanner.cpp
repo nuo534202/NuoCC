@@ -158,6 +158,8 @@ void Scanner::CommitToken(const std::string& token)
         case T_RBrace:
         case T_LParen:
         case T_RParen:
+        case T_LBracket:
+        case T_RBracket:
         case T_LShift:
         case T_RShift:
         case T_Inc:
@@ -286,6 +288,7 @@ const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'<', T_LT}, {'>', T_GT},
     {'{', T_LBrace}, {'}', T_RBrace},
     {'(', T_LParen}, {')', T_RParen},
+    {'[', T_LBracket}, {']', T_RBracket},
     {'&', T_Amper}, {'|', T_Or}, {'^', T_Xor},
     {'~', T_Invert}, {'!', T_LogNot}
 };
@@ -299,7 +302,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
 
 const std::unordered_set<char> Scanner::kAlphabet = {
     '+', '-', '*', '/', '=', ';', ',', '_', '.',
-    '<', '>', '!', '{', '}', '(', ')', '&', '|', '^', '~',
+    '<', '>', '!', '{', '}', '(', ')', '[', ']', '&', '|', '^', '~',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 

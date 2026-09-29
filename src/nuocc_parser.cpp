@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 
 #include "nodes/nuocc_scanner_nodes.hpp"
 #include "utils/nuocc_print.hpp"
@@ -52,6 +53,17 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     {
         program.functions.push_back(
             FunctionDeclaration(token_list, i, type, name));
+        return;
+    }
+
+    /* A '[' after the name declares an array of that many elements. */
+    if (TokenTag(token_list[i]) == T_LBracket)
+    {
+        Symbol symbol = ArrayDeclaration(token_list, i, type, name,
+                                         StorageClass::kGlobal);
+
+        Match(token_list, i, T_Semicolon, ";");
+        program.globals.push_back(std::make_unique<AstDeclare>(symbol));
         return;
     }
 
@@ -216,13 +228,21 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
     return std::make_unique<AstPrint>(expression);
 }
 
-/* declaration: type identifier_list ';'  ; */
+/* declaration: type identifier_list ';' | type array_declaration ';'  ; */
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
     PrimitiveType type = ParseType(token_list, i);
 
     std::string name = MatchIdentifier(token_list, i, "a variable name");
+
+    if (TokenTag(token_list[i]) == T_LBracket)
+    {
+        Symbol symbol = ArrayDeclaration(token_list, i, type, name,
+                                         StorageClass::kLocal);
+
+        return std::make_unique<AstDeclare>(symbol);
+    }
 
     /* The declaration may name more than one variable of that type. */
     std::vector<AstNodePtr> declarations;
@@ -265,6 +285,87 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
         i++;
         current = MatchIdentifier(token_list, i, "a variable name");
     }
+}
+
+/*
+ * array_declaration: identifier '[' number ']'  ;
+ *
+ * Unlike a list of variables, an array declares one name only: the number
+ * is how many elements of the declared type it holds, and the room for all
+ * of them is reserved together so that the elements stand next to each
+ * other. The size is fixed at the declaration and cannot be changed.
+ */
+Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    PrimitiveType element_type,
+    const std::string& name,
+    StorageClass storage)
+{
+    Match(token_list, i, T_LBracket, "[");
+
+    if (TokenTag(token_list[i]) != T_IntLit)
+    {
+        std::cerr << "syntax error: expect an array size!" << std::endl;
+        std::exit(1);
+    }
+
+    const Literal<int, T_IntLit> *lit =
+        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
+    const int32 element_count = lit->GetValue();
+    i++;
+
+    if (element_count <= 0)
+    {
+        std::cerr << "syntax error: an array must have at least one element!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    const int32 element_size = PrimitiveSize(element_type);
+
+    if (element_size == 0)
+    {
+        std::cerr << "syntax error: an array needs a value type!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    /*
+     * An array is measured from its first element, so indexing it asks for
+     * the address of that element: a pointer to the element type. That
+     * pointer does not exist yet when the elements are pointers themselves,
+     * the same way an int pointer to a pointer is refused.
+     */
+    if (IsPointerType(element_type))
+    {
+        std::cerr << "Error: there is no pointer to this type yet!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    /* The room for the whole array has to be countable in bytes. */
+    if (element_count > std::numeric_limits<int32>::max() / element_size)
+    {
+        std::cerr << "syntax error: the array " << name << " is too large!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_RBracket, "]");
+
+    Symbol symbol{.name = name,
+                  .type = element_type,
+                  .stype = StructuralType::kArray,
+                  .storage = storage,
+                  .stack_offset = storage == StorageClass::kLocal
+                                      ? AllocateLocal(element_size * element_count,
+                                                      std::min<int32>(element_size, 8))
+                                      : 0,
+                  .element_count = element_count};
+
+    symbol_table_.AddSymbol(symbol);
+
+    return symbol;
 }
 
 /*
@@ -587,9 +688,9 @@ AstNodePtr Parser::BinaryExpression(
  *      ;
  *
  * The two operators only take the operands they can mean something for:
- * '&' a variable, and '*' a pointer which an identifier or another '*'
- * produced. Anything else is rejected rather than turned into a tree the
- * code generator cannot make sense of.
+ * '&' a name or a dereference, which both name a location, and '*' any
+ * value which holds an address. Anything else is rejected rather than
+ * turned into a tree the code generator cannot make sense of.
  */
 AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
     idx_t& i)
@@ -601,6 +702,15 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
             i++;
 
             AstNodePtr operand = PrefixExpression(token_list, i);
+
+            /*
+             * A '*' and a '&' written one after the other are two ways of
+             * saying the same thing twice, so they undo each other: the
+             * address of what a '*' reads is the address it was given,
+             * which is also how '&' takes the address of an array element.
+             */
+            if (operand->GetAstNodeTag() == A_AstDeref)
+                return operand->ReleaseLeft();
 
             if (operand->GetAstNodeTag() != A_AstIdentifier)
             {
@@ -619,12 +729,16 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
             i++;
 
             AstNodePtr operand = PrefixExpression(token_list, i);
-            AstNodeTag tag = operand->GetAstNodeTag();
 
-            if (tag != A_AstIdentifier && tag != A_AstDeref)
+            /*
+             * What is read through is asked for by its type and not by the
+             * tree it came in, so that a parenthesised expression which
+             * holds an address, such as '*(ptr + 2)', is read as well.
+             */
+            if (!IsPointerType(operand->GetType()))
             {
-                std::cerr << "syntax error: * must be followed by a";
-                std::cerr << " variable or another *!" << std::endl;
+                std::cerr << "syntax error: * needs a pointer value!";
+                std::cerr << std::endl;
                 std::exit(1);
             }
 
@@ -736,16 +850,49 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
 
             return MakeIntLitLeaf(token, type);
         }
+        case T_LParen:
+        {
+            i++;
+
+            AstNodePtr expression = BinaryExpression(token_list, i, 0);
+
+            Match(token_list, i, T_RParen, ")");
+
+            return expression;
+        }
         case T_Identifier:
         {
             /* A '(' after the name turns this into a function call. */
             if (TokenTag(token_list[i + 1]) == T_LParen)
                 return FuncCall(token_list, i);
 
-            Symbol symbol = LookupTyped(token_list[i],
-                                        StructuralType::kVariable,
-                                        "variable");
+            /* A '[' after the name indexes an array or a pointer. */
+            if (TokenTag(token_list[i + 1]) == T_LBracket)
+                return ArrayAccess(token_list, i);
+
+            Symbol symbol = Lookup(token_list[i], "variable");
             i++;
+
+            /*
+             * An array named on its own stands for the address of its
+             * first element, which is what lets one be given wherever a
+             * pointer is wanted. The address of an array is fixed, so it
+             * cannot be the thing an increment or a decrement changes.
+             */
+            if (symbol.stype == StructuralType::kArray)
+            {
+                if (TokenTag(token_list[i]) == T_Inc ||
+                    TokenTag(token_list[i]) == T_Dec)
+                {
+                    std::cerr << "syntax error: an array cannot be changed!";
+                    std::cerr << std::endl;
+                    std::exit(1);
+                }
+
+                return std::make_unique<AstAddress>(symbol);
+            }
+
+            CheckKind(symbol, StructuralType::kVariable, "variable");
 
             /*
              * A '++' or a '--' after the name makes this a postfix
@@ -770,6 +917,70 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             std::cerr << ", expect an expression!" << std::endl;
             std::exit(1);
     }
+}
+
+/*
+ * array_access: identifier '[' expression ']'  ;
+ *
+ * The name has already been told apart from a call and from a plain read
+ * of the name by the caller, which saw the '[' and came here.
+ */
+AstNodePtr Parser::ArrayAccess(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Symbol symbol = Lookup(token_list[i], "variable");
+
+    /*
+     * The base the index is measured from is the address of an array, or
+     * the address a pointer holds when it is a pointer which is indexed:
+     * both start a row of values of one type. Anything else has no row to
+     * walk along.
+     */
+    AstNodePtr base;
+
+    if (symbol.stype == StructuralType::kArray)
+    {
+        base = std::make_unique<AstAddress>(symbol);
+    }
+    else if (symbol.stype == StructuralType::kVariable &&
+             IsPointerType(symbol.type))
+    {
+        base = MakeIdentLeaf(symbol);
+    }
+    else
+    {
+        std::cerr << "syntax error: " << symbol.name;
+        std::cerr << " cannot be indexed!" << std::endl;
+        std::exit(1);
+    }
+
+    i++;    /* step over the name */
+    Match(token_list, i, T_LBracket, "[");
+
+    AstNodePtr index = BinaryExpression(token_list, i, 0);
+
+    Match(token_list, i, T_RBracket, "]");
+
+    const PrimitiveType base_type = base->GetType();
+
+    /*
+     * The index counts elements and not bytes, so it becomes an offset:
+     * element six of an int array starts 24 bytes along, which is what
+     * scaling it by the size of one element works out. Only an integer
+     * counts elements, so anything else is refused here rather than
+     * scaled into an offset which would not mean anything.
+     */
+    if (!ModifyType(index, base_type, T_Plus))
+    {
+        std::cerr << "syntax error: an array index must be an integer!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    AstNodePtr address = std::make_unique<AstOperator>(base, index, T_Plus,
+                                                       base_type);
+
+    return std::make_unique<AstDeref>(address, ValueAt(base_type));
 }
 
 /*
@@ -811,9 +1022,7 @@ PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
     return type;
 }
 
-Symbol Parser::LookupTyped(const NodePtr& token,
-    StructuralType wanted,
-    std::string_view what)
+Symbol Parser::Lookup(const NodePtr& token, std::string_view what)
 {
     /*
      * Only a name can be looked up, so a literal or an operator standing
@@ -837,14 +1046,30 @@ Symbol Parser::LookupTyped(const NodePtr& token,
         std::exit(1);
     }
 
-    if (symbol->stype != wanted)
-    {
-        std::cerr << "syntax error: " << ident->GetName();
-        std::cerr << " is not a " << what << "!" << std::endl;
-        std::exit(1);
-    }
-
     return *symbol;
+}
+
+void Parser::CheckKind(const Symbol& symbol,
+    StructuralType wanted,
+    std::string_view what) const
+{
+    if (symbol.stype == wanted)
+        return;
+
+    std::cerr << "syntax error: " << symbol.name;
+    std::cerr << " is not a " << what << "!" << std::endl;
+    std::exit(1);
+}
+
+Symbol Parser::LookupTyped(const NodePtr& token,
+    StructuralType wanted,
+    std::string_view what)
+{
+    Symbol symbol = Lookup(token, what);
+
+    CheckKind(symbol, wanted, what);
+
+    return symbol;
 }
 
 AstNodePtr Parser::MakeIntLitLeaf(const NodePtr& token, PrimitiveType type)
@@ -1017,7 +1242,11 @@ int32 Parser::AllocateLocal(PrimitiveType type)
         std::exit(1);
     }
 
-    const int32 alignment = std::min<int32>(size, 8);
+    return AllocateLocal(size, std::min<int32>(size, 8));
+}
+
+int32 Parser::AllocateLocal(int32 size, int32 alignment)
+{
     const int32 remainder = local_stack_size_ % alignment;
 
     if (remainder != 0)

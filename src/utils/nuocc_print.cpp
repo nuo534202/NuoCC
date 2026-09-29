@@ -134,6 +134,12 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_RParen:
             out = ")";
             break;
+        case T_LBracket:
+            out = "[";
+            break;
+        case T_RBracket:
+            out = "]";
+            break;
         case T_Semicolon:
             out = ";";
             break;

@@ -20,15 +20,19 @@
 6. Increment and Decrement: `++` and `--`, written before a variable or
    after it. `++x` yields the value the variable holds afterwards and `x++`
    the value it held before, and both leave the variable changed by one.
-   The value has to go back somewhere, so the operator takes a variable and
-   not an expression: `++b[2]` has to wait for arrays.
+   The value has to go back somewhere, so the operator takes the name of a
+   variable and not a location: `++b[2]` has to wait for an increment
+   which can be given a place rather than a name.
 7. Taking the Address of a variable with `&`, and reading or writing
    through a pointer with `*`. A pointer may be the target of an
    assignment: `*y= 14;` stores into the location `y` points at, and only
    into that location, so writing through a `char` pointer does not run
-   over the value stored next to it. Only the `&` of a variable and the
-   `*` of a pointer are accepted, and a pointer to a pointer has no type
-   of its own yet.
+   over the value stored next to it. `&` takes the address of a variable
+   or of an element of an array, written `&b[2]`, and undoes itself with
+   a `*`, so `&*y` is `y`. `*` reads through anything which holds an
+   address, so a parenthesised expression counts too: `*(y + 2)` is the
+   value two values along from where `y` points. A pointer to a pointer
+   has no type of its own yet.
 8. Simple `print` statement.
 9. If-Else Statements.
 10. While Loops.
@@ -70,3 +74,23 @@
     may stand on its left is a variable or the location a pointer holds,
     and the value has to fit the target the same way it has to fit a
     variable.
+19. Parenthesised Expressions. `(expression)` groups whatever stands inside
+    it, so `(2 + 3) * (4 + 1)` is 25 and not 21. The parentheses may also
+    hold a value which is then read through: `*(ptr + 2)` is the element
+    two places along from where `ptr` points, the same as `ptr[2]`.
+20. Arrays. `int a[5];` declares one name holding five `int`s one after
+    another, at the top level of the program or inside a function, and the
+    size is a fixed number of elements which may not be changed after the
+    declaration. An element is read with `a[2]` and written with
+    `a[2]= 7;`; the index is any expression, counts elements and not bytes,
+    and is scaled by the size of one element. An array named on its own
+    stands for the address of its first element, which is what `p= a;`
+    stores and what lets an array be given wherever a pointer is wanted,
+    and the address of an element is taken with `&a[2]`. A pointer may be
+    indexed the same way, so `p[4]` reads just as `a[4]` does. Every
+    element starts out zero. An array declares one name only, so
+    `int a[2], b;` is refused, and the address of the whole array is not a
+    value which may be stored into, so `a= p;` and `a++;` are refused. One
+    dimension is known so far; a size which is zero, is not a number, or
+    does not fit in memory, an array of a type which cannot hold a value
+    such as `void a[2];`, and an array of a pointer type are all refused.

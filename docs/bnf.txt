@@ -13,7 +13,13 @@ opt_parameter: <empty>
     | type identifier
     ;
 
+/*
+ * An array declares one name only, so it never joins an identifier_list.
+ * The size is a fixed number of elements and may not be zero, and the
+ * elements may not be void or pointers.
+ */
 var_declaration: type identifier_list ';'
+    | type identifier '[' number ']' ';'
     ;
 
 identifier_list: identifier
@@ -52,6 +58,7 @@ print_statement: 'print' expression ';'
     ;
 
 declaration: type identifier_list ';'
+    | type identifier '[' number ']' ';'
     ;
 
 function_call: identifier '(' opt_expression ')'
@@ -99,6 +106,7 @@ assignment_expression: logical_or_expression
     ;
 
 lvalue: identifier
+    | array_access
     | '*' prefix_expression
     ;
 
@@ -187,9 +195,19 @@ postfix_expression: primary
     | identifier '--'
     ;
 
+/*
+ * An array named on its own stands for the address of its first element,
+ * so an array_access may also be written where a pointer is wanted, and
+ * the index counts elements rather than bytes.
+ */
+array_access: identifier '[' expression ']'
+    ;
+
 primary: number
     | identifier
     | function_call
+    | array_access
+    | '(' expression ')'
     ;
 
 number: T_INTLIT

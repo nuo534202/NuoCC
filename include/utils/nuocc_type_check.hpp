@@ -24,6 +24,12 @@ bool IsPointerType(PrimitiveType type);
 int32 PrimitiveSize(PrimitiveType type);
 
 /*
+ * The number of bytes a symbol's storage takes: one value for a variable,
+ * one value for every element of an array.
+ */
+int32 SymbolStorageSize(const Symbol& symbol);
+
+/*
  * The type which is a pointer to the given type, and the type a given
  * pointer type points at. Both die on a type which has no answer.
  */

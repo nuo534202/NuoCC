@@ -54,7 +54,8 @@ private:
      *
      * Both start with a type and a name, so it is the token after the name
      * which tells them apart: a '(' begins the parameter list of a
-     * function, a ',' or a ';' continues a list of variables.
+     * function, a '[' the size of an array, and a ',' or a ';' continues
+     * a list of variables.
      */
     void GlobalDeclaration(const std::vector<NodePtr>& token_list,
         idx_t& i,
@@ -88,6 +89,20 @@ private:
                         const std::string& name,
                         std::vector<AstNodePtr>& declarations,
                         StorageClass storage);
+
+    /*
+     * array_declaration: identifier '[' number ']'  ;
+     *
+     * The type and the name have already been parsed by the caller. The
+     * number is how many elements the array holds, and the whole array
+     * takes room for all of them at once: one element of the declared
+     * type for each. The caller matches the semicolon.
+     */
+    Symbol ArrayDeclaration(const std::vector<NodePtr>& token_list,
+                            idx_t& i,
+                            PrimitiveType element_type,
+                            const std::string& name,
+                            StorageClass storage);
 
     AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
@@ -143,9 +158,36 @@ private:
     AstNodePtr ParsePrimary(const std::vector<NodePtr>& token_list,
         idx_t& i);
 
+    /*
+     * array_access: identifier '[' expression ']'  ;
+     *
+     * The name is the array to index, or the pointer to walk along: both
+     * start a row of values of one type. The index counts elements and is
+     * scaled into an offset before it is added to the base, and what
+     * comes back is the element itself, which may stand on the left of an
+     * assignment as well as be read.
+     */
+    AstNodePtr ArrayAccess(const std::vector<NodePtr>& token_list, idx_t& i);
+
     /* Parse the type which starts a declaration and step over it. */
     PrimitiveType ParseType(const std::vector<NodePtr>& token_list,
                             idx_t& i);
+
+    /*
+     * Return the declaration a name refers to, whatever kind of symbol it
+     * names, and stop if there is no such name. A name can only be read
+     * where one is expected, so a literal or an operator standing there
+     * is refused rather than read as a name.
+     */
+    Symbol Lookup(const NodePtr& token, std::string_view what);
+
+    /*
+     * Stop unless a symbol is the kind of symbol the grammar wants there,
+     * such as a variable where a value is read.
+     */
+    void CheckKind(const Symbol& symbol,
+                   StructuralType wanted,
+                   std::string_view what) const;
 
     /*
      * Return the declaration a name refers to, checking that it really names
@@ -205,6 +247,18 @@ private:
                std::string_view name);
 
     uint8 GetOpPrecedence(NodeTag tag);
+
+    /*
+     * Reserve room in the stack frame of the function being parsed, and
+     * return the offset the room starts at. The room is aligned to no
+     * more than eight bytes, which is the widest value the language has.
+     */
+    int32 AllocateLocal(int32 size, int32 alignment);
+
+    /*
+     * Reserve the room one value of a type takes. A type which cannot hold
+     * a value at all, such as void, has no room to reserve and is an error.
+     */
     int32 AllocateLocal(PrimitiveType type);
 
 private:

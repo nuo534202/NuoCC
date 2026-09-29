@@ -56,6 +56,11 @@ const AstNodePtr& AstNode::GetRight() const
     return right_;
 }
 
+AstNodePtr AstNode::ReleaseLeft()
+{
+    return std::move(left_);
+}
+
 AstNodeTag AstNode::GetAstNodeTag() const
 {
     return node_type_;
