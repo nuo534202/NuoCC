@@ -4,9 +4,10 @@ namespace nuocc
 {
 
 /*
- * The function the generated code calls to print a value, provided by the
- * runtime the output is linked with. See lib/printint.c.
+ * The functions the generated code may call, provided by the runtime the
+ * output is linked with. See lib/printint.c.
  */
 constexpr char kPrintIntName[] = "printint";
+constexpr char kPrintCharName[] = "printchar";
 
 }   /* namespace nuocc */

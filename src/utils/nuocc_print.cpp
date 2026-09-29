@@ -86,6 +86,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_IntLit:
             out = "IntLit";
             break;
+        case T_StrLit:
+            out = "StrLit";
+            break;
         case T_KeyWord:
             out = "KeyWord";
             break;
@@ -171,6 +174,12 @@ void PrintTokenList(const Scanner& scanner)
         if (token->GetNodeTag() == T_IntLit)
         {
             auto lit = static_cast<Literal<int, T_IntLit>*>(token.get());
+            std::cout << " " << lit->GetValue();
+        }
+        else if (token->GetNodeTag() == T_StrLit)
+        {
+            auto lit =
+                static_cast<Literal<std::string, T_StrLit>*>(token.get());
             std::cout << " " << lit->GetValue();
         }
         else if (token->GetNodeTag() == T_KeyWord)

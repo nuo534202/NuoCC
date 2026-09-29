@@ -97,6 +97,16 @@ int32 AstIntLit::GetValue() const
     return value_;
 }
 
+/* AstStrLit */
+AstStrLit::AstStrLit(const std::string& text)
+    : AstNode(A_AstStrLit, PrimitiveType::kCharPtr),
+      text_(text) {}
+
+const std::string& AstStrLit::GetText() const
+{
+    return text_;
+}
+
 /* AstIdentifier */
 AstIdentifier::AstIdentifier(AstNodePtr& left,
     AstNodePtr& right,

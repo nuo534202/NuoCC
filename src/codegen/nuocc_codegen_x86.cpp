@@ -641,6 +641,20 @@ reg_idx X86Codegen::AddressOf(const Symbol& symbol)
 }
 
 /*
+ * The address of a string literal is reached the same way as a global
+ * variable's, but a label is local, so it takes no mangled spelling.
+ */
+reg_idx X86Codegen::LoadStrAddress(label_idx label)
+{
+    const std::string name = "L" + std::to_string(label);
+    reg_idx reg = AllocRegister();
+
+    ofs_ << "\tleaq\t" << name << "(%rip), " << reg_list_[reg] << std::endl;
+
+    return reg;
+}
+
+/*
  * Read the value a pointer points at into the same register that holds the
  * pointer. How much is read is decided by what the pointer points at.
  */

@@ -10,6 +10,10 @@
 namespace nuocc
 {
 
+/*
+ * The whole file is read in at once because a literal may hold a space,
+ * which the word at a time reading below would split in two.
+ */
 void Scanner::Scan(const std::string& file)
 {
     std::ifstream ifs;
@@ -21,16 +25,18 @@ void Scanner::Scan(const std::string& file)
         std::exit(1);
     }
 
-    std::string buf;
+    std::string source;
+    std::string line;
 
-    while (ifs >> buf)
-    {
-        idx_t i = 0;
-        StringToToken(buf, i);
-    }
+    while (std::getline(ifs, line))
+        source += line + '\n';
+
+    ifs.close();
+
+    idx_t i = 0;
+    StringToToken(source, i);
 
     token_list_.push_back(std::make_unique<Node>(T_EOF));
-    ifs.close();
 }
 
 const std::vector<NodePtr>& Scanner::GetTokenList() const
@@ -40,32 +46,165 @@ const std::vector<NodePtr>& Scanner::GetTokenList() const
 
 void Scanner::StringToToken(const std::string& buf, idx_t& i)
 {
-    SkipEmpty(buf, i);
-
-    size_t size = buf.size();
-    std::string token;
-
-    for (; i < size; i++)
+    while (true)
     {
-        /* character is not in the alphabet */
-        if (kAlphabet.find(buf[i]) == kAlphabet.end())
-        {
-            std::cerr << "Error: unrecognized character " << buf[i];
-            std::cerr << "!" << std::endl;
-            std::exit(1);
-        }
+        SkipEmpty(buf, i);
 
-        if (IsNewToken(token, buf[i]))
+        if (i >= buf.size())
+            return;
+
+        if (buf[i] == '\'')
         {
-            CommitToken(token);
-            BeginToken(token, buf[i]);
+            ScanCharLiteral(buf, i);
             continue;
         }
 
-        AppendToken(token, buf[i]);
+        if (buf[i] == '"')
+        {
+            ScanStrLiteral(buf, i);
+            continue;
+        }
+
+        std::string token;
+
+        for (; i < buf.size(); i++)
+        {
+            char ch = buf[i];
+
+            /*
+             * A word ends at whitespace and at the quote which starts a
+             * literal, so the loop below can pick the literal up again.
+             */
+            if (std::isspace(static_cast<unsigned char>(ch)) ||
+                ch == '\'' || ch == '"')
+                break;
+
+            /* character is not in the alphabet */
+            if (kAlphabet.find(ch) == kAlphabet.end())
+            {
+                std::cerr << "Error: unrecognized character " << ch;
+                std::cerr << "!" << std::endl;
+                std::exit(1);
+            }
+
+            if (IsNewToken(token, ch))
+            {
+                CommitToken(token);
+                BeginToken(token, ch);
+                continue;
+            }
+
+            AppendToken(token, ch);
+        }
+
+        CommitToken(token);
+    }
+}
+
+/*
+ * A character literal holds one character between two single quotes and
+ * scans as an integer literal: its value is the character's code, and the
+ * parser gives a small literal the type char.
+ */
+void Scanner::ScanCharLiteral(const std::string& buf, idx_t& i)
+{
+    i++;    /* step over the opening quote */
+
+    if (i >= buf.size() || buf[i] == '\n')
+    {
+        std::cerr << "lexical error: unterminated character literal!";
+        std::cerr << std::endl;
+        std::exit(1);
     }
 
-    CommitToken(token);
+    char value = ScanEscape(buf, i);
+
+    if (i >= buf.size() || buf[i] != '\'')
+    {
+        std::cerr << "lexical error: expected ' at end of character ";
+        std::cerr << "literal!" << std::endl;
+        std::exit(1);
+    }
+
+    i++;    /* step over the closing quote */
+
+    token_list_.push_back(std::make_unique<Literal<int, T_IntLit>>(
+        static_cast<unsigned char>(value)));
+}
+
+/*
+ * A string literal holds zero or more characters between two double
+ * quotes and scans into a token of its own, whose text stands for the
+ * string. The storage for the characters comes later, when the string is
+ * used, so only the text is kept here.
+ */
+void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
+{
+    i++;    /* step over the opening quote */
+
+    std::string text;
+
+    while (true)
+    {
+        /* A string may not reach the end of the file or a new line. */
+        if (i >= buf.size() || buf[i] == '\n')
+        {
+            std::cerr << "lexical error: unterminated string literal!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        if (buf[i] == '"')
+        {
+            i++;    /* step over the closing quote */
+            break;
+        }
+
+        text.push_back(ScanEscape(buf, i));
+    }
+
+    token_list_.push_back(
+        std::make_unique<Literal<std::string, T_StrLit>>(text));
+}
+
+/*
+ * Read one character of a literal, interpret a backslash escape, and
+ * leave i just after what was read. Only the simple escapes are known:
+ * an octal code or a Unicode value is an error rather than a guess.
+ */
+char Scanner::ScanEscape(const std::string& buf, idx_t& i)
+{
+    char c = buf[i++];
+
+    if (c != '\\')
+        return c;
+
+    if (i >= buf.size() || buf[i] == '\n')
+    {
+        std::cerr << "lexical error: expected a character after a ";
+        std::cerr << "backslash!" << std::endl;
+        std::exit(1);
+    }
+
+    char escaped = buf[i++];
+
+    switch (escaped)
+    {
+        case 'a':  return '\a';
+        case 'b':  return '\b';
+        case 'f':  return '\f';
+        case 'n':  return '\n';
+        case 'r':  return '\r';
+        case 't':  return '\t';
+        case 'v':  return '\v';
+        case '\\': return '\\';
+        case '"':  return '"';
+        case '\'': return '\'';
+        default:
+            std::cerr << "lexical error: unknown escape sequence \\";
+            std::cerr << escaped << "!" << std::endl;
+            std::exit(1);
+    }
 }
 
 void Scanner::SkipEmpty(const std::string& buf, idx_t& i)

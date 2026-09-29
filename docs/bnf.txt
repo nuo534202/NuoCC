@@ -204,11 +204,21 @@ array_access: identifier '[' expression ']'
     ;
 
 primary: number
+    | string_literal
     | identifier
     | function_call
     | array_access
     | '(' expression ')'
     ;
 
+/*
+ * A character literal scans as a number whose value is the character's
+ * code and which the parser gives the type char when it fits, so it is
+ * not a production of its own. A string literal is a token of its own
+ * and has the type char *.
+ */
 number: T_INTLIT
+    ;
+
+string_literal: T_STRLIT
     ;

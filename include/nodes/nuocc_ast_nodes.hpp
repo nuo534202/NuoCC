@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "utils/nuocc_types.hpp"
@@ -93,6 +94,24 @@ public:
 
 private:
     int32 value_;
+};
+
+/*
+ * A string literal, always of type char *. It holds the characters of
+ * one "..." literal; the static storage for them is created when the
+ * literal is used.
+ */
+class AstStrLit : public AstNode
+{
+public:
+    AstStrLit(const std::string& text);
+    ~AstStrLit() = default;
+
+public:
+    const std::string& GetText() const;
+
+private:
+    std::string text_;
 };
 
 /*

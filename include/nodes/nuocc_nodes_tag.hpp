@@ -36,6 +36,7 @@ typedef enum NodeTag
 
     /* Literal Type */
     T_IntLit,
+    T_StrLit,
     // T_BoolLit,
     // T_CharLit,
     // T_FloatLit,
@@ -90,7 +91,8 @@ typedef enum AstNodeTag
     A_AstInvert,
     A_AstLogNot,
     A_AstToBool,
-    A_AstIncDec
+    A_AstIncDec,
+    A_AstStrLit
 } AstNodeTag;
 
 }   /* namespace nuocc */

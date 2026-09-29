@@ -298,6 +298,33 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
     ofs_ << "\t.text" << std::endl;
 }
 
+/*
+ * The storage holds one byte per character and then the NUL which ends
+ * the string, all under a local label: unlike a global variable, a
+ * literal has no name the rest of the program could refer to.
+ */
+void AsmCodegen::GenStrStorage(label_idx label, const std::string& text)
+{
+    ofs_ << "\t.data" << std::endl;
+    EmitLabel(label);
+
+    ofs_ << "\t.byte\t";
+
+    for (std::size_t k = 0; k < text.size(); k++)
+    {
+        if (k > 0)
+            ofs_ << ", ";
+
+        ofs_ << static_cast<int>(static_cast<unsigned char>(text[k]));
+    }
+
+    if (!text.empty())
+        ofs_ << ", ";
+
+    ofs_ << "0" << std::endl;
+    ofs_ << "\t.text" << std::endl;
+}
+
 std::string AsmCodegen::GlobName(const std::string& name) const
 {
     return name;
@@ -316,6 +343,16 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             const AstIntLit *int_lit =
                 static_cast<const AstIntLit*>(root.get());
             return LoadInt(int_lit->GetValue());
+        }
+        case A_AstStrLit:
+        {
+            const AstStrLit *str_lit =
+                static_cast<const AstStrLit*>(root.get());
+
+            label_idx label = NewLabel();
+            GenStrStorage(label, str_lit->GetText());
+
+            return LoadStrAddress(label);
         }
         case A_AstIdentifier:
         {

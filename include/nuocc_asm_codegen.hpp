@@ -103,6 +103,7 @@ protected:
     virtual void PrintInt(reg_idx reg) = 0;
 
     virtual reg_idx AddressOf(const Symbol& symbol) = 0;
+    virtual reg_idx LoadStrAddress(label_idx label) = 0;
     virtual reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) = 0;
     virtual void StoreDeref(reg_idx value_reg,
                             reg_idx address_reg,
@@ -117,6 +118,12 @@ protected:
      * address of another.
      */
     void GenGlobSymbol(const Symbol& symbol);
+
+    /*
+     * Give a string literal storage in the data section, under a label
+     * of its own, so that the code can take the address of it.
+     */
+    void GenStrStorage(label_idx label, const std::string& text);
 
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);

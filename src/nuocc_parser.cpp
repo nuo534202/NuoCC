@@ -16,10 +16,15 @@ namespace nuocc
 Program Parser::Parse(const std::vector<NodePtr>& token_list)
 {
     /*
-     * printint() is provided by the runtime the generated code is linked
-     * with, so it is already known before any of the program is parsed.
+     * printint() and printchar() are provided by the runtime the
+     * generated code is linked with, so they are already known before
+     * any of the program is parsed.
      */
     symbol_table_.AddSymbol(Symbol{.name = kPrintIntName,
+                                   .type = PrimitiveType::kVoid,
+                                   .stype = StructuralType::kFunction,
+                                   .parameter_type = PrimitiveType::kInt});
+    symbol_table_.AddSymbol(Symbol{.name = kPrintCharName,
                                    .type = PrimitiveType::kVoid,
                                    .stype = StructuralType::kFunction,
                                    .parameter_type = PrimitiveType::kInt});
@@ -849,6 +854,16 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             i++;
 
             return MakeIntLitLeaf(token, type);
+        }
+        case T_StrLit:
+        {
+            std::string text =
+                static_cast<const Literal<std::string, T_StrLit>*>(
+                    token_list[i].get())
+                    ->GetValue();
+            i++;
+
+            return std::make_unique<AstStrLit>(text);
         }
         case T_LParen:
         {

@@ -33,6 +33,10 @@ private:
     void StringToToken(const std::string& buf, idx_t& i);
     void SkipEmpty(const std::string& buf, idx_t& i);
 
+    void ScanCharLiteral(const std::string& buf, idx_t& i);
+    void ScanStrLiteral(const std::string& buf, idx_t& i);
+    char ScanEscape(const std::string& buf, idx_t& i);
+
     bool IsNewToken(const std::string& token, char ch);
     void BeginToken(std::string& token, char ch);
     void AppendToken(std::string& token, char ch);

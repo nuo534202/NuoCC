@@ -94,3 +94,28 @@
     dimension is known so far; a size which is zero, is not a number, or
     does not fit in memory, an array of a type which cannot hold a value
     such as `void a[2];`, and an array of a pointer type are all refused.
+21. Character Literals. `'a'` is one character between two single quotes,
+    has the value of that character's code, and has the type `char`, so it
+    may be assigned to a `char` and passed to a function like any other
+    small number. The escapes `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v`,
+    `\\`, `\"` and `\'` stand for the characters they name. A literal
+    which is empty, holds more than one character, is not closed by a
+    quote before the end of the line or of the file, ends with a bare
+    backslash, or uses an escape which is not in that list (so an octal
+    code or a Unicode value) is refused.
+22. String Literals. `"Hello world"` is zero or more characters between
+    two double quotes, may hold spaces, and has the type `char *`. It
+    stands for the address of its first character, its storage holds a
+    zero byte after the last character, and it may be assigned to a
+    pointer, indexed with `p[0]`, read through with `*p`, and walked with
+    `p= p + 1` exactly like a pointer to a `char`. The same escapes as a
+    character literal are known. A string which is not closed before the
+    end of the line or of the file, or uses an unknown escape, is
+    refused, and a string may not be given to `print` or stored into a
+    number.
+23. The `printchar()` Runtime Function. `printchar(x)` is called like any
+    other function and prints the one character whose code is `x`,
+    without a newline after it, so it is how the characters of a string
+    are shown: `for (p= "hi"; *p != 0; p= p + 1) printchar(*p);`. Its
+    argument must fit an `int` and it returns nothing; it is provided by
+    lib/printint.c together with `printint()`.
