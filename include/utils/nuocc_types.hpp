@@ -83,6 +83,11 @@ struct Symbol
      * declared. It is empty for everything which is not a function.
      */
     std::vector<PrimitiveType> parameter_types;
+    /*
+     * Whether a function has been given a body. A prototype has none yet,
+     * and the flag is false for everything which is not a function.
+     */
+    bool has_body = false;
     /* The number of elements of an array, and zero for anything else. */
     int32 element_count = 0;
 };

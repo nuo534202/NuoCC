@@ -123,3 +123,11 @@
     are shown: `for (p= "hi"; *p != 0; p= p + 1) printchar(*p);`. Its
     argument must fit an `int` and it returns nothing; it is provided by
     lib/printint.c together with `printint()`.
+24. Function Prototypes. A function may be declared without a body,
+    before it is defined, so that it can be called from anywhere below the
+    declaration: `int add(int a, int b);`. A later declaration of the same
+    function has to agree with the prototype in the return type, the
+    number of parameters and the type of each of them; a second body for a
+    function which already has one is refused. The parameter names of a
+    prototype are only placeholders, since it is the definition which
+    gives them to the body.

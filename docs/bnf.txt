@@ -8,7 +8,14 @@ global_declaration: function_declaration
 
 function_declaration:
       type identifier '(' opt_parameter_list ')' compound_statement
+    | type identifier '(' opt_parameter_list ')' ';'
     ;
+
+/*
+ * A declaration which ends in a semicolon is a prototype: it declares the
+ * function and the types it takes, and the body comes later. A definition
+ * which follows has to agree with the prototype it repeats.
+ */
 
 opt_parameter_list: <empty>
     | parameter_list

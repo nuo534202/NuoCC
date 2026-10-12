@@ -20,6 +20,20 @@ void SymbolTable::AddSymbol(const Symbol& symbol)
     symbols_.push_back(symbol);
 }
 
+bool SymbolTable::UpdateSymbol(const Symbol& symbol)
+{
+    for (auto it = symbols_.rbegin(); it != symbols_.rend(); ++it)
+    {
+        if (it->name == symbol.name)
+        {
+            *it = symbol;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 idx_t SymbolTable::Mark() const
 {
     return symbols_.size();

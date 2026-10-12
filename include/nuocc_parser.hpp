@@ -62,9 +62,12 @@ private:
 
     /*
      * function_declaration: type identifier '(' opt_parameter_list ')'
-     *                       compound_statement  ;
+     *      |                type identifier '(' opt_parameter_list ')' ';'
+     *      ;
      *
-     * The type and the name have already been parsed by the caller.
+     * A declaration which ends in a semicolon is a prototype: it names the
+     * function and the types it takes, and the body comes later. The type
+     * and the name have already been parsed by the caller.
      */
     AstNodePtr FunctionDeclaration(const std::vector<NodePtr>& token_list,
         idx_t& i,
@@ -130,14 +133,22 @@ private:
 
     /*
      * Parse the parameter list of a function, which is empty or one or
-     * more `type identifier` pairs separated by commas. Every parameter is
-     * a local variable of the function and is given a place in its stack
-     * frame here.
+     * more `type identifier` pairs separated by commas. The parameters
+     * come back in the order they are written, and nothing is added to the
+     * symbol table here: a prototype keeps only their types, while a
+     * definition binds them once its body is known to follow.
      */
     std::vector<Symbol> FunctionParameters(
         const std::vector<NodePtr>& token_list,
-        idx_t& i,
-        Symbol& function);
+        idx_t& i);
+
+    /*
+     * Compare a declaration of a function with the one which is already
+     * known, which is a prototype or a function which has been defined.
+     * The return type, the number of parameters and the type of every
+     * parameter have to agree.
+     */
+    void CheckPrototype(const Symbol& previous, const Symbol& symbol);
 
     AstNodePtr Condition(const std::vector<NodePtr>& token_list,
         idx_t& i);

@@ -56,8 +56,12 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 
     if (TokenTag(token_list[i]) == T_LParen)
     {
-        program.functions.push_back(
-            FunctionDeclaration(token_list, i, type, name));
+        /* A prototype declares no body, so it adds no function. */
+        AstNodePtr function = FunctionDeclaration(token_list, i, type, name);
+
+        if (function)
+            program.functions.push_back(std::move(function));
+
         return;
     }
 
@@ -80,25 +84,85 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 
 /*
  * function_declaration: type identifier '(' opt_parameter_list ')'
- *                       compound_statement  ;
+ *      |                type identifier '(' opt_parameter_list ')' ';'
+ *      ;
+ *
+ * A declaration which ends in a semicolon is a prototype: it says what the
+ * function is called and what it takes, and its body is given later, or
+ * somewhere else altogether. Everything a prototype says is kept with the
+ * function, so that the definition which follows has to agree with it.
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     PrimitiveType type,
     const std::string& name)
 {
+    /* The name may already be known as a prototype, or as a function
+     * which has been defined; a later declaration has to agree with what
+     * is known, and a second body is refused. */
+    std::optional<Symbol> previous = symbol_table_.FindSymbol(name);
+
+    if (previous && previous->stype != StructuralType::kFunction)
+    {
+        std::cerr << "syntax error: " << name << " is not a function!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_LParen, "(");
+    std::vector<Symbol> parameters = FunctionParameters(token_list, i);
+    Match(token_list, i, T_RParen, ")");
+
     Symbol symbol{.name = name,
                   .type = type,
                   .stype = StructuralType::kFunction};
 
-    local_stack_size_ = 0;
-    Match(token_list, i, T_LParen, "(");
-    std::vector<Symbol> parameters = FunctionParameters(token_list, i, symbol);
-    symbol_table_.AddSymbol(symbol);
-    const idx_t symbol_mark = symbol_table_.Mark();
     for (const Symbol& parameter : parameters)
+        symbol.parameter_types.push_back(parameter.type);
+
+    if (previous)
+        CheckPrototype(*previous, symbol);
+
+    /* The token after the parameter list says whether a body follows. */
+    const bool has_body = TokenTag(token_list[i]) == T_LBrace;
+
+    if (previous && previous->has_body && has_body)
+    {
+        std::cerr << "syntax error: function " << name;
+        std::cerr << " is already defined!" << std::endl;
+        std::exit(1);
+    }
+
+    /* A definition has a body, and a prototype which follows one does not
+     * take it away. */
+    symbol.has_body = has_body || (previous.has_value() && previous->has_body);
+
+    /*
+     * The function is known before its body is read, so that the body can
+     * call the function itself. A prototype which was seen earlier is
+     * replaced, and the name is new only when no declaration came first.
+     */
+    if (previous)
+        symbol_table_.UpdateSymbol(symbol);
+    else
+        symbol_table_.AddSymbol(symbol);
+
+    /* A declaration which ends in a semicolon declares no body, so there
+     * is no function to generate code for. */
+    if (!has_body)
+    {
+        Match(token_list, i, T_Semicolon, ";");
+        return nullptr;
+    }
+
+    const idx_t symbol_mark = symbol_table_.Mark();
+
+    local_stack_size_ = 0;
+    for (Symbol& parameter : parameters)
+    {
+        parameter.stack_offset = AllocateLocal(parameter.type);
         symbol_table_.AddSymbol(parameter);
-    Match(token_list, i, T_RParen, ")");
+    }
 
     current_function_type_ = type;
     AstNodePtr body = CompoundStatement(token_list, i);
@@ -553,14 +617,14 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
  *      |        type identifier ',' parameter_list
  *      ;
  *
- * The type and the name of every parameter are read here, and the
- * parameter is given a place in the stack frame of the function, so that
- * the body can use it like any other local variable.
+ * The type and the name of every parameter are read here. Nothing is added
+ * to the symbol table yet, because a declaration which turns out to be a
+ * prototype keeps only the types of its parameters; a definition binds
+ * them once its body is known to follow.
  */
 std::vector<Symbol> Parser::FunctionParameters(
     const std::vector<NodePtr>& token_list,
-    idx_t& i,
-    Symbol& function)
+    idx_t& i)
 {
     std::vector<Symbol> parameters;
 
@@ -586,12 +650,10 @@ std::vector<Symbol> Parser::FunctionParameters(
 
         std::string name = MatchIdentifier(token_list, i, "a parameter name");
 
-        function.parameter_types.push_back(type);
         parameters.push_back(Symbol{.name = name,
                                     .type = type,
                                     .stype = StructuralType::kVariable,
-                                    .storage = StorageClass::kLocal,
-                                    .stack_offset = AllocateLocal(type)});
+                                    .storage = StorageClass::kLocal});
 
         if (TokenTag(token_list[i]) != T_Comma)
             break;
@@ -600,6 +662,44 @@ std::vector<Symbol> Parser::FunctionParameters(
     }
 
     return parameters;
+}
+
+/*
+ * Every declaration of a function has to agree with the one which came
+ * before it: the same return type, the same number of parameters and the
+ * same type for each of them in turn, since a caller which was checked
+ * against one of them has to keep working with the other.
+ */
+void Parser::CheckPrototype(const Symbol& previous, const Symbol& symbol)
+{
+    if (previous.type != symbol.type)
+    {
+        std::cerr << "syntax error: return type of function ";
+        std::cerr << symbol.name << " does not match its prototype!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    if (previous.parameter_types.size() != symbol.parameter_types.size())
+    {
+        std::cerr << "syntax error: wrong number of parameters for ";
+        std::cerr << symbol.name << ": ";
+        std::cerr << symbol.parameter_types.size() << " given, ";
+        std::cerr << previous.parameter_types.size() << " wanted!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    for (idx_t k = 0; k < symbol.parameter_types.size(); k++)
+    {
+        if (previous.parameter_types[k] != symbol.parameter_types[k])
+        {
+            std::cerr << "syntax error: parameter " << (k + 1) << " of ";
+            std::cerr << symbol.name << " does not match its prototype!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+    }
 }
 
 /*
