@@ -1,8 +1,8 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <string>
+#include <vector>
 
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "utils/nuocc_types.hpp"
@@ -208,8 +208,9 @@ private:
 };
 
 /*
- * A function declaration. The left child holds the body, and local_size is
- * the space required by its parameter and local variables.
+ * A function declaration. The left child holds the body, local_size is
+ * the space required by its parameters and local variables, and parameters
+ * holds one symbol per parameter in the order they are declared.
  */
 class AstFunction : public AstNode
 {
@@ -217,18 +218,18 @@ public:
     AstFunction(AstNodePtr& body,
                 const Symbol& symbol,
                 int32 local_size,
-                const std::optional<Symbol>& parameter);
+                std::vector<Symbol>& parameters);
     ~AstFunction() = default;
 
 public:
     const Symbol& GetSymbol() const;
     int32 GetLocalSize() const;
-    const std::optional<Symbol>& GetParameter() const;
+    const std::vector<Symbol>& GetParameters() const;
 
 private:
     Symbol symbol_;
     int32 local_size_;
-    std::optional<Symbol> parameter_;
+    std::vector<Symbol> parameters_;
 };
 
 /*
@@ -271,20 +272,22 @@ public:
 };
 
 /*
- * Call a function. The optional left child holds its one argument, and the
- * type of this node is the return type of the function.
+ * Call a function, holding one expression per argument in the order they
+ * are written. The type of this node is the return type of the function.
  */
 class AstFuncCall : public AstNode
 {
 public:
-    AstFuncCall(AstNodePtr& argument, const Symbol& symbol);
+    AstFuncCall(std::vector<AstNodePtr>& arguments, const Symbol& symbol);
     ~AstFuncCall() = default;
 
 public:
     const Symbol& GetSymbol() const;
+    const std::vector<AstNodePtr>& GetArguments() const;
 
 private:
     Symbol symbol_;
+    std::vector<AstNodePtr> arguments_;
 };
 
 /*

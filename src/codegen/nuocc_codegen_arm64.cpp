@@ -90,7 +90,7 @@ void Arm64Codegen::EmitPreamble()
 void Arm64Codegen::EmitFunctionPreamble(
     const Symbol& symbol,
     int32 local_size,
-    const std::optional<Symbol>& parameter)
+    const std::vector<Symbol>& parameters)
 {
     ofs_ << "\t.text" << std::endl;
     ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
@@ -106,19 +106,30 @@ void Arm64Codegen::EmitFunctionPreamble(
     ofs_ << "\tstp\t" << xreg_list_[2] << ", " << xreg_list_[3];
     ofs_ << ", [sp, #" << kSavedRegs2Offset << "]" << std::endl;
 
-    if (parameter)
+    /*
+     * Each parameter arrives in x0 to x5 and is kept in the stack frame of
+     * the function, where the body reads it as the local variable it is.
+     */
+    for (idx_t k = 0; k < parameters.size(); k++)
     {
-        const int32 offset = kBaseFrameSize + parameter->stack_offset;
-        switch (PrimitiveSize(parameter->type))
+        const Symbol& parameter = parameters[k];
+        const int32 offset = kBaseFrameSize + parameter.stack_offset;
+        const std::string reg64 = "x" + std::to_string(k);
+        const std::string reg32 = "w" + std::to_string(k);
+
+        switch (PrimitiveSize(parameter.type))
         {
             case 1:
-                ofs_ << "\tstrb\tw0, [x29, #" << offset << "]" << std::endl;
+                ofs_ << "\tstrb\t" << reg32 << ", [x29, #" << offset;
+                ofs_ << "]" << std::endl;
                 break;
             case 4:
-                ofs_ << "\tstr\tw0, [x29, #" << offset << "]" << std::endl;
+                ofs_ << "\tstr\t" << reg32 << ", [x29, #" << offset;
+                ofs_ << "]" << std::endl;
                 break;
             case 8:
-                ofs_ << "\tstr\tx0, [x29, #" << offset << "]" << std::endl;
+                ofs_ << "\tstr\t" << reg64 << ", [x29, #" << offset;
+                ofs_ << "]" << std::endl;
                 break;
             default:
                 std::cerr << "Error: invalid parameter type!" << std::endl;
@@ -569,17 +580,40 @@ void Arm64Codegen::JumpIfZero(reg_idx reg, label_idx label)
 }
 
 /*
- * Call a function. The value registers are callee saved, so whatever an
- * expression is still holding survives the call on its own.
+ * Put one argument on the stack while a call is being made. Every value
+ * takes sixteen bytes, so the stack stays aligned to sixteen bytes while
+ * the remaining arguments are worked out, which is what a function called
+ * from one of them needs.
  */
-reg_idx Arm64Codegen::Call(const Symbol& symbol,
-    std::optional<reg_idx> arg_reg)
+void Arm64Codegen::PushArgument(reg_idx reg)
 {
+    ofs_ << "\tsub\tsp, sp, #16" << std::endl;
+    ofs_ << "\tstr\t" << xreg_list_[reg] << ", [sp]" << std::endl;
+}
+
+/*
+ * Call a function with the argument values which have been pushed, the
+ * first of them nearest to the stack pointer. Up to six of them travel in
+ * x0 to x5, and the ones beyond that would have to travel on the stack.
+ *
+ * The value registers are callee saved, so whatever an expression is still
+ * holding survives the call on its own.
+ */
+reg_idx Arm64Codegen::Call(const Symbol& symbol, int32 arg_count)
+{
+    for (int32 arg = 0; arg < arg_count; arg++)
+    {
+        ofs_ << "\tldr\tx" << arg << ", [sp, #" << 16 * arg << "]";
+        ofs_ << std::endl;
+    }
+
+    if (arg_count > 0)
+        ofs_ << "\tadd\tsp, sp, #" << 16 * arg_count << std::endl;
+
+    ofs_ << "\tbl\t" << GlobName(symbol.name) << std::endl;
+
     reg_idx out_reg = AllocRegister();
 
-    if (arg_reg)
-        ofs_ << "\tmov\tx0, " << xreg_list_[*arg_reg] << std::endl;
-    ofs_ << "\tbl\t" << GlobName(symbol.name) << std::endl;
     ofs_ << "\tmov\t" << xreg_list_[out_reg] << ", x0" << std::endl;
 
     return out_reg;

@@ -34,6 +34,21 @@ const std::unordered_map<NodeTag, ComparisonInstr> kComparisonInstr = {
     {T_GE, {"setge", "jl"}}
 };
 
+/*
+ * The registers the SysV ABI passes arguments in, written in each of the
+ * widths a parameter may be stored with. An argument beyond the sixth
+ * would have to travel on the stack, which the language does not do yet.
+ */
+constexpr std::string_view kParamRegs64[] = {
+    "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"
+};
+constexpr std::string_view kParamRegs32[] = {
+    "%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"
+};
+constexpr std::string_view kParamRegs8[] = {
+    "%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"
+};
+
 }   /* namespace */
 
 X86Codegen::X86Codegen(const std::string& output_file)
@@ -60,7 +75,7 @@ void X86Codegen::EmitPreamble()
 void X86Codegen::EmitFunctionPreamble(
     const Symbol& symbol,
     int32 local_size,
-    const std::optional<Symbol>& parameter)
+    const std::vector<Symbol>& parameters)
 {
     ofs_ << "\t.text" << std::endl;
     ofs_ << "\t.globl\t" << symbol.name << std::endl;
@@ -73,20 +88,30 @@ void X86Codegen::EmitFunctionPreamble(
     if (frame_size != 0)
         ofs_ << "\tsubq\t$" << frame_size << ", %rsp" << std::endl;
 
-    if (parameter)
+    /*
+     * Each parameter arrives in the register the ABI gives it and is kept
+     * in the stack frame of the function, where the body reads it as the
+     * local variable it is.
+     */
+    for (idx_t k = 0; k < parameters.size(); k++)
     {
-        const int32 offset = parameter->stack_offset +
-                             PrimitiveSize(parameter->type);
-        switch (PrimitiveSize(parameter->type))
+        const Symbol& parameter = parameters[k];
+        const int32 offset = parameter.stack_offset +
+                             PrimitiveSize(parameter.type);
+
+        switch (PrimitiveSize(parameter.type))
         {
             case 1:
-                ofs_ << "\tmovb\t%dil, -" << offset << "(%rbp)" << std::endl;
+                ofs_ << "\tmovb\t" << kParamRegs8[k] << ", -";
+                ofs_ << offset << "(%rbp)" << std::endl;
                 break;
             case 4:
-                ofs_ << "\tmovl\t%edi, -" << offset << "(%rbp)" << std::endl;
+                ofs_ << "\tmovl\t" << kParamRegs32[k] << ", -";
+                ofs_ << offset << "(%rbp)" << std::endl;
                 break;
             case 8:
-                ofs_ << "\tmovq\t%rdi, -" << offset << "(%rbp)" << std::endl;
+                ofs_ << "\tmovq\t" << kParamRegs64[k] << ", -";
+                ofs_ << offset << "(%rbp)" << std::endl;
                 break;
             default:
                 std::cerr << "Error: invalid parameter type!" << std::endl;
@@ -537,41 +562,75 @@ void X86Codegen::JumpIfZero(reg_idx reg, label_idx label)
 }
 
 /*
- * Call a function. The call is allowed to clobber every register, so the
- * ones which still hold a value have to be saved across it. An odd number
- * of saved registers would leave the stack misaligned for the call, so it
- * is padded back to a multiple of sixteen bytes.
+ * Put one argument on the stack while a call is being made. Every value
+ * takes sixteen bytes, so the stack stays aligned to sixteen bytes while
+ * the remaining arguments are worked out, which is what a function called
+ * from one of them needs.
  */
-reg_idx X86Codegen::Call(const Symbol& symbol,
-    std::optional<reg_idx> arg_reg)
+void X86Codegen::PushArgument(reg_idx reg)
+{
+    ofs_ << "\tsubq\t$16, %rsp" << std::endl;
+    ofs_ << "\tmovq\t" << reg_list_[reg] << ", (%rsp)" << std::endl;
+}
+
+/*
+ * Call a function with the argument values which have been pushed, the
+ * first of them nearest to the stack pointer. Up to six arguments travel
+ * in the registers the ABI gives them, and the ones beyond that would have
+ * to travel on the stack.
+ *
+ * The call is allowed to clobber every register, so the ones which still
+ * hold a value have to be saved across it. An odd number of saved
+ * registers would leave the stack misaligned for the call, so it is padded
+ * back to a multiple of sixteen bytes; the argument slots are already
+ * sixteen bytes each and need no padding.
+ */
+reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
 {
     const bool *is_free = FreeRegisters();
     int32 saved = 0;
 
     for (reg_idx reg = 0; reg < kRegSize; reg++)
     {
-        if (!is_free[reg] && (!arg_reg || reg != *arg_reg))
+        if (!is_free[reg])
         {
             ofs_ << "\tpushq\t" << reg_list_[reg] << std::endl;
             saved++;
         }
     }
 
-    if (saved % 2 != 0)
+    const int32 pad = saved % 2;
+    if (pad != 0)
         ofs_ << "\tsubq\t$8, %rsp" << std::endl;
 
-    if (arg_reg)
-        ofs_ << "\tmovq\t" << reg_list_[*arg_reg] << ", %rdi" << std::endl;
+    /*
+     * The saved registers and the padding sit between the stack pointer
+     * and the arguments, so the offset of an argument is measured past
+     * both of them. Loading the fifth and sixth arguments into %r8 and %r9
+     * may overwrite a saved value there; the value was pushed above and is
+     * given back once the call has returned.
+     */
+    for (int32 arg = 0; arg < arg_count; arg++)
+    {
+        const int32 offset = 8 * (saved + pad) + 16 * arg;
+
+        ofs_ << "\tmovq\t" << offset << "(%rsp), ";
+        ofs_ << kParamRegs64[arg] << std::endl;
+    }
+
     ofs_ << "\tcall\t" << symbol.name << std::endl;
 
-    if (saved % 2 != 0)
+    if (pad != 0)
         ofs_ << "\taddq\t$8, %rsp" << std::endl;
 
     for (reg_idx reg = kRegSize; reg > 0; reg--)
     {
-        if (!is_free[reg - 1] && (!arg_reg || reg - 1 != *arg_reg))
+        if (!is_free[reg - 1])
             ofs_ << "\tpopq\t" << reg_list_[reg - 1] << std::endl;
     }
+
+    if (arg_count > 0)
+        ofs_ << "\taddq\t$" << 16 * arg_count << ", %rsp" << std::endl;
 
     reg_idx out_reg = AllocRegister();
 

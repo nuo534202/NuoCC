@@ -42,10 +42,13 @@
     otherwise, so `if (x)` tests one value and `while (*p)` walks a pointer
     to the end of what it points at.
 13. Function Declarations and Calls. A function returns `void`, `char`, `int`
-    or `long` and takes zero or one parameter. The parameter is visible in the
-    function body, and an argument must match its type after widening. A
-    function which returns a value must end with a `return` statement, and a
-    void function cannot return one.
+    or `long` and takes zero to six parameters. Every parameter is visible in
+    the function body as a local variable, and each argument must match the
+    type of the parameter it is given to after widening. The arguments are
+    worked out from the last to the first and passed in the registers the
+    machine gives to arguments, so a call with more than six arguments is
+    refused. A function which returns a value must end with a `return`
+    statement, and a void function cannot return one.
 14. Global Variables. A declaration outside every function declares a
     variable which every function can use. One declaration may name
     several variables of the same type, written `int x, y, z;`, and the
@@ -64,9 +67,10 @@
 16. Function-local Variables. Variables declared inside a function are
     stored in that function's stack frame, are released when the function
     returns, and may have the same name as a variable in another function.
-17. Function Parameters. A function may bind one typed parameter, such as
-    `int add(int value)`, and callers may pass an expression of a compatible
-    type. Parameterless functions may be called with empty parentheses.
+17. Function Parameters. A function may bind up to six typed parameters, such
+    as `int add(int a, int b)`, and a caller has to give one expression for
+    each of them. Parameterless functions may be called with empty
+    parentheses.
 18. Assignment Expressions. An assignment is an expression which yields the
     value stored, so `x= 5` may be used wherever a value may, as in
     `print x= 5;`. `=` binds less tightly than every other operator and to

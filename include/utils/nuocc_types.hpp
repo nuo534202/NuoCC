@@ -25,6 +25,13 @@ using reg_idx = size_t;
 using label_idx = uint32;
 
 /*
+ * The registers the ABI gives to arguments set how many a call may pass
+ * without reaching into the stack, and six is the number both targets
+ * have in common.
+ */
+constexpr int32 kMaxArguments = 6;
+
+/*
  * The primitive type of a value. kNone marks the trees which are not
  * expressions at all, such as statements and declarations.
  */
@@ -71,7 +78,11 @@ struct Symbol
     StructuralType stype = StructuralType::kVariable;
     StorageClass storage = StorageClass::kGlobal;
     int32 stack_offset = 0;
-    PrimitiveType parameter_type = PrimitiveType::kNone;
+    /*
+     * The types of the parameters of a function, in the order they are
+     * declared. It is empty for everything which is not a function.
+     */
+    std::vector<PrimitiveType> parameter_types;
     /* The number of elements of an array, and zero for anything else. */
     int32 element_count = 0;
 };

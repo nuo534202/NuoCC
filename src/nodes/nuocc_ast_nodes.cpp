@@ -162,11 +162,11 @@ const Symbol& AstDeclare::GetSymbol() const
 AstFunction::AstFunction(AstNodePtr& body,
     const Symbol& symbol,
     int32 local_size,
-    const std::optional<Symbol>& parameter)
+    std::vector<Symbol>& parameters)
     : AstNode(A_AstFunction, PrimitiveType::kNone, body),
       symbol_(symbol),
       local_size_(local_size),
-      parameter_(parameter) {}
+      parameters_(std::move(parameters)) {}
 
 const Symbol& AstFunction::GetSymbol() const
 {
@@ -178,9 +178,9 @@ int32 AstFunction::GetLocalSize() const
     return local_size_;
 }
 
-const std::optional<Symbol>& AstFunction::GetParameter() const
+const std::vector<Symbol>& AstFunction::GetParameters() const
 {
-    return parameter_;
+    return parameters_;
 }
 
 /* AstWiden */
@@ -202,13 +202,20 @@ AstReturn::AstReturn(AstNodePtr& expression)
     : AstNode(A_AstReturn, PrimitiveType::kNone, expression) {}
 
 /* AstFuncCall */
-AstFuncCall::AstFuncCall(AstNodePtr& argument, const Symbol& symbol)
-    : AstNode(A_AstFuncCall, symbol.type, argument),
-      symbol_(symbol) {}
+AstFuncCall::AstFuncCall(std::vector<AstNodePtr>& arguments,
+    const Symbol& symbol)
+    : AstNode(A_AstFuncCall, symbol.type),
+      symbol_(symbol),
+      arguments_(std::move(arguments)) {}
 
 const Symbol& AstFuncCall::GetSymbol() const
 {
     return symbol_;
+}
+
+const std::vector<AstNodePtr>& AstFuncCall::GetArguments() const
+{
+    return arguments_;
 }
 
 /* AstAddress */

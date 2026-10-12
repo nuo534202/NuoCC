@@ -6,11 +6,16 @@ global_declaration: function_declaration
     | var_declaration
     ;
 
-function_declaration: type identifier '(' opt_parameter ')' compound_statement
+function_declaration:
+      type identifier '(' opt_parameter_list ')' compound_statement
     ;
 
-opt_parameter: <empty>
-    | type identifier
+opt_parameter_list: <empty>
+    | parameter_list
+    ;
+
+parameter_list: type identifier
+    | type identifier ',' parameter_list
     ;
 
 /*
@@ -61,11 +66,15 @@ declaration: type identifier_list ';'
     | type identifier '[' number ']' ';'
     ;
 
-function_call: identifier '(' opt_expression ')'
+function_call: identifier '(' opt_expression_list ')'
     ;
 
-opt_expression: <empty>
-    | expression
+opt_expression_list: <empty>
+    | expression_list
+    ;
+
+expression_list: expression
+    | expression ',' expression_list
     ;
 
 return_statement: 'return' '(' expression ')'

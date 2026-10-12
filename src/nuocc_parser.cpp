@@ -23,11 +23,11 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
     symbol_table_.AddSymbol(Symbol{.name = kPrintIntName,
                                    .type = PrimitiveType::kVoid,
                                    .stype = StructuralType::kFunction,
-                                   .parameter_type = PrimitiveType::kInt});
+                                   .parameter_types = {PrimitiveType::kInt}});
     symbol_table_.AddSymbol(Symbol{.name = kPrintCharName,
                                    .type = PrimitiveType::kVoid,
                                    .stype = StructuralType::kFunction,
-                                   .parameter_type = PrimitiveType::kInt});
+                                   .parameter_types = {PrimitiveType::kInt}});
 
     idx_t i = 0;
     Program program;
@@ -79,7 +79,7 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * function_declaration: type identifier '(' opt_parameter ')'
+ * function_declaration: type identifier '(' opt_parameter_list ')'
  *                       compound_statement  ;
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
@@ -93,11 +93,11 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
 
     local_stack_size_ = 0;
     Match(token_list, i, T_LParen, "(");
-    std::optional<Symbol> parameter = FunctionParameter(token_list, i, symbol);
+    std::vector<Symbol> parameters = FunctionParameters(token_list, i, symbol);
     symbol_table_.AddSymbol(symbol);
     const idx_t symbol_mark = symbol_table_.Mark();
-    if (parameter)
-        symbol_table_.AddSymbol(*parameter);
+    for (const Symbol& parameter : parameters)
+        symbol_table_.AddSymbol(parameter);
     Match(token_list, i, T_RParen, ")");
 
     current_function_type_ = type;
@@ -125,7 +125,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
         }
     }
 
-    return std::make_unique<AstFunction>(body, symbol, local_size, parameter);
+    return std::make_unique<AstFunction>(body, symbol, local_size, parameters);
 }
 
 /*
@@ -488,10 +488,12 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * function_call: identifier '(' opt_expression ')'  ;
+ * function_call: identifier '(' opt_expression_list ')'  ;
  *
  * The current token is the function's name, so a single token of lookahead
- * is all it takes to tell a call apart from a variable.
+ * is all it takes to tell a call apart from a variable. Every argument is
+ * an expression of its own, and each one has to fit the type of the
+ * parameter it is given to.
  */
 AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
 {
@@ -501,60 +503,103 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
     Match(token_list, i, T_Identifier, "a function name");
     Match(token_list, i, T_LParen, "(");
 
-    AstNodePtr argument = nullptr;
-    if (TokenTag(token_list[i]) != T_RParen)
-        argument = BinaryExpression(token_list, i, 0);
+    std::vector<AstNodePtr> arguments;
 
-    if (function.parameter_type == PrimitiveType::kNone)
+    if (TokenTag(token_list[i]) != T_RParen)
     {
-        if (argument)
+        while (true)
         {
-            std::cerr << "syntax error: function " << function.name;
-            std::cerr << " does not take an argument!" << std::endl;
-            std::exit(1);
+            arguments.push_back(BinaryExpression(token_list, i, 0));
+
+            if (TokenTag(token_list[i]) != T_Comma)
+                break;
+
+            i++;
         }
     }
-    else
+
+    if (arguments.size() != function.parameter_types.size())
     {
-        if (!argument || !ModifyType(argument, function.parameter_type,
-                                     std::nullopt))
+        std::cerr << "syntax error: wrong number of arguments for function ";
+        std::cerr << function.name << ": " << arguments.size();
+        std::cerr << " given, " << function.parameter_types.size();
+        std::cerr << " wanted!" << std::endl;
+        std::exit(1);
+    }
+
+    for (idx_t k = 0; k < arguments.size(); k++)
+    {
+        if (!ModifyType(arguments[k], function.parameter_types[k],
+                        std::nullopt))
         {
-            std::cerr << "syntax error: invalid argument for function ";
-            std::cerr << function.name << "!" << std::endl;
+            std::cerr << "syntax error: argument " << (k + 1) << " of ";
+            std::cerr << function.name << " does not fit its parameter";
+            std::cerr << " type!" << std::endl;
             std::exit(1);
         }
     }
 
     Match(token_list, i, T_RParen, ")");
 
-    return std::make_unique<AstFuncCall>(argument, function);
+    return std::make_unique<AstFuncCall>(arguments, function);
 }
 
-std::optional<Symbol> Parser::FunctionParameter(
+/*
+ * opt_parameter_list: <empty>
+ *      |              parameter_list
+ *      ;
+ *
+ * parameter_list: type identifier
+ *      |        type identifier ',' parameter_list
+ *      ;
+ *
+ * The type and the name of every parameter are read here, and the
+ * parameter is given a place in the stack frame of the function, so that
+ * the body can use it like any other local variable.
+ */
+std::vector<Symbol> Parser::FunctionParameters(
     const std::vector<NodePtr>& token_list,
     idx_t& i,
     Symbol& function)
 {
-    if (TokenTag(token_list[i]) == T_RParen)
-        return std::nullopt;
+    std::vector<Symbol> parameters;
 
-    PrimitiveType type = ParseType(token_list, i);
-    if (type == PrimitiveType::kVoid)
+    if (TokenTag(token_list[i]) == T_RParen)
+        return parameters;
+
+    while (true)
     {
-        std::cerr << "syntax error: a parameter needs a value type!";
-        std::cerr << std::endl;
-        std::exit(1);
+        if (parameters.size() == kMaxArguments)
+        {
+            std::cerr << "syntax error: a function takes at most ";
+            std::cerr << kMaxArguments << " parameters!" << std::endl;
+            std::exit(1);
+        }
+
+        PrimitiveType type = ParseType(token_list, i);
+        if (type == PrimitiveType::kVoid)
+        {
+            std::cerr << "syntax error: a parameter needs a value type!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        std::string name = MatchIdentifier(token_list, i, "a parameter name");
+
+        function.parameter_types.push_back(type);
+        parameters.push_back(Symbol{.name = name,
+                                    .type = type,
+                                    .stype = StructuralType::kVariable,
+                                    .storage = StorageClass::kLocal,
+                                    .stack_offset = AllocateLocal(type)});
+
+        if (TokenTag(token_list[i]) != T_Comma)
+            break;
+
+        i++;
     }
 
-    std::string name = MatchIdentifier(token_list, i, "a parameter name");
-    function.parameter_type = type;
-
-    Symbol parameter{.name = name,
-                     .type = type,
-                     .stype = StructuralType::kVariable,
-                     .storage = StorageClass::kLocal,
-                     .stack_offset = AllocateLocal(type)};
-    return parameter;
+    return parameters;
 }
 
 /*

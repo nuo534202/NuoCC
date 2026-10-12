@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "nuocc_asm_codegen.hpp"
@@ -21,9 +20,10 @@ public:
 
 protected:
     void EmitPreamble() override;
-    void EmitFunctionPreamble(const Symbol& symbol,
-                              int32 local_size,
-                              const std::optional<Symbol>& parameter) override;
+    void EmitFunctionPreamble(
+        const Symbol& symbol,
+        int32 local_size,
+        const std::vector<Symbol>& parameters) override;
     void EmitFunctionPostamble() override;
     void EmitLabel(label_idx label) override;
     void EmitJump(label_idx label) override;
@@ -61,8 +61,8 @@ protected:
                         label_idx label) override;
     void JumpIfZero(reg_idx reg, label_idx label) override;
 
-    reg_idx Call(const Symbol& symbol,
-                 std::optional<reg_idx> arg_reg) override;
+    void PushArgument(reg_idx reg) override;
+    reg_idx Call(const Symbol& symbol, int32 arg_count) override;
     void Return(reg_idx reg) override;
     void PrintInt(reg_idx reg) override;
 

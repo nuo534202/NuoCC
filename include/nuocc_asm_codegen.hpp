@@ -37,9 +37,10 @@ protected:
     /* What every target has to provide. */
 
     virtual void EmitPreamble() = 0;
-    virtual void EmitFunctionPreamble(const Symbol& symbol,
-                                      int32 local_size,
-                                      const std::optional<Symbol>& parameter) = 0;
+    virtual void EmitFunctionPreamble(
+        const Symbol& symbol,
+        int32 local_size,
+        const std::vector<Symbol>& parameters) = 0;
     virtual void EmitFunctionPostamble() = 0;
     virtual void EmitLabel(label_idx label) = 0;
     virtual void EmitJump(label_idx label) = 0;
@@ -97,8 +98,17 @@ protected:
      */
     virtual void JumpIfZero(reg_idx reg, label_idx label) = 0;
 
-    virtual reg_idx Call(const Symbol& symbol,
-                         std::optional<reg_idx> arg_reg) = 0;
+    /*
+     * Put the value of one argument on the stack while a call is being
+     * made, ready for Call() to hand it to the function.
+     */
+    virtual void PushArgument(reg_idx reg) = 0;
+
+    /*
+     * Call a function with the argument values which have been pushed,
+     * and give back the register which holds its result.
+     */
+    virtual reg_idx Call(const Symbol& symbol, int32 arg_count) = 0;
     virtual void Return(reg_idx reg) = 0;
     virtual void PrintInt(reg_idx reg) = 0;
 

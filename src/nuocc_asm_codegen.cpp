@@ -63,7 +63,7 @@ void AsmCodegen::GenProgram(const Program& program)
 
         EmitFunctionPreamble(ast_function->GetSymbol(),
                              function_local_size_,
-                             ast_function->GetParameter());
+                             ast_function->GetParameters());
 
         GenStatement(function->GetLeft());
 
@@ -433,23 +433,26 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 }
 
 /*
- * Call a function with its optional argument. The target decides where the
- * result comes back from.
+ * Call a function. The arguments are worked out from the last one to the
+ * first and pushed on the stack in that order, so that the first argument
+ * ends up nearest to the stack pointer; the target takes them from there.
+ * Working them out from the last one also means that an argument which
+ * needs a function of its own does not disturb the ones already pushed.
  */
 reg_idx AsmCodegen::GenCall(const AstNodePtr& root)
 {
     const AstFuncCall *call = static_cast<const AstFuncCall*>(root.get());
+    const std::vector<AstNodePtr>& arguments = call->GetArguments();
 
-    std::optional<reg_idx> arg_reg;
-    if (root->GetLeft())
-        arg_reg = GenExpr(root->GetLeft());
+    for (auto it = arguments.rbegin(); it != arguments.rend(); ++it)
+    {
+        reg_idx arg_reg = GenExpr(*it);
 
-    reg_idx out_reg = Call(call->GetSymbol(), arg_reg);
+        PushArgument(arg_reg);
+        FreeRegister(arg_reg);
+    }
 
-    if (arg_reg)
-        FreeRegister(*arg_reg);
-
-    return out_reg;
+    return Call(call->GetSymbol(), static_cast<int32>(arguments.size()));
 }
 
 /*

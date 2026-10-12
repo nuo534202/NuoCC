@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -62,7 +61,7 @@ private:
         Program& program);
 
     /*
-     * function_declaration: type identifier '(' opt_parameter ')'
+     * function_declaration: type identifier '(' opt_parameter_list ')'
      *                       compound_statement  ;
      *
      * The type and the name have already been parsed by the caller.
@@ -129,7 +128,13 @@ private:
     AstNodePtr FuncCall(const std::vector<NodePtr>& token_list,
                         idx_t& i);
 
-    std::optional<Symbol> FunctionParameter(
+    /*
+     * Parse the parameter list of a function, which is empty or one or
+     * more `type identifier` pairs separated by commas. Every parameter is
+     * a local variable of the function and is given a place in its stack
+     * frame here.
+     */
+    std::vector<Symbol> FunctionParameters(
         const std::vector<NodePtr>& token_list,
         idx_t& i,
         Symbol& function);
