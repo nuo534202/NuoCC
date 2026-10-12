@@ -35,3 +35,9 @@ endif()
 message(STATUS "NuoCC will generate ${NUOCC_TARGET} assembly")
 
 add_executable(nuocc ${SRC})
+
+# The runtime the generated programs are linked with, which holds printint()
+# and printchar(): the language may call them but does not define them. The
+# path is fixed here so that the compiler can be run from anywhere.
+target_compile_definitions(nuocc PRIVATE
+    NUOCC_RUNTIME="${PROJECT_SOURCE_DIR}/lib/printint.c")

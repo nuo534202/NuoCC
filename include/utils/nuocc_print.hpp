@@ -6,6 +6,7 @@
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "nodes/nuocc_scanner_nodes.hpp"
 #include "nuocc_scanner.hpp"
+#include "utils/nuocc_types.hpp"
 
 namespace nuocc
 {
@@ -17,18 +18,18 @@ namespace nuocc
  */
 std::string NodeTagToString(const NodeTag& tag);
 
-#ifdef NDEBUG
-
-/* Release Mode */
-#define PRINTTOKENLIST(scanner) ((void)0)
-
-#else
-
-/* Debug Mode */
-#define PRINTTOKENLIST(scanner) PrintTokenList(scanner)
-
+/*
+ * Print the tokens the scanner read, one per line, which is what the -T
+ * flag asks for. It is always compiled in: what is printed is asked for
+ * on the command line rather than decided when the compiler is built.
+ */
 void PrintTokenList(const Scanner& scanner);
 
-#endif
+/*
+ * Print the whole program as a tree, one node per line, indented by how
+ * deep the node stands. The storage of the globals is printed first, then
+ * each function, the same order the code generator walks them in.
+ */
+void PrintSyntaxTree(const Program& program);
 
 }   /* namespace nuocc */

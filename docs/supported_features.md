@@ -131,3 +131,14 @@
     function which already has one is refused. The parameter names of a
     prototype are only placeholders, since it is the definition which
     gives them to the body.
+25. Compiler Command Line. `nuocc [-vcST] [-o outfile] file [file ...]`
+    compiles one or more source files. Unless `-c` or `-S` says to stop
+    earlier, it also assembles what it generated and links the result into
+    an executable, which is `a.out` or the file `-o` names; the runtime in
+    `lib` is linked in with it, since that is where `printint()` and
+    `printchar()` live. `-c` stops at one object file per input file, `-S`
+    stops at one assembly file, `-v` prints each stage and the command it
+    runs, and `-T` prints the tokens and the syntax tree of every input
+    file. What a compilation produces is written where the compiler is
+    run, named after the input file, and the object files made on the way
+    to an executable are removed once it has been linked.

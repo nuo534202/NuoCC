@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "nodes/nuocc_ast_nodes.hpp"
+
 namespace nuocc
 {
 
@@ -159,9 +161,6 @@ std::string NodeTagToString(const NodeTag& tag)
     return out;
 }
 
-#ifndef NDEBUG
-
-/* Debug Mode */
 void PrintTokenList(const Scanner& scanner)
 {
     const std::vector<NodePtr>& token_list
@@ -197,6 +196,168 @@ void PrintTokenList(const Scanner& scanner)
     }
 }
 
-#endif
+namespace
+{
+
+/* The name of a type, for the line the tree dump prints. */
+std::string TypeName(PrimitiveType type)
+{
+    switch (type)
+    {
+        case PrimitiveType::kVoid:
+            return "void";
+        case PrimitiveType::kChar:
+            return "char";
+        case PrimitiveType::kInt:
+            return "int";
+        case PrimitiveType::kLong:
+            return "long";
+        case PrimitiveType::kVoidPtr:
+            return "void *";
+        case PrimitiveType::kCharPtr:
+            return "char *";
+        case PrimitiveType::kIntPtr:
+            return "int *";
+        case PrimitiveType::kLongPtr:
+            return "long *";
+        default:
+            return "none";
+    }
+}
+
+/* What one node stands for, which is everything about it but its
+ * children. A function call is the only node whose arguments are not
+ * children, so its line names them as well. */
+std::string DescribeNode(const AstNode& node)
+{
+    PrimitiveType type = node.GetType();
+
+    switch (node.GetAstNodeTag())
+    {
+        case A_AstFunction:
+        {
+            const AstFunction *function =
+                static_cast<const AstFunction*>(&node);
+            std::string out = "function " + function->GetSymbol().name;
+            out += " returns " + TypeName(type);
+            out += ", " + std::to_string(function->GetParameters().size());
+            out += " parameters, " + std::to_string(function->GetLocalSize());
+            out += " bytes of locals";
+            return out;
+        }
+        case A_AstDeclare:
+        {
+            const AstDeclare *declare = static_cast<const AstDeclare*>(&node);
+            return "declare " + TypeName(declare->GetSymbol().type) + " " +
+                   declare->GetSymbol().name;
+        }
+        case A_AstPrint:
+            return "print";
+        case A_AstGlue:
+            return "glue";
+        case A_AstIf:
+            return static_cast<const AstIf*>(&node)->HasElse() ? "if else"
+                                                              : "if";
+        case A_AstWhile:
+            return "while";
+        case A_AstReturn:
+            return "return";
+        case A_AstOperator:
+        {
+            const AstOperator *op = static_cast<const AstOperator*>(&node);
+            return "operator " + NodeTagToString(op->GetOpType()) + " : " +
+                   TypeName(type);
+        }
+        case A_AstIntLit:
+        {
+            const AstIntLit *lit = static_cast<const AstIntLit*>(&node);
+            return "int " + std::to_string(lit->GetValue()) + " : " +
+                   TypeName(type);
+        }
+        case A_AstStrLit:
+        {
+            const AstStrLit *lit = static_cast<const AstStrLit*>(&node);
+            return "string \"" + lit->GetText() + "\"";
+        }
+        case A_AstIdentifier:
+        {
+            const AstIdentifier *ident =
+                static_cast<const AstIdentifier*>(&node);
+            return "read " + ident->GetSymbol().name + " : " + TypeName(type);
+        }
+        case A_AstWiden:
+            return "widen to " + TypeName(type);
+        case A_AstScale:
+        {
+            const AstScale *scale = static_cast<const AstScale*>(&node);
+            return "scale by " + std::to_string(scale->GetSize());
+        }
+        case A_AstAddress:
+        {
+            const AstAddress *address = static_cast<const AstAddress*>(&node);
+            return "address of " + address->GetSymbol().name;
+        }
+        case A_AstDeref:
+            return "read through pointer : " + TypeName(type);
+        case A_AstFuncCall:
+        {
+            const AstFuncCall *call = static_cast<const AstFuncCall*>(&node);
+            return "call " + call->GetSymbol().name + " returns " +
+                   TypeName(type) + ", " +
+                   std::to_string(call->GetArguments().size()) + " arguments";
+        }
+        case A_AstNegate:
+            return "negate";
+        case A_AstInvert:
+            return "invert";
+        case A_AstLogNot:
+            return "logical not";
+        case A_AstToBool:
+            return "to condition";
+        case A_AstIncDec:
+        {
+            const AstIncDec *inc = static_cast<const AstIncDec*>(&node);
+            return std::string(inc->IsPost() ? "after" : "before") +
+                   " increment of " + inc->GetSymbol().name + " by " +
+                   std::to_string(inc->GetDelta());
+        }
+        default:
+            return "node";
+    }
+}
+
+void PrintNode(const AstNodePtr& node, int32 depth)
+{
+    if (!node)
+        return;
+
+    std::cout << std::string(depth * 2, ' ') << DescribeNode(*node);
+    std::cout << std::endl;
+
+    /* The arguments of a call are not children, so they are printed
+     * here as if they were, one after another. */
+    if (node->GetAstNodeTag() == A_AstFuncCall)
+    {
+        const AstFuncCall *call = static_cast<const AstFuncCall*>(node.get());
+
+        for (const AstNodePtr& argument : call->GetArguments())
+            PrintNode(argument, depth + 1);
+    }
+
+    PrintNode(node->GetLeft(), depth + 1);
+    PrintNode(node->GetMid(), depth + 1);
+    PrintNode(node->GetRight(), depth + 1);
+}
+
+}   /* namespace */
+
+void PrintSyntaxTree(const Program& program)
+{
+    for (const AstNodePtr& global : program.globals)
+        PrintNode(global, 0);
+
+    for (const AstNodePtr& function : program.functions)
+        PrintNode(function, 0);
+}
 
 }   /* namespace nuocc */

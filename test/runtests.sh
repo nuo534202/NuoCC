@@ -2,9 +2,9 @@
 #
 # Run the NuoCC regression suite.
 #
-# A program in test/testN.c is compiled, assembled, linked with the runtime
-# in lib/, run, and what it printed is compared against the recorded output
-# in test/expected/testN.out. A program in test/errors is the other kind of
+# A program in test/testN.c is compiled and linked by the compiler itself,
+# run, and what it printed is compared against the recorded output in
+# test/expected/testN.out. A program in test/errors is the other kind of
 # test: the compiler has to refuse it, and the message it is refused with is
 # compared against the recorded one beside it.
 #
@@ -14,14 +14,13 @@
 # has been built for this host: an Apple host assembles the arm64 target
 # and every other host assembles the x86_64 one, which is also the target
 # CMake builds by default. Naming one the host cannot assemble shows up as
-# assembly which will not build.
+# assembly which will not build. The assembler and the linker the compiler
+# calls can be named with the CC environment variable.
 
 set -u
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root_dir=$(dirname -- "$script_dir")
-cc_tool=${CC:-cc}
-
 if [ $# -gt 0 ]; then
     nuocc=$1
 else
@@ -74,21 +73,10 @@ programs=$(
 for name in $programs; do
     source=$script_dir/$name.c
     expected=$script_dir/expected/$name.out
-    rm -f "$work_dir/asm_out.txt"
 
-    if ! (cd "$work_dir" && "$nuocc" "$source" >compiler.log 2>&1); then
-        echo "FAIL $name: the compiler refused it"
+    if ! (cd "$work_dir" && "$nuocc" -o out "$source" >compiler.log 2>&1); then
+        echo "FAIL $name: the compiler could not build it"
         sed -n '1,3p' "$work_dir/compiler.log"
-        failed=$((failed + 1))
-        continue
-    fi
-
-    cp "$work_dir/asm_out.txt" "$work_dir/out.s"
-
-    if ! $cc_tool "$work_dir/out.s" "$root_dir/lib/printint.c" \
-         -o "$work_dir/out" 2>"$work_dir/cc.log"; then
-        echo "FAIL $name: the assembly did not build"
-        sed -n '1,3p' "$work_dir/cc.log"
         failed=$((failed + 1))
         continue
     fi
@@ -119,7 +107,9 @@ for source in "$script_dir"/errors/*.c; do
         continue
     fi
 
-    if (cd "$work_dir" && "$nuocc" "$source" >/dev/null 2>trial.err); then
+    # Nothing has to be assembled or linked to see that the source is
+    # refused, so only the assembly is asked for.
+    if (cd "$work_dir" && "$nuocc" -S "$source" >/dev/null 2>trial.err); then
         echo "FAIL $name: the compiler accepted it"
         failed=$((failed + 1))
         continue
