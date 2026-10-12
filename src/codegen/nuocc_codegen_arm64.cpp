@@ -697,17 +697,22 @@ reg_idx Arm64Codegen::LoadStrAddress(label_idx label)
  */
 reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
 {
-    switch (ValueAt(pointer_type))
+    /*
+     * How much is read is decided by the size of what the pointer points
+     * at, which is what makes reading through a pointer to a pointer read
+     * a whole address.
+     */
+    switch (PrimitiveSize(ValueAt(pointer_type)))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tldrb\t" << wreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tldrsw\t" << xreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
-        case PrimitiveType::kLong:
+        case 8:
             ofs_ << "\tldr\t" << xreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
@@ -728,19 +733,15 @@ void Arm64Codegen::StoreDeref(reg_idx value_reg,
     reg_idx address_reg,
     PrimitiveType type)
 {
-    switch (type)
+    switch (PrimitiveSize(type))
     {
-        case PrimitiveType::kChar:
+        case 1:
             ofs_ << "\tstrb\t" << wreg_list_[value_reg] << ", [";
             break;
-        case PrimitiveType::kInt:
+        case 4:
             ofs_ << "\tstr\t" << wreg_list_[value_reg] << ", [";
             break;
-        case PrimitiveType::kLong:
-        case PrimitiveType::kVoidPtr:
-        case PrimitiveType::kCharPtr:
-        case PrimitiveType::kIntPtr:
-        case PrimitiveType::kLongPtr:
+        case 8:
             ofs_ << "\tstr\t" << xreg_list_[value_reg] << ", [";
             break;
         default:

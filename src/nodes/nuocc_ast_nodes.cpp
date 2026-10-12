@@ -99,7 +99,7 @@ int32 AstIntLit::GetValue() const
 
 /* AstStrLit */
 AstStrLit::AstStrLit(const std::string& text)
-    : AstNode(A_AstStrLit, PrimitiveType::kCharPtr),
+    : AstNode(A_AstStrLit, PointerTo(PrimitiveType::kChar)),
       text_(text) {}
 
 const std::string& AstStrLit::GetText() const

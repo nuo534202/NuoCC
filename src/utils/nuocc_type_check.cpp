@@ -7,8 +7,31 @@
 namespace nuocc
 {
 
+namespace
+{
+
+/*
+ * The bits of a type which count its levels of indirection. The rest of
+ * the type says which primitive type it is built from, so no level of
+ * indirection can reach into it.
+ */
+constexpr uint8 kIndirectionMask = 0x0F;
+
+/* A type with the given number of levels of indirection. */
+PrimitiveType WithIndirection(PrimitiveType type, uint8 levels)
+{
+    const uint8 base = static_cast<uint8>(type) & ~kIndirectionMask;
+
+    return static_cast<PrimitiveType>(base | levels);
+}
+
+}   /* namespace */
+
 bool IsIntType(PrimitiveType type)
 {
+    if (IsPointerType(type))
+        return false;
+
     switch (type)
     {
         case PrimitiveType::kChar:
@@ -22,20 +45,25 @@ bool IsIntType(PrimitiveType type)
 
 bool IsPointerType(PrimitiveType type)
 {
-    switch (type)
-    {
-        case PrimitiveType::kVoidPtr:
-        case PrimitiveType::kCharPtr:
-        case PrimitiveType::kIntPtr:
-        case PrimitiveType::kLongPtr:
-            return true;
-        default:
-            return false;
-    }
+    return Indirection(type) != 0;
+}
+
+uint8 Indirection(PrimitiveType type)
+{
+    return static_cast<uint8>(type) & kIndirectionMask;
+}
+
+PrimitiveType BaseType(PrimitiveType type)
+{
+    return WithIndirection(type, 0);
 }
 
 int32 PrimitiveSize(PrimitiveType type)
 {
+    /* Every pointer takes the same amount of room, whatever it points at. */
+    if (IsPointerType(type))
+        return 8;
+
     switch (type)
     {
         case PrimitiveType::kChar:
@@ -43,12 +71,6 @@ int32 PrimitiveSize(PrimitiveType type)
         case PrimitiveType::kInt:
             return 4;
         case PrimitiveType::kLong:
-            return 8;
-        /* Every pointer takes the same amount of room, whatever it points at. */
-        case PrimitiveType::kVoidPtr:
-        case PrimitiveType::kCharPtr:
-        case PrimitiveType::kIntPtr:
-        case PrimitiveType::kLongPtr:
             return 8;
         default:
             return 0;
@@ -65,42 +87,31 @@ int32 SymbolStorageSize(const Symbol& symbol)
 
 PrimitiveType PointerTo(PrimitiveType type)
 {
-    switch (type)
+    if (BaseType(type) == PrimitiveType::kNone)
     {
-        case PrimitiveType::kVoid:
-            return PrimitiveType::kVoidPtr;
-        case PrimitiveType::kChar:
-            return PrimitiveType::kCharPtr;
-        case PrimitiveType::kInt:
-            return PrimitiveType::kIntPtr;
-        case PrimitiveType::kLong:
-            return PrimitiveType::kLongPtr;
-        default:
-            break;
+        std::cerr << "Error: there is no pointer to this type!" << std::endl;
+        std::exit(1);
     }
 
-    std::cerr << "Error: there is no pointer to this type yet!" << std::endl;
-    std::exit(1);
+    if (Indirection(type) == kIndirectionMask)
+    {
+        std::cerr << "Error: a type cannot be a pointer that many times!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    return WithIndirection(type, Indirection(type) + 1);
 }
 
 PrimitiveType ValueAt(PrimitiveType type)
 {
-    switch (type)
+    if (!IsPointerType(type))
     {
-        case PrimitiveType::kVoidPtr:
-            return PrimitiveType::kVoid;
-        case PrimitiveType::kCharPtr:
-            return PrimitiveType::kChar;
-        case PrimitiveType::kIntPtr:
-            return PrimitiveType::kInt;
-        case PrimitiveType::kLongPtr:
-            return PrimitiveType::kLong;
-        default:
-            break;
+        std::cerr << "Error: this type is not a pointer!" << std::endl;
+        std::exit(1);
     }
 
-    std::cerr << "Error: this type is not a pointer!" << std::endl;
-    std::exit(1);
+    return WithIndirection(type, Indirection(type) - 1);
 }
 
 namespace

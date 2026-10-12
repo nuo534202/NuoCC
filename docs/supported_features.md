@@ -31,8 +31,10 @@
    or of an element of an array, written `&b[2]`, and undoes itself with
    a `*`, so `&*y` is `y`. `*` reads through anything which holds an
    address, so a parenthesised expression counts too: `*(y + 2)` is the
-   value two values along from where `y` points. A pointer to a pointer
-   has no type of its own yet.
+   value two values along from where `y` points. A pointer may point at
+   another pointer, so `char **row` holds the address of a `char *`: the
+   `*` of it is that `char *` and a second `*` is the `char` at the end of
+   it.
 8. Simple `print` statement.
 9. If-Else Statements.
 10. While Loops.
@@ -96,8 +98,9 @@
     `int a[2], b;` is refused, and the address of the whole array is not a
     value which may be stored into, so `a= p;` and `a++;` are refused. One
     dimension is known so far; a size which is zero, is not a number, or
-    does not fit in memory, an array of a type which cannot hold a value
-    such as `void a[2];`, and an array of a pointer type are all refused.
+    does not fit in memory, and an array of a type which cannot hold a
+    value such as `void a[2];` are refused. The elements may be pointers,
+    so `char *words[3]` is a row of three of them.
 21. Character Literals. `'a'` is one character between two single quotes,
     has the value of that character's code, and has the type `char`, so it
     may be assigned to a `char` and passed to a function like any other
@@ -142,3 +145,11 @@
     file. What a compilation produces is written where the compiler is
     run, named after the input file, and the object files made on the way
     to an executable are removed once it has been linked.
+26. Pointers at Any Depth. A type records how many levels of pointer it
+    has, so a `char **` is as ordinary a type as a `char *`: it may be
+    declared, assigned, passed to a function, held in an array and read
+    through more than once, and the type checks which already refuse a
+    mismatched pointer apply at every level. Adding to a pointer of any
+    depth moves it on by the size of what it points at, which for a
+    pointer is eight bytes. Fifteen levels are as many as a type has room
+    for.

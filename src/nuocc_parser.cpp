@@ -399,19 +399,6 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
         std::exit(1);
     }
 
-    /*
-     * An array is measured from its first element, so indexing it asks for
-     * the address of that element: a pointer to the element type. That
-     * pointer does not exist yet when the elements are pointers themselves,
-     * the same way an int pointer to a pointer is refused.
-     */
-    if (IsPointerType(element_type))
-    {
-        std::cerr << "Error: there is no pointer to this type yet!";
-        std::cerr << std::endl;
-        std::exit(1);
-    }
-
     /* The room for the whole array has to be countable in bytes. */
     if (element_count > std::numeric_limits<int32>::max() / element_size)
     {

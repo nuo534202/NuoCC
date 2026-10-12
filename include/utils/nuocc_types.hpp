@@ -32,22 +32,22 @@ using label_idx = uint32;
 constexpr int32 kMaxArguments = 6;
 
 /*
- * The primitive type of a value. kNone marks the trees which are not
- * expressions at all, such as statements and declarations.
+ * The type of a value. The bottom four bits of a type are how many levels
+ * of indirection it has and the rest of it is which primitive type it is
+ * built from, so a char is kChar and a char ** is two levels above it.
+ * Only the primitive types are named here: the helpers in
+ * utils/nuocc_type_check.hpp are what give a type one more level of
+ * indirection and take one away, and nothing else reads the levels for
+ * itself. kNone marks the trees which are not expressions at all, such as
+ * statements and declarations.
  */
 enum class PrimitiveType : uint8
 {
-    kNone = 0,
-    kVoid,
-    kChar,
-    kInt,
-    kLong,
-    /* A pointer to one of the types above. There is one level of these for
-     * now; a pointer to a pointer has no type of its own yet. */
-    kVoidPtr,
-    kCharPtr,
-    kIntPtr,
-    kLongPtr
+    kNone = 0x00,
+    kVoid = 0x10,
+    kChar = 0x20,
+    kInt = 0x30,
+    kLong = 0x40
 };
 
 /* What a symbol names. */

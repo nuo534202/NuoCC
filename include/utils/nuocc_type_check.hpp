@@ -18,6 +18,14 @@ bool IsIntType(PrimitiveType type);
 bool IsPointerType(PrimitiveType type);
 
 /*
+ * How many levels of indirection a type has, and the primitive type which
+ * is left when they are taken away: a char ** has two levels, and char
+ * beneath them.
+ */
+uint8 Indirection(PrimitiveType type);
+PrimitiveType BaseType(PrimitiveType type);
+
+/*
  * The size in bytes of a primitive type on the target machine. A size of
  * zero means the type cannot hold a value at all.
  */
@@ -31,7 +39,8 @@ int32 SymbolStorageSize(const Symbol& symbol);
 
 /*
  * The type which is a pointer to the given type, and the type a given
- * pointer type points at. Both die on a type which has no answer.
+ * pointer type points at, which is one level of indirection less. Both die
+ * on a type which has no answer.
  */
 PrimitiveType PointerTo(PrimitiveType type);
 PrimitiveType ValueAt(PrimitiveType type);

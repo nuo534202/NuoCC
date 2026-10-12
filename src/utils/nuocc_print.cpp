@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "nodes/nuocc_ast_nodes.hpp"
+#include "utils/nuocc_type_check.hpp"
 
 namespace nuocc
 {
@@ -199,30 +200,34 @@ void PrintTokenList(const Scanner& scanner)
 namespace
 {
 
-/* The name of a type, for the line the tree dump prints. */
+/* The name of a type, for the line the tree dump prints: the primitive
+ * type and one star for every level of indirection it has. */
 std::string TypeName(PrimitiveType type)
 {
-    switch (type)
+    std::string name;
+
+    switch (BaseType(type))
     {
         case PrimitiveType::kVoid:
-            return "void";
+            name = "void";
+            break;
         case PrimitiveType::kChar:
-            return "char";
+            name = "char";
+            break;
         case PrimitiveType::kInt:
-            return "int";
+            name = "int";
+            break;
         case PrimitiveType::kLong:
-            return "long";
-        case PrimitiveType::kVoidPtr:
-            return "void *";
-        case PrimitiveType::kCharPtr:
-            return "char *";
-        case PrimitiveType::kIntPtr:
-            return "int *";
-        case PrimitiveType::kLongPtr:
-            return "long *";
+            name = "long";
+            break;
         default:
             return "none";
     }
+
+    for (uint8 level = 0; level < Indirection(type); level++)
+        name += " *";
+
+    return name;
 }
 
 /* What one node stands for, which is everything about it but its
