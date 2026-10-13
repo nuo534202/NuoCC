@@ -54,12 +54,13 @@
 14. Global Variables. A declaration outside every function declares a
     variable which every function can use. One declaration may name
     several variables of the same type, written `int x, y, z;`, and the
-    same is allowed for the variables declared inside a function. The
-    `*` of a pointer type belongs to the declaration and not to the name,
-    so it is written once: `char *b;` and not `char *b, *c;`. A name has
-    to be declared before it is used, so a function can only reach the
-    global variables declared above it. The variables are stored one
-    after another in the order they are declared.
+    same is allowed for the variables declared inside a function. Every
+    name of the list carries its own type: the `*`s and the array size
+    written with a name are what give it a pointer or an array on top of
+    the base type, so `char *b, c;` declares a pointer and a plain `char`.
+    A name has to be declared before it is used, so a function can only
+    reach the global variables declared above it. The variables are stored
+    one after another in the order they are declared.
 15. Pointer Arithmetic. An integer may be added to or subtracted from a
     pointer, and is scaled by the size of what the pointer points at, so
     `&c + 1` is the address of the next value of `c`'s type and not the
@@ -94,10 +95,11 @@
     stores and what lets an array be given wherever a pointer is wanted,
     and the address of an element is taken with `&a[2]`. A pointer may be
     indexed the same way, so `p[4]` reads just as `a[4]` does. Every
-    element starts out zero. An array declares one name only, so
-    `int a[2], b;` is refused, and the address of the whole array is not a
-    value which may be stored into, so `a= p;` and `a++;` are refused. One
-    dimension is known so far; a size which is zero, is not a number, or
+    element starts out zero. An array may stand in a declaration beside
+    other names, since each name brings its own size: `int a[2], b;`
+    declares an array and a plain variable. The address of the whole array
+    is not a value which may be stored into, so `a= p;` and `a++;` are
+    refused. One dimension is known so far; a size which is zero, is not a number, or
     does not fit in memory, and an array of a type which cannot hold a
     value such as `void a[2];` are refused. The elements may be pointers,
     so `char *words[3]` is a row of three of them.
@@ -329,3 +331,21 @@
     `for (x = 0, y = 1; x < 6; x = x + 1, y = y + 2)` initializes and steps
     two variables at once. Either of those clauses may be left empty, as
     `for (; x < 5; x = x + 1)` does.
+
+35. Declaration Lists and a Type for Every Name (acwj Stage 39,
+    `39_Var_Initialisation_pt1`). The type at the front of a declaration
+    is only the base of every type the declaration gives: each name adds
+    its own `*`s and its own `[size]`, so one declaration may name plain
+    values, pointers and arrays at once.
+
+        int   a, *b, **c;
+        char *e, f;             /* e is a pointer, f is a plain char */
+        int   g, h[3], *i[4];
+
+    The same holds wherever a type names something. A member of a struct
+    or a union may be a pointer or an array of its own, and a function may
+    take a pointer of its own with every parameter: `int f(int a, char
+    *b);`. A typedef may name a pointer, so `typedef char *charptr;` makes
+    `charptr` stand for `char *`, and a function may return a pointer, so
+    `char *g();` declares one. Initializers are not part of the language
+    yet, so a value may not be given where a name is declared.

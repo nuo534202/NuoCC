@@ -84,12 +84,19 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
         return;
     }
 
-    std::string name = MatchIdentifier(token_list, i, "a name");
-
-    if (TokenTag(token_list[i]) == T_LParen)
+    /*
+     * A function declares a name of its own, and it is told from a
+     * variable before the name is read: the stars come first and a '('
+     * after the name follows.
+     */
+    if (IsFunctionDeclarator(token_list, i))
     {
+        TypeRef return_type = ParseStars(token_list, i, type);
+        std::string name = MatchIdentifier(token_list, i, "a function name");
+
         /* A prototype declares no body, so it adds no function. */
-        AstNodePtr function = FunctionDeclaration(token_list, i, type, name);
+        AstNodePtr function =
+            FunctionDeclaration(token_list, i, return_type, name);
 
         if (function)
             program.functions.push_back(std::move(function));
@@ -97,35 +104,19 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
         return;
     }
 
-    /* A '[' after the name declares an array of that many elements. */
-    if (TokenTag(token_list[i]) == T_LBracket)
-    {
-        Symbol symbol = ArrayDeclaration(token_list, i, type, name, storage);
-        symbol_table_.AddSymbol(symbol);
-
-        Match(token_list, i, T_Semicolon, ";");
-
-        if (!is_extern)
-            program.globals.push_back(std::make_unique<AstDeclare>(symbol));
-
-        return;
-    }
-
-    /*
-     * Every name of the list is declared, but only the ones whose storage
-     * belongs here are given any: an extern name is left for the file
-     * which defines it.
-     */
-    std::vector<AstNodePtr> declarations;
-    IdentifierList(token_list, i, type, name, declarations, storage);
+    std::vector<Symbol> symbols = VariableList(token_list, i, type, storage);
 
     Match(token_list, i, T_Semicolon, ";");
 
-    if (!is_extern)
-    {
-        for (AstNodePtr& declaration : declarations)
-            program.globals.push_back(std::move(declaration));
-    }
+    /*
+     * The storage belongs here for every name but an extern one, which is
+     * left for the source file which defines it.
+     */
+    if (is_extern)
+        return;
+
+    for (const Symbol& symbol : symbols)
+        program.globals.push_back(std::make_unique<AstDeclare>(symbol));
 }
 
 /*
@@ -501,57 +492,80 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     if (TokenTag(token_list[i]) == T_Semicolon && type_definition_)
         return nullptr;
 
-    std::string name = MatchIdentifier(token_list, i, "a variable name");
+    /* The declaration may name more than one variable of that base type. */
+    std::vector<Symbol> symbols = VariableList(token_list, i, type, storage);
 
-    if (TokenTag(token_list[i]) == T_LBracket)
-    {
-        Symbol symbol = ArrayDeclaration(token_list, i, type, name, storage);
-        symbol_table_.AddSymbol(symbol);
-
-        return std::make_unique<AstDeclare>(symbol);
-    }
-
-    /* The declaration may name more than one variable of that type. */
     std::vector<AstNodePtr> declarations;
-    IdentifierList(token_list, i, type, name, declarations, storage);
+
+    for (const Symbol& symbol : symbols)
+        declarations.push_back(std::make_unique<AstDeclare>(symbol));
 
     return GlueStatements(declarations);
 }
 
 /*
- * identifier_list: identifier | identifier ',' identifier_list  ;
+ * declarator_list: declarator | declarator ',' declarator_list  ;
+ *
+ * declarator: opt_pointer identifier
+ *      |   opt_pointer identifier '[' number ']'
+ *      ;
+ *
+ * Every name adds its own stars and its own array size to the base type, so
+ * one declaration can hold values, pointers and arrays at once. A name is
+ * declared as soon as it has been read, so a later one can be written in
+ * terms of the ones before it.
  */
-void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
+std::vector<Symbol> Parser::VariableList(const std::vector<NodePtr>& token_list,
     idx_t& i,
-    const TypeRef& type,
-    const std::string& name,
-    std::vector<AstNodePtr>& declarations,
+    const TypeRef& base,
     StorageClass storage)
 {
-    std::string current = name;
+    std::vector<Symbol> symbols;
 
     while (true)
     {
-        Symbol symbol{.name = current,
+        TypeRef type = ParseStars(token_list, i, base);
+        std::string name = MatchIdentifier(token_list, i, "a variable name");
+
+        Symbol symbol{.name = name,
                       .type = type.type,
                       .composite = type.composite,
                       .stype = StructuralType::kVariable,
-                      .storage = storage,
-                      .stack_offset = storage == StorageClass::kLocal
-                                          ? AllocateLocal(type)
-                                          : 0};
+                      .storage = storage};
+
+        if (TokenTag(token_list[i]) == T_LBracket)
+        {
+            /* A '[' after the name makes it an array of that many
+             * elements rather than one value. */
+            symbol = ArrayDeclaration(token_list, i, type, name, storage);
+        }
+        else if (storage == StorageClass::kLocal)
+        {
+            /* An ordinary local takes room in its function's frame. */
+            symbol.stack_offset = AllocateLocal(type);
+        }
 
         symbol_table_.AddSymbol(symbol);
+        symbols.push_back(symbol);
 
-        declarations.push_back(std::make_unique<AstDeclare>(symbol));
-
-        /* A ',' continues the list with another name of the same type. */
+        /* A ',' continues the list with another name of that base type. */
         if (TokenTag(token_list[i]) != T_Comma)
             break;
 
         i++;
-        current = MatchIdentifier(token_list, i, "a variable name");
     }
+
+    return symbols;
+}
+
+bool Parser::IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
+    idx_t i) const
+{
+    while (TokenTag(token_list[i]) == T_Star)
+        i++;
+
+    return TokenTag(token_list[i]) == T_Identifier &&
+           TokenTag(token_list[i + 1]) == T_LParen;
 }
 
 /*
@@ -1025,6 +1039,8 @@ std::vector<Symbol> Parser::FunctionParameters(
         }
 
         TypeRef type = ParseType(token_list, i);
+        type = ParseStars(token_list, i, type);
+
         if (type.type == PrimitiveType::kComposite) {
             std::cerr << "syntax error: passing a composite value"
                       << " is not supported yet!" << std::endl;
@@ -1590,8 +1606,9 @@ AstNodePtr Parser::ArrayAccess(AstNodePtr base,
 }
 
 /*
- * Parse the type which starts a declaration, along with the '*' of every
- * pointer level, and step over all of it.
+ * Parse the base type which starts a declaration and step over it, without
+ * the stars: those belong to the name they stand in front of and are read
+ * with it, so that each name of a list can bring its own.
  */
 TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
 {
@@ -1651,6 +1668,24 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
             std::cerr << "syntax error: expect a type!" << std::endl;
             std::exit(1);
     }
+
+    return type;
+}
+
+/*
+ * opt_pointer: <empty>
+ *      |      '*' opt_pointer
+ *      ;
+ *
+ * Add a level of indirection to the base type for every star which stands
+ * in front of one name, which is what makes `int *b` a pointer to an int
+ * and `int a, *b` a variable and a pointer in one declaration.
+ */
+TypeRef Parser::ParseStars(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    const TypeRef& base)
+{
+    TypeRef type = base;
 
     while (TokenTag(token_list[i]) == T_Star)
     {
@@ -1854,6 +1889,11 @@ void Parser::TypedefDeclaration(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_Typedef, "typedef");
 
     TypeRef type = ParseType(token_list, i);
+
+    /* The stars before the name are part of the type it names, so
+     * `typedef char *charptr;` gives a name to a pointer to a char. */
+    type = ParseStars(token_list, i, type);
+
     std::string name = MatchIdentifier(token_list, i, "a type name");
 
     if (symbol_table_.FindSymbol(name))
@@ -1894,6 +1934,8 @@ void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
         }
 
         TypeRef member_type = ParseType(token_list, i);
+        member_type = ParseStars(token_list, i, member_type);
+
         std::string name = MatchIdentifier(token_list, i, "a member name");
 
         Symbol member{.name = name,

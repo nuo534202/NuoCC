@@ -37,33 +37,40 @@ opt_parameter_list: <empty>
     | parameter_list
     ;
 
-parameter_list: type identifier
-    | type identifier ',' parameter_list
+parameter_list: parameter
+    | parameter ',' parameter_list
+    ;
+
+parameter: type opt_pointer identifier
     ;
 
 /*
- * An array declares one name only, so it never joins an identifier_list.
- * The size is a fixed number of elements and may not be zero, and the
- * elements may not be void or composite values.
+ * Every name of a declaration brings its own stars and its own array size,
+ * so plain values, pointers and arrays may stand in one list. An array
+ * holds a fixed number of elements, which may not be zero, and every
+ * element has to be a type which can hold a value.
  */
-var_declaration: type identifier_list ';'
-    | type identifier '[' number ']' ';'
+var_declaration: type declarator_list ';'
     ;
 
-identifier_list: identifier
-    | identifier ',' identifier_list
+declarator_list: declarator
+    | declarator ',' declarator_list
+    ;
+
+declarator: opt_pointer identifier
+    | opt_pointer identifier '[' number ']'
     ;
 
 /*
- * A type is a keyword with the stars which follow it, a composite or an
- * enum named by its tag, or a name made with typedef, which stands for
- * whatever type it was declared to be. Only the keywords and the tags may
- * be followed by stars here: a typedef already carries the stars its own
- * declaration gave it.
+ * A type is a keyword, a composite or an enum named by its tag, or a name
+ * made with typedef, which stands for whatever type it was declared to be.
+ * Only the base type is written here: the stars belong to the declarator,
+ * which is where each name of a declaration is given its own, so that
+ * `int a, *b;` declares a variable and a pointer in one declaration.
  */
-type: type_keyword opt_pointer
-    | composite_type opt_pointer
-    | enum_type opt_pointer
+type: type_keyword
+    | composite_type
+    | enum_type
     | identifier
     ;
 
@@ -119,8 +126,7 @@ member_list: member
     | member member_list
     ;
 
-member: type identifier ';'
-    | type identifier '[' number ']' ';'
+member: type declarator ';'
     ;
 
 opt_pointer: <empty>
@@ -152,8 +158,7 @@ statement: compound_statement
 print_statement: 'print' expression ';'
     ;
 
-declaration: opt_extern type identifier_list ';'
-    | opt_extern type identifier '[' number ']' ';'
+declaration: opt_extern type declarator_list ';'
     | typedef_declaration
     ;
 
@@ -162,7 +167,7 @@ declaration: opt_extern type identifier_list ';'
  * the name becomes another way of writing that type. A type definition
  * which names nothing may stand alone, as `enum fred { apple };` does.
  */
-typedef_declaration: 'typedef' type identifier ';'
+typedef_declaration: 'typedef' type opt_pointer identifier ';'
     ;
 
 function_call: identifier '(' opt_expression_list ')'

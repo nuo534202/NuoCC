@@ -52,9 +52,11 @@ private:
      * global_declaration: function_declaration | var_declaration  ;
      *
      * Both start with a type and a name, so it is the token after the name
-     * which tells them apart: a '(' begins the parameter list of a
-     * function, a '[' the size of an array, and a ',' or a ';' continues
-     * a list of variables.
+     * which tells them apart: a '(' begins the parameter list of a function,
+     * a '[' the size of an array, and a ',' or a ';' continues a list of
+     * variables. A function is told from a variable before its name is read,
+     * because the stars of a declaration come before the name and a list of
+     * names may follow it.
      */
     void GlobalDeclaration(const std::vector<NodePtr>& token_list,
         idx_t& i,
@@ -75,22 +77,38 @@ private:
         const std::string& name);
 
     /*
-     * var_declaration: type identifier_list ';'  ;
+     * var_declaration: type declarator_list ';'  ;
      *
-     * identifier_list: identifier | identifier ',' identifier_list  ;
+     * declarator_list: declarator
+     *      |           declarator ',' declarator_list
+     *      ;
      *
-     * The type and the first name have already been parsed by the caller,
-     * so what is left is every ', name' which follows. Each name is
-     * declared as a variable of that type, either at the top level of the
-     * program or in the current function. The semicolon is left to the
-     * caller, the same way it is for every other statement.
+     * declarator: opt_pointer identifier
+     *      |   opt_pointer identifier '[' number ']'
+     *      ;
+     *
+     * The type has already been parsed by the caller, but it is only the
+     * base of every type in the list: each name adds its own stars and its
+     * own array size to it, so `int a, *b, c[40], *d[100];` declares four
+     * variables of four different types. Each name is declared as it is
+     * read, and the symbols come back in the order they are written so that
+     * the caller can give the ones which belong to it some storage. The
+     * semicolon is left to the caller, the same way it is for every other
+     * statement.
      */
-    void IdentifierList(const std::vector<NodePtr>& token_list,
-                        idx_t& i,
-                        const TypeRef& type,
-                        const std::string& name,
-                        std::vector<AstNodePtr>& declarations,
-                        StorageClass storage);
+    std::vector<Symbol> VariableList(const std::vector<NodePtr>& token_list,
+                                     idx_t& i,
+                                     const TypeRef& base,
+                                     StorageClass storage);
+
+    /*
+     * Whether the name which follows the type declares a function: some
+     * stars, a name and a '('. A function and a variable are told apart
+     * before the name is read, because the stars belong to the declaration
+     * and a variable may be the first of a list.
+     */
+    bool IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
+                              idx_t i) const;
 
     /*
      * array_declaration: identifier '[' number ']'  ;
@@ -329,12 +347,29 @@ private:
                            idx_t& i);
 
     /*
-     * Parse the type which starts a declaration and step over it. The
-     * `type_definition_` flag is left saying whether the type was written
-     * as a definition of a tag, which is the one shape a declaration may
-     * end at without naming anything, as `enum fred { ... };` does.
+     * Parse the type which starts a declaration and step over it. Only the
+     * base type is read: the stars of a declarator belong to the name they
+     * stand in front of, so they are read by ParseStars where that name is
+     * read. The `type_definition_` flag is left saying whether the type was
+     * written as a definition of a tag, which is the one shape a
+     * declaration may end at without naming anything, as `enum fred { ... };`
+     * does.
      */
     TypeRef ParseType(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
+     * opt_pointer: <empty>
+     *      |      '*' opt_pointer
+     *      ;
+     *
+     * Read the stars in front of one name and add a level of indirection to
+     * the base type for each of them. Every declarator has its own, which is
+     * what lets `int a, *b;` declare a variable and a pointer in one
+     * declaration.
+     */
+    TypeRef ParseStars(const std::vector<NodePtr>& token_list,
+                       idx_t& i,
+                       const TypeRef& base);
 
     /*
      * Return the declaration a name refers to, whatever kind of symbol it
