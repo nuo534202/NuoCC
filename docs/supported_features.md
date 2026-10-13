@@ -269,3 +269,13 @@
     level of the program or inside a function. A name declared `extern` is
     addressed the way a global is, so it is the definition, wherever it
     stands, which gives it room.
+
+32. Break and Continue (acwj Stage 36, `36_Break_Continue`). `break;`
+    leaves the loop it stands in at once, and `continue;` begins that
+    loop's next pass. A break jumps to the code after the loop, so a loop
+    within a loop leaves only the one the break is written in. The next
+    pass of a `while` loop begins at its condition, and the next pass of a
+    `for` loop begins at the step written at the end of it, so a continue
+    in a for loop still runs that step. Written where no loop is around
+    it, either one is refused with `there is no loop to break out of!` or
+    `there is no loop to continue!`.

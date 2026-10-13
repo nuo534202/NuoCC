@@ -165,6 +165,20 @@ bool AstIf::HasElse() const
 AstWhile::AstWhile(AstNodePtr& condition, AstNodePtr& body)
     : AstNode(A_AstWhile, PrimitiveType::kNone, condition, body) {}
 
+/* AstFor */
+AstFor::AstFor(AstNodePtr& condition, AstNodePtr& body, AstNodePtr& post)
+    : AstNode(A_AstFor,
+              PrimitiveType::kNone,
+              condition,
+              body,
+              post) {}
+
+/* AstBreak */
+AstBreak::AstBreak() : AstNode(A_AstBreak, PrimitiveType::kNone) {}
+
+/* AstContinue */
+AstContinue::AstContinue() : AstNode(A_AstContinue, PrimitiveType::kNone) {}
+
 /* AstDeclare */
 AstDeclare::AstDeclare(const Symbol& symbol)
     : AstNode(A_AstDeclare, PrimitiveType::kNone),

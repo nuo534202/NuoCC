@@ -220,6 +220,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     }
 
     current_function_type_ = type;
+    loop_level_ = 0;
     AstNodePtr body = CompoundStatement(token_list, i);
 
     current_function_type_ = {};
@@ -339,6 +340,10 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {ForStatement(token_list, i), false};
         case T_Return:
             return {ReturnStatement(token_list, i), true};
+        case T_Break:
+            return {BreakStatement(token_list, i), true};
+        case T_Continue:
+            return {ContinueStatement(token_list, i), true};
         default:
             /*
              * A statement may declare a variable whose type is a name
@@ -575,7 +580,14 @@ AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_While, "while");
 
     AstNodePtr condition = Condition(token_list, i);
+
+    /*
+     * The body stands one loop deeper, so that a break or a continue
+     * written in it finds this loop.
+     */
+    loop_level_++;
     AstNodePtr body = CompoundStatement(token_list, i);
+    loop_level_--;
 
     return std::make_unique<AstWhile>(condition, body);
 }
@@ -610,11 +622,20 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
     ParsedStatement postop = Statement(token_list, i);
     Match(token_list, i, T_RParen, ")");
 
+    /*
+     * The body stands one loop deeper, so that a break or a continue
+     * written in it finds this loop.
+     */
+    loop_level_++;
     AstNodePtr body = CompoundStatement(token_list, i);
+    loop_level_--;
 
-    /* The post statement runs at the end of each pass of the loop. */
-    AstNodePtr loop_body = std::make_unique<AstGlue>(body, postop.tree);
-    AstNodePtr loop = std::make_unique<AstWhile>(condition, loop_body);
+    /*
+     * The step is kept as part of the loop rather than glued to the end of
+     * the body, because a continue goes on to it: `for (i= 0; i < 9; i=
+     * i + 1) { continue; }` still counts.
+     */
+    AstNodePtr loop = std::make_unique<AstFor>(condition, body, postop.tree);
 
     return std::make_unique<AstGlue>(preop.tree, loop);
 }
@@ -648,6 +669,48 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_RParen, ")");
 
     return std::make_unique<AstReturn>(expression);
+}
+
+/*
+ * break_statement: 'break'  ;
+ *
+ * A break leaves the loop it stands in, so it may only be written inside
+ * one; the semicolon is left to the caller.
+ */
+AstNodePtr Parser::BreakStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    if (loop_level_ == 0)
+    {
+        std::cerr << "syntax error: there is no loop to break out of!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_Break, "break");
+
+    return std::make_unique<AstBreak>();
+}
+
+/*
+ * continue_statement: 'continue'  ;
+ *
+ * A continue begins the next pass of the loop it stands in, so it may only
+ * be written inside one; the semicolon is left to the caller.
+ */
+AstNodePtr Parser::ContinueStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    if (loop_level_ == 0)
+    {
+        std::cerr << "syntax error: there is no loop to continue!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_Continue, "continue");
+
+    return std::make_unique<AstContinue>();
 }
 
 /*

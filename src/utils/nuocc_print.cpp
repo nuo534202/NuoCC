@@ -140,6 +140,12 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Extern:
             out = "extern";
             break;
+        case T_Break:
+            out = "break";
+            break;
+        case T_Continue:
+            out = "continue";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;
@@ -299,6 +305,12 @@ std::string DescribeNode(const AstNode& node)
                                                               : "if";
         case A_AstWhile:
             return "while";
+        case A_AstFor:
+            return "for";
+        case A_AstBreak:
+            return "break";
+        case A_AstContinue:
+            return "continue";
         case A_AstReturn:
             return "return";
         case A_AstOperator:

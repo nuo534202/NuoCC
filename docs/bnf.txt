@@ -140,6 +140,8 @@ statement: print_statement
     | while_statement
     | for_statement
     | return_statement
+    | break_statement
+    | continue_statement
     ;
 
 print_statement: 'print' expression ';'
@@ -172,6 +174,16 @@ expression_list: expression
 return_statement: 'return' '(' expression ')'
     ;
 
+/*
+ * A break leaves the loop it stands in and a continue begins that loop's
+ * next pass, so neither may be written where there is no loop around it.
+ */
+break_statement: 'break' ';'
+    ;
+
+continue_statement: 'continue' ';'
+    ;
+
 expression_statement: expression ';'
     ;
 
@@ -185,6 +197,11 @@ if_head: 'if' '(' true_false_expression ')' compound_statement
 while_statement: 'while' '(' true_false_expression ')' compound_statement
     ;
 
+/*
+ * The step between the last two semicolons runs at the end of every pass,
+ * and is where a continue in the body goes on to, so it runs on that pass
+ * as well.
+ */
 for_statement: 'for' '(' statement ';'
                        true_false_expression ';'
                        statement ')' compound_statement

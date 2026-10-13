@@ -58,6 +58,8 @@ typedef enum NodeTag
     T_Enum,
     T_Typedef,
     T_Extern,
+    T_Break,
+    T_Continue,
 
     T_Identifier,
 
@@ -101,7 +103,10 @@ typedef enum AstNodeTag
     A_AstIncDec,
     A_AstStrLit,
     A_AstMember,
-    A_AstAddressExpr
+    A_AstAddressExpr,
+    A_AstFor,
+    A_AstBreak,
+    A_AstContinue
 } AstNodeTag;
 
 }   /* namespace nuocc */

@@ -196,6 +196,42 @@ public:
 };
 
 /*
+ * A for loop, which is a while loop with a step taken at the end of every
+ * pass: the left child holds the condition, the middle child the body and
+ * the right child the statement which runs at the end of the pass. The
+ * right child is null when the loop was written without one. A for loop is
+ * a node of its own and not a while loop because a `continue` goes on to
+ * the step rather than back to the condition.
+ */
+class AstFor : public AstNode
+{
+public:
+    AstFor(AstNodePtr& condition, AstNodePtr& body, AstNodePtr& post);
+    ~AstFor() = default;
+};
+
+/*
+ * Leave the innermost loop, skipping the rest of the body of that pass.
+ */
+class AstBreak : public AstNode
+{
+public:
+    AstBreak();
+    ~AstBreak() = default;
+};
+
+/*
+ * Begin the next pass of the innermost loop, which for a for loop runs the
+ * step written at the end of it.
+ */
+class AstContinue : public AstNode
+{
+public:
+    AstContinue();
+    ~AstContinue() = default;
+};
+
+/*
  * The declaration of a variable. Its symbol records whether the storage is
  * global or belongs to the current function's stack frame.
  */

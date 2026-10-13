@@ -121,6 +121,20 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             GenWhile(root);
             return;
 
+        case A_AstFor:
+            GenFor(root);
+            return;
+
+        case A_AstBreak:
+            /* Leave the loop this statement stands in. */
+            EmitJump(loop_break_label_);
+            return;
+
+        case A_AstContinue:
+            /* Begin the next pass of that loop. */
+            EmitJump(loop_continue_label_);
+            return;
+
         case A_AstReturn:
         {
             reg_idx reg = GenExpr(root->GetLeft());
@@ -207,11 +221,19 @@ void AsmCodegen::GenIf(const AstNodePtr& root)
  *      <body>
  *      jmp Lstart
  * Lend:
+ *
+ * A continue of this loop goes back to Lstart, since there is nowhere else
+ * for the next pass to begin.
  */
 void AsmCodegen::GenWhile(const AstNodePtr& root)
 {
     label_idx start_label = NewLabel();
     label_idx end_label = NewLabel();
+
+    const label_idx saved_break = loop_break_label_;
+    const label_idx saved_continue = loop_continue_label_;
+    loop_break_label_ = end_label;
+    loop_continue_label_ = start_label;
 
     EmitLabel(start_label);
 
@@ -223,6 +245,66 @@ void AsmCodegen::GenWhile(const AstNodePtr& root)
 
     EmitJump(start_label);
     EmitLabel(end_label);
+
+    loop_break_label_ = saved_break;
+    loop_continue_label_ = saved_continue;
+}
+
+/*
+ * Generate the code for a for loop, which is a while loop with a step at
+ * the end of every pass:
+ *
+ * Lstart:
+ *      <condition>, jumping to Lend when it does not hold
+ *      <body>
+ * Lnext:
+ *      <step>
+ *      jmp Lstart
+ * Lend:
+ *
+ * A continue of this loop goes to Lnext and not to Lstart, so that the
+ * step still runs on the pass the continue began.
+ */
+void AsmCodegen::GenFor(const AstNodePtr& root)
+{
+    label_idx start_label = NewLabel();
+    label_idx end_label = NewLabel();
+
+    /*
+     * The step is where a continue goes and so needs a label of its own. A
+     * loop written without one has nothing to skip to, which leaves the
+     * next pass beginning where the condition does.
+     */
+    label_idx next_label = start_label;
+
+    if (root->GetRight())
+        next_label = NewLabel();
+
+    const label_idx saved_break = loop_break_label_;
+    const label_idx saved_continue = loop_continue_label_;
+    loop_break_label_ = end_label;
+    loop_continue_label_ = next_label;
+
+    EmitLabel(start_label);
+
+    GenCondition(root->GetLeft(), end_label);
+    FreeAllRegister();
+
+    GenStatement(root->GetMid());
+    FreeAllRegister();
+
+    if (root->GetRight())
+    {
+        EmitLabel(next_label);
+        GenStatement(root->GetRight());
+        FreeAllRegister();
+    }
+
+    EmitJump(start_label);
+    EmitLabel(end_label);
+
+    loop_break_label_ = saved_break;
+    loop_continue_label_ = saved_continue;
 }
 
 /*

@@ -139,6 +139,7 @@ protected:
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);
     void GenWhile(const AstNodePtr& root);
+    void GenFor(const AstNodePtr& root);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);
@@ -162,6 +163,15 @@ protected:
     label_idx function_end_label_;
     PrimitiveType function_return_type_;
     int32 function_local_size_;
+    /*
+     * Where the two kinds of loop jump leave the loop being generated: a
+     * break goes to the label after it and a continue to the label the
+     * next pass starts at. They are saved and put back around each loop,
+     * so a loop within a loop keeps its own pair. Neither is set while no
+     * loop is open, and the parser refuses a break or a continue there.
+     */
+    label_idx loop_break_label_ = 0;
+    label_idx loop_continue_label_ = 0;
     std::ofstream ofs_;
 };
 
