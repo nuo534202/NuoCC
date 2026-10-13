@@ -71,7 +71,7 @@ private:
      */
     AstNodePtr FunctionDeclaration(const std::vector<NodePtr>& token_list,
         idx_t& i,
-        PrimitiveType type,
+        const TypeRef& type,
         const std::string& name);
 
     /*
@@ -87,7 +87,7 @@ private:
      */
     void IdentifierList(const std::vector<NodePtr>& token_list,
                         idx_t& i,
-                        PrimitiveType type,
+                        const TypeRef& type,
                         const std::string& name,
                         std::vector<AstNodePtr>& declarations,
                         StorageClass storage);
@@ -102,9 +102,36 @@ private:
      */
     Symbol ArrayDeclaration(const std::vector<NodePtr>& token_list,
                             idx_t& i,
-                            PrimitiveType element_type,
+                            const TypeRef& element_type,
                             const std::string& name,
                             StorageClass storage);
+
+    /*
+     * struct_type: 'struct' opt_tag '{' member_list '}'
+     *      |       'struct' tag
+     *      ;
+     *
+     * The `struct` keyword has been read. What follows is either the tag
+     * of a type which is already known, which is how a variable of it, or
+     * a pointer to it, is written, or the members of a new type between
+     * braces. A type may be written without a tag, which is how a type
+     * which is used once and never named again is declared.
+     */
+    TypeRef StructType(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
+     * member_list: type identifier ';'
+     *      |       type identifier '[' number ']' ';'
+     *      |       member_list member_list
+     *      ;
+     *
+     * Every member is given the place it takes inside a value of the
+     * type, and the room the whole type takes is worked out once they
+     * have all been read.
+     */
+    void StructMembers(const std::vector<NodePtr>& token_list,
+                       idx_t& i,
+                       const std::shared_ptr<CompositeType>& type);
 
     AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
@@ -186,8 +213,7 @@ private:
     AstNodePtr ArrayAccess(const std::vector<NodePtr>& token_list, idx_t& i);
 
     /* Parse the type which starts a declaration and step over it. */
-    PrimitiveType ParseType(const std::vector<NodePtr>& token_list,
-                            idx_t& i);
+    TypeRef ParseType(const std::vector<NodePtr>& token_list, idx_t& i);
 
     /*
      * Return the declaration a name refers to, whatever kind of symbol it
@@ -275,7 +301,7 @@ private:
      * Reserve the room one value of a type takes. A type which cannot hold
      * a value at all, such as void, has no room to reserve and is an error.
      */
-    int32 AllocateLocal(PrimitiveType type);
+    int32 AllocateLocal(const TypeRef& type);
 
 private:
     SymbolTable symbol_table_;
@@ -286,6 +312,10 @@ private:
      */
     PrimitiveType current_function_type_ = PrimitiveType::kNone;
     int32 local_stack_size_ = 0;
+
+    /* The struct types the program declared, in the order it declared
+     * them, so that the whole program holds them once it is parsed. */
+    std::vector<std::shared_ptr<CompositeType>> types_;
 };
 
 }   /* namespace nuocc */

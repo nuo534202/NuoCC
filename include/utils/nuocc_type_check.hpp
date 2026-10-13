@@ -27,15 +27,27 @@ PrimitiveType BaseType(PrimitiveType type);
 
 /*
  * The size in bytes of a primitive type on the target machine. A size of
- * zero means the type cannot hold a value at all.
+ * zero means the type cannot hold a value at all. A struct has no size of
+ * its own, so ask ValueSize for one.
  */
 int32 PrimitiveSize(PrimitiveType type);
+
+/*
+ * The room one value of a type takes, and what that value lines up to. A
+ * struct takes the room its definition asks for, which is why the type
+ * comes with the definition it is of.
+ */
+int32 ValueSize(PrimitiveType type,
+                const std::shared_ptr<CompositeType>& composite);
+int32 ValueAlignment(PrimitiveType type,
+                     const std::shared_ptr<CompositeType>& composite);
 
 /*
  * The number of bytes a symbol's storage takes: one value for a variable,
  * one value for every element of an array.
  */
 int32 SymbolStorageSize(const Symbol& symbol);
+int32 SymbolAlignment(const Symbol& symbol);
 
 /*
  * The type which is a pointer to the given type, and the type a given

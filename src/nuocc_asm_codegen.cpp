@@ -255,21 +255,23 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
  */
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
+    const int32 size = SymbolStorageSize(symbol);
+
     ofs_ << "\t.data" << std::endl;
     ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
 
-    if (symbol.stype == StructuralType::kArray)
+    /*
+     * An array and a struct are each one block of room holding everything
+     * they are made of, all of it starting out zero, and the block is
+     * lined up to what it holds so that every part of it lands where its
+     * type says. The label has to come after that alignment or it would
+     * point at the padding in front of the block.
+     */
+    if (symbol.stype == StructuralType::kArray ||
+        symbol.type == PrimitiveType::kStruct)
     {
-        /*
-         * An array is one block of room holding every element, all of
-         * them starting out zero. The block is aligned to one element so
-         * that each of them lands on an address of its own size, and the
-         * label has to come after that alignment or it would point at the
-         * padding in front of the array.
-         */
-        ofs_ << "\t.balign\t" << PrimitiveSize(symbol.type) << std::endl;
-        ofs_ << GlobName(symbol.name) << ":" << std::endl;
-        ofs_ << "\t.space\t" << SymbolStorageSize(symbol) << std::endl;
+        ofs_ << "\t.balign\t" << SymbolAlignment(symbol) << std::endl;
+        ofs_ << GlobName(symbol.name) << ":\t.space\t" << size << std::endl;
         ofs_ << "\t.text" << std::endl;
         return;
     }
@@ -277,7 +279,7 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
     ofs_ << GlobName(symbol.name) << ":\t";
 
     /* How much room the variable needs is decided by its type. */
-    switch (PrimitiveSize(symbol.type))
+    switch (size)
     {
         case 1:
             ofs_ << ".byte";

@@ -201,8 +201,11 @@ namespace
 {
 
 /* The name of a type, for the line the tree dump prints: the primitive
- * type and one star for every level of indirection it has. */
-std::string TypeName(PrimitiveType type)
+ * type and one star for every level of indirection it has. A struct is
+ * named by its tag when it has one, which is the only way the dump can say
+ * which struct a value is of. */
+std::string TypeName(PrimitiveType type,
+    const std::shared_ptr<CompositeType>& composite = nullptr)
 {
     std::string name;
 
@@ -219,6 +222,11 @@ std::string TypeName(PrimitiveType type)
             break;
         case PrimitiveType::kLong:
             name = "long";
+            break;
+        case PrimitiveType::kStruct:
+            name = "struct";
+            if (composite && !composite->name.empty())
+                name += " " + composite->name;
             break;
         default:
             return "none";
@@ -244,7 +252,8 @@ std::string DescribeNode(const AstNode& node)
             const AstFunction *function =
                 static_cast<const AstFunction*>(&node);
             std::string out = "function " + function->GetSymbol().name;
-            out += " returns " + TypeName(type);
+            out += " returns " + TypeName(function->GetSymbol().type,
+                                          function->GetSymbol().composite);
             out += ", " + std::to_string(function->GetParameters().size());
             out += " parameters, " + std::to_string(function->GetLocalSize());
             out += " bytes of locals";
@@ -253,8 +262,9 @@ std::string DescribeNode(const AstNode& node)
         case A_AstDeclare:
         {
             const AstDeclare *declare = static_cast<const AstDeclare*>(&node);
-            return "declare " + TypeName(declare->GetSymbol().type) + " " +
-                   declare->GetSymbol().name;
+            return "declare " + TypeName(declare->GetSymbol().type,
+                                         declare->GetSymbol().composite) +
+                   " " + declare->GetSymbol().name;
         }
         case A_AstPrint:
             return "print";
@@ -288,7 +298,8 @@ std::string DescribeNode(const AstNode& node)
         {
             const AstIdentifier *ident =
                 static_cast<const AstIdentifier*>(&node);
-            return "read " + ident->GetSymbol().name + " : " + TypeName(type);
+            return "read " + ident->GetSymbol().name + " : " +
+                   TypeName(type, ident->GetSymbol().composite);
         }
         case A_AstWiden:
             return "widen to " + TypeName(type);
@@ -308,7 +319,7 @@ std::string DescribeNode(const AstNode& node)
         {
             const AstFuncCall *call = static_cast<const AstFuncCall*>(&node);
             return "call " + call->GetSymbol().name + " returns " +
-                   TypeName(type) + ", " +
+                   TypeName(type, call->GetSymbol().composite) + ", " +
                    std::to_string(call->GetArguments().size()) + " arguments";
         }
         case A_AstNegate:
@@ -358,6 +369,26 @@ void PrintNode(const AstNodePtr& node, int32 depth)
 
 void PrintSyntaxTree(const Program& program)
 {
+    for (const std::shared_ptr<CompositeType>& type : program.types)
+    {
+        std::cout << "struct ";
+        std::cout << (type->name.empty() ? "(no tag)" : type->name);
+        std::cout << ": " << type->size << " bytes, aligned to ";
+        std::cout << type->alignment << std::endl;
+
+        for (const Symbol& member : type->members)
+        {
+            std::cout << "  at " << member.member_offset << ": ";
+            std::cout << TypeName(member.type, member.composite);
+            std::cout << " " << member.name;
+
+            if (member.stype == StructuralType::kArray)
+                std::cout << "[" << member.element_count << "]";
+
+            std::cout << std::endl;
+        }
+    }
+
     for (const AstNodePtr& global : program.globals)
         PrintNode(global, 0);
 

@@ -1,0 +1,1 @@
+syntax error: arithmetic on a pointer to a struct is not supported yet!

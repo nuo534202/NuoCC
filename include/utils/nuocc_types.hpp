@@ -47,8 +47,19 @@ enum class PrimitiveType : uint8
     kVoid = 0x10,
     kChar = 0x20,
     kInt = 0x30,
-    kLong = 0x40
+    kLong = 0x40,
+    /*
+     * A struct is a type of its own, but which struct a value is of is
+     * said by the definition it carries and not by the type value, so
+     * that a struct and a pointer to it are put together the same way a
+     * char and its pointers are.
+     */
+    kStruct = 0x50
 };
+
+/* The definition of a struct type, which a value of the type carries so
+ * that its members can be reached from it. */
+struct CompositeType;
 
 /* What a symbol names. */
 enum class StructuralType : uint8
@@ -67,7 +78,10 @@ enum class StructuralType : uint8
 enum class StorageClass : uint8
 {
     kGlobal = 0,
-    kLocal
+    kLocal,
+    /* A member of a struct lives inside a value of the struct rather than
+     * in storage of its own. */
+    kMember
 };
 
 /* An entry of the symbol table. */
@@ -75,6 +89,12 @@ struct Symbol
 {
     std::string name;
     PrimitiveType type = PrimitiveType::kNone;
+    /*
+     * The struct a value of this type is. A pointer to a struct carries
+     * the definition it points at, so the members of the type a value is
+     * of are reachable however many levels of pointer there are.
+     */
+    std::shared_ptr<CompositeType> composite;
     StructuralType stype = StructuralType::kVariable;
     StorageClass storage = StorageClass::kGlobal;
     int32 stack_offset = 0;
@@ -90,6 +110,40 @@ struct Symbol
     bool has_body = false;
     /* The number of elements of an array, and zero for anything else. */
     int32 element_count = 0;
+    /* Where a member starts, measured from the base of its struct. */
+    int32 member_offset = 0;
+};
+
+/*
+ * The definition of a struct: the tag it was declared with, the members it
+ * is made of in the order they were written, and the room a value of the
+ * type takes. A member is a symbol because a member is a variable in
+ * everything but where it lives, which is what lets one of them be an
+ * array, or a struct of its own.
+ *
+ * A struct may contain a pointer to itself, so the definition is known by
+ * its tag before its members have been read. Until they have, its size is
+ * zero, which is a size no value can have.
+ */
+struct CompositeType
+{
+    /* The tag it was declared with, empty when it was written without one. */
+    std::string name;
+    std::vector<Symbol> members;
+    /* How many bytes a value of the type takes, and what it lines up to. */
+    int32 size = 0;
+    int32 alignment = 1;
+};
+
+/*
+ * A type as it is written down: which primitive type, and the struct which
+ * the value is of when it is one. The type value on its own cannot say
+ * which struct a value is of, so the two travel together.
+ */
+struct TypeRef
+{
+    PrimitiveType type = PrimitiveType::kNone;
+    std::shared_ptr<CompositeType> composite;
 };
 
 using NodePtr = std::unique_ptr<class Node>;
@@ -102,6 +156,8 @@ using AstNodePtr = std::unique_ptr<class AstNode>;
  */
 struct Program
 {
+    /* Every struct type the program declared, in the order it was given. */
+    std::vector<std::shared_ptr<CompositeType>> types;
     /* Every function of the program, in the order it was declared. */
     std::vector<AstNodePtr> functions;
     /* Every global variable, in the order it was declared. */

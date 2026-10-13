@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 
+#include <algorithm>
 #include <iostream>
 
 namespace nuocc
@@ -77,12 +78,45 @@ int32 PrimitiveSize(PrimitiveType type)
     }
 }
 
+int32 ValueSize(PrimitiveType type,
+    const std::shared_ptr<CompositeType>& composite)
+{
+    /* A pointer to a struct is a pointer like any other. It is a struct
+     * value whose room comes from the definition and not from the type. */
+    if (type == PrimitiveType::kStruct)
+        return composite ? composite->size : 0;
+
+    return PrimitiveSize(type);
+}
+
+int32 ValueAlignment(PrimitiveType type,
+    const std::shared_ptr<CompositeType>& composite)
+{
+    if (IsPointerType(type))
+        return 8;
+
+    if (type == PrimitiveType::kStruct)
+        return composite ? composite->alignment : 1;
+
+    const int32 size = PrimitiveSize(type);
+
+    /* A type which takes no room at all is nothing to line up against. */
+    return size == 0 ? 1 : std::min<int32>(size, 8);
+}
+
 int32 SymbolStorageSize(const Symbol& symbol)
 {
-    if (symbol.stype != StructuralType::kArray)
-        return PrimitiveSize(symbol.type);
+    const int32 element = ValueSize(symbol.type, symbol.composite);
 
-    return PrimitiveSize(symbol.type) * symbol.element_count;
+    if (symbol.stype != StructuralType::kArray)
+        return element;
+
+    return element * symbol.element_count;
+}
+
+int32 SymbolAlignment(const Symbol& symbol)
+{
+    return ValueAlignment(symbol.type, symbol.composite);
 }
 
 PrimitiveType PointerTo(PrimitiveType type)
@@ -158,6 +192,21 @@ bool ModifyType(AstNodePtr& tree,
     {
         if (IsIntType(type) && IsPointerType(wanted))
         {
+            /*
+             * How far along the next value is is the size of what the
+             * pointer points at, and a struct only knows that once its
+             * definition says so and not from the type value, which the
+             * tree being scaled here does not carry. Stepping a pointer
+             * to a struct along is therefore refused rather than scaled
+             * by a size of zero.
+             */
+            if (ValueAt(wanted) == PrimitiveType::kStruct)
+            {
+                std::cerr << "syntax error: arithmetic on a pointer to a";
+                std::cerr << " struct is not supported yet!" << std::endl;
+                std::exit(1);
+            }
+
             /*
              * The integer becomes an offset into what the pointer points
              * at, so it is scaled by the size of one of those. A size of

@@ -39,12 +39,35 @@ identifier_list: identifier
     ;
 
 type: type_keyword opt_pointer
+    | struct_type opt_pointer
     ;
 
 type_keyword: 'char'
     | 'int'
     | 'long'
     | 'void'
+    ;
+
+/*
+ * A struct is named by its tag, and a type which is written without one can
+ * only be used where it is defined. The members are read with the type
+ * already known by its tag, so that a member may be a pointer back at the
+ * struct it stands in. A struct with no members is refused.
+ */
+struct_type: 'struct' opt_tag
+    | 'struct' opt_tag '{' member_list '}'
+    ;
+
+opt_tag: <empty>
+    | identifier
+    ;
+
+member_list: member
+    | member member_list
+    ;
+
+member: type identifier ';'
+    | type identifier '[' number ']' ';'
     ;
 
 opt_pointer: <empty>

@@ -41,6 +41,8 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
         std::exit(1);
     }
 
+    program.types = std::move(types_);
+
     return program;
 }
 
@@ -51,7 +53,19 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     Program& program)
 {
-    PrimitiveType type = ParseType(token_list, i);
+    TypeRef type = ParseType(token_list, i);
+
+    /*
+     * A struct definition which no variable follows declares the type and
+     * nothing else, as `struct fred { int x; };` does.
+     */
+    if (TokenTag(token_list[i]) == T_Semicolon &&
+        type.type == PrimitiveType::kStruct)
+    {
+        Match(token_list, i, T_Semicolon, ";");
+        return;
+    }
+
     std::string name = MatchIdentifier(token_list, i, "a name");
 
     if (TokenTag(token_list[i]) == T_LParen)
@@ -70,6 +84,7 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     {
         Symbol symbol = ArrayDeclaration(token_list, i, type, name,
                                          StorageClass::kGlobal);
+        symbol_table_.AddSymbol(symbol);
 
         Match(token_list, i, T_Semicolon, ";");
         program.globals.push_back(std::make_unique<AstDeclare>(symbol));
@@ -94,7 +109,7 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
  */
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
-    PrimitiveType type,
+    const TypeRef& type,
     const std::string& name)
 {
     /* The name may already be known as a prototype, or as a function
@@ -114,7 +129,8 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_RParen, ")");
 
     Symbol symbol{.name = name,
-                  .type = type,
+                  .type = type.type,
+                  .composite = type.composite,
                   .stype = StructuralType::kFunction};
 
     for (const Symbol& parameter : parameters)
@@ -160,11 +176,12 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     local_stack_size_ = 0;
     for (Symbol& parameter : parameters)
     {
-        parameter.stack_offset = AllocateLocal(parameter.type);
+        parameter.stack_offset = AllocateLocal(
+            TypeRef{.type = parameter.type, .composite = parameter.composite});
         symbol_table_.AddSymbol(parameter);
     }
 
-    current_function_type_ = type;
+    current_function_type_ = type.type;
     AstNodePtr body = CompoundStatement(token_list, i);
 
     current_function_type_ = PrimitiveType::kNone;
@@ -175,7 +192,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
      * A function which returns a value must end with a return statement, as
      * that is the only way its caller can be given a result.
      */
-    if (type != PrimitiveType::kVoid)
+    if (type.type != PrimitiveType::kVoid)
     {
         const AstNodePtr& last = (body && body->GetAstNodeTag() == A_AstGlue)
                                  ? body->GetRight()
@@ -263,6 +280,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Int:
         case T_Char:
         case T_Long:
+        case T_Struct:
             return {DeclareStatement(token_list, i), true};
         case T_If:
             return {IfStatement(token_list, i), false};
@@ -301,7 +319,13 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    PrimitiveType type = ParseType(token_list, i);
+    TypeRef type = ParseType(token_list, i);
+
+    /* A struct definition which no variable follows declares the type and
+     * nothing else; the semicolon is left to the caller. */
+    if (TokenTag(token_list[i]) == T_Semicolon &&
+        type.type == PrimitiveType::kStruct)
+        return nullptr;
 
     std::string name = MatchIdentifier(token_list, i, "a variable name");
 
@@ -309,6 +333,7 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     {
         Symbol symbol = ArrayDeclaration(token_list, i, type, name,
                                          StorageClass::kLocal);
+        symbol_table_.AddSymbol(symbol);
 
         return std::make_unique<AstDeclare>(symbol);
     }
@@ -326,7 +351,7 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
  */
 void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
     idx_t& i,
-    PrimitiveType type,
+    const TypeRef& type,
     const std::string& name,
     std::vector<AstNodePtr>& declarations,
     StorageClass storage)
@@ -336,7 +361,8 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
     while (true)
     {
         Symbol symbol{.name = current,
-                      .type = type,
+                      .type = type.type,
+                      .composite = type.composite,
                       .stype = StructuralType::kVariable,
                       .storage = storage,
                       .stack_offset = storage == StorageClass::kLocal
@@ -366,7 +392,7 @@ void Parser::IdentifierList(const std::vector<NodePtr>& token_list,
  */
 Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
-    PrimitiveType element_type,
+    const TypeRef& element_type,
     const std::string& name,
     StorageClass storage)
 {
@@ -390,7 +416,20 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
         std::exit(1);
     }
 
-    const int32 element_size = PrimitiveSize(element_type);
+    /*
+     * Every element of an array is reached by counting its size along from
+     * the first one, and the room a struct takes is only known from its
+     * definition, which an index does not carry yet.
+     */
+    if (element_type.type == PrimitiveType::kStruct)
+    {
+        std::cerr << "syntax error: an array of structs is not supported";
+        std::cerr << " yet!" << std::endl;
+        std::exit(1);
+    }
+
+    const int32 element_size = ValueSize(element_type.type,
+                                         element_type.composite);
 
     if (element_size == 0)
     {
@@ -409,17 +448,19 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
     Match(token_list, i, T_RBracket, "]");
 
+    const int32 element_alignment = ValueAlignment(element_type.type,
+                                                   element_type.composite);
+
     Symbol symbol{.name = name,
-                  .type = element_type,
+                  .type = element_type.type,
+                  .composite = element_type.composite,
                   .stype = StructuralType::kArray,
                   .storage = storage,
                   .stack_offset = storage == StorageClass::kLocal
                                       ? AllocateLocal(element_size * element_count,
-                                                      std::min<int32>(element_size, 8))
+                                                      element_alignment)
                                       : 0,
                   .element_count = element_count};
-
-    symbol_table_.AddSymbol(symbol);
 
     return symbol;
 }
@@ -627,8 +668,8 @@ std::vector<Symbol> Parser::FunctionParameters(
             std::exit(1);
         }
 
-        PrimitiveType type = ParseType(token_list, i);
-        if (type == PrimitiveType::kVoid)
+        TypeRef type = ParseType(token_list, i);
+        if (type.type == PrimitiveType::kVoid)
         {
             std::cerr << "syntax error: a parameter needs a value type!";
             std::cerr << std::endl;
@@ -638,7 +679,8 @@ std::vector<Symbol> Parser::FunctionParameters(
         std::string name = MatchIdentifier(token_list, i, "a parameter name");
 
         parameters.push_back(Symbol{.name = name,
-                                    .type = type,
+                                    .type = type.type,
+                                    .composite = type.composite,
                                     .stype = StructuralType::kVariable,
                                     .storage = StorageClass::kLocal});
 
@@ -1134,39 +1176,210 @@ AstNodePtr Parser::ArrayAccess(const std::vector<NodePtr>& token_list,
  * Parse the type which starts a declaration, along with the '*' of every
  * pointer level, and step over all of it.
  */
-PrimitiveType Parser::ParseType(const std::vector<NodePtr>& token_list,
-    idx_t& i)
+TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
 {
-    PrimitiveType type;
+    TypeRef type;
 
     switch (TokenTag(token_list[i]))
     {
+        /*
+         * A struct is a type like any other, so the keyword and whatever
+         * it names are read here and the stars which follow are read with
+         * every other type's below.
+         */
+        case T_Struct:
+            type = StructType(token_list, i);
+            break;
         case T_Char:
-            type = PrimitiveType::kChar;
+            type.type = PrimitiveType::kChar;
+            i++;
             break;
         case T_Int:
-            type = PrimitiveType::kInt;
+            type.type = PrimitiveType::kInt;
+            i++;
             break;
         case T_Long:
-            type = PrimitiveType::kLong;
+            type.type = PrimitiveType::kLong;
+            i++;
             break;
         case T_Void:
-            type = PrimitiveType::kVoid;
+            type.type = PrimitiveType::kVoid;
+            i++;
             break;
         default:
             std::cerr << "syntax error: expect a type!" << std::endl;
             std::exit(1);
     }
 
-    i++;
-
     while (TokenTag(token_list[i]) == T_Star)
     {
-        type = PointerTo(type);
+        type.type = PointerTo(type.type);
         i++;
     }
 
     return type;
+}
+
+/*
+ * struct_type: 'struct' opt_tag '{' member_list '}'
+ *      |       'struct' tag
+ *      ;
+ *
+ * A type which is already known is named by its tag, and the definition
+ * may be written here as well, either for a type which has a tag of its
+ * own or for one which is never named again. The members are read with the
+ * definition already known by its tag, so that a member may be a pointer
+ * back at the struct it stands in.
+ */
+TypeRef Parser::StructType(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    i++;    /* step over the struct keyword */
+
+    std::string name;
+    std::shared_ptr<CompositeType> type;
+
+    if (TokenTag(token_list[i]) == T_Identifier)
+    {
+        name = MatchIdentifier(token_list, i, "a struct name");
+        type = symbol_table_.FindTag(name);
+    }
+
+    /* Without a brace this only names a type which is already known. */
+    if (TokenTag(token_list[i]) != T_LBrace)
+    {
+        if (!type)
+        {
+            std::cerr << "syntax error: there is no struct " << name;
+            std::cerr << "!" << std::endl;
+            std::exit(1);
+        }
+
+        return TypeRef{.type = PrimitiveType::kStruct, .composite = type};
+    }
+
+    if (type)
+    {
+        std::cerr << "syntax error: struct " << name;
+        std::cerr << " is already defined!" << std::endl;
+        std::exit(1);
+    }
+
+    type = std::make_shared<CompositeType>();
+    type->name = name;
+
+    if (!name.empty())
+        symbol_table_.AddTag(type);
+
+    types_.push_back(type);
+
+    StructMembers(token_list, i, type);
+
+    return TypeRef{.type = PrimitiveType::kStruct, .composite = type};
+}
+
+/*
+ * member_list: type identifier ';'
+ *      |       type identifier '[' number ']' ';'
+ *      |       member_list member_list
+ *      ;
+ *
+ * Every member is given the place it takes inside a value of the type,
+ * and the room the whole type takes is worked out once they have all been
+ * read. A member lines up to its own type, and the type as a whole lines
+ * up to the strictest of its members, so that every member of every
+ * element of an array of them lands where it should.
+ */
+void Parser::StructMembers(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    const std::shared_ptr<CompositeType>& type)
+{
+    Match(token_list, i, T_LBrace, "{");
+
+    while (TokenTag(token_list[i]) != T_RBrace)
+    {
+        if (TokenTag(token_list[i]) == T_EOF)
+        {
+            std::cerr << "syntax error: expect }!" << std::endl;
+            std::exit(1);
+        }
+
+        TypeRef member_type = ParseType(token_list, i);
+        std::string name = MatchIdentifier(token_list, i, "a member name");
+
+        Symbol member{.name = name,
+                      .type = member_type.type,
+                      .composite = member_type.composite,
+                      .stype = StructuralType::kVariable,
+                      .storage = StorageClass::kMember};
+
+        if (TokenTag(token_list[i]) == T_LBracket)
+            member = ArrayDeclaration(token_list, i, member_type, name,
+                                      StorageClass::kMember);
+
+        Match(token_list, i, T_Semicolon, ";");
+
+        /*
+         * A struct cannot hold a value of itself, because knowing how much
+         * room such a member takes would take knowing the size of the type
+         * it is being worked out for. A pointer to itself is a value of a
+         * size which is already known, and that is how a type which refers
+         * to itself is written.
+         */
+        if (SymbolStorageSize(member) == 0)
+        {
+            if (member.composite)
+            {
+                std::cerr << "syntax error: the member " << name;
+                std::cerr << " is a struct which is not finished!";
+            }
+            else
+            {
+                std::cerr << "syntax error: a member needs a value type!";
+            }
+
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        type->members.push_back(member);
+    }
+
+    i++;    /* step over the right brace */
+
+    if (type->members.empty())
+    {
+        std::cerr << "syntax error: a struct needs at least one member!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    int32 offset = 0;
+    int32 alignment = 1;
+
+    for (Symbol& member : type->members)
+    {
+        const int32 member_alignment = SymbolAlignment(member);
+
+        if (member_alignment > alignment)
+            alignment = member_alignment;
+
+        const int32 remainder = offset % member_alignment;
+
+        if (remainder != 0)
+            offset += member_alignment - remainder;
+
+        member.member_offset = offset;
+        offset += SymbolStorageSize(member);
+    }
+
+    type->alignment = alignment;
+
+    const int32 remainder = offset % alignment;
+
+    if (remainder != 0)
+        offset += alignment - remainder;
+
+    type->size = offset;
 }
 
 Symbol Parser::Lookup(const NodePtr& token, std::string_view what)
@@ -1379,9 +1592,10 @@ uint8 Parser::GetOpPrecedence(NodeTag tag)
     return it->second;
 }
 
-int32 Parser::AllocateLocal(PrimitiveType type)
+int32 Parser::AllocateLocal(const TypeRef& type)
 {
-    const int32 size = PrimitiveSize(type);
+    const int32 size = ValueSize(type.type, type.composite);
+
     if (size == 0)
     {
         std::cerr << "syntax error: a variable needs a value type!";
@@ -1389,7 +1603,7 @@ int32 Parser::AllocateLocal(PrimitiveType type)
         std::exit(1);
     }
 
-    return AllocateLocal(size, std::min<int32>(size, 8));
+    return AllocateLocal(size, ValueAlignment(type.type, type.composite));
 }
 
 int32 Parser::AllocateLocal(int32 size, int32 alignment)

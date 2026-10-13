@@ -153,3 +153,26 @@
     depth moves it on by the size of what it points at, which for a
     pointer is eight bytes. Fifteen levels are as many as a type has room
     for.
+27. Structs. `struct name { int x; char y; };` declares a type whose
+    members are laid out one after another, and a variable of that type may
+    be declared at the top level of the program or inside a function, with
+    `struct name variable;` or with the definition in the declaration
+    itself, `struct { int x; } variable;`. Every member is lined up to what
+    its own type asks for, the room the whole type takes is rounded up to
+    the strictest of them, and a global variable of the type is given that
+    much storage. A member may be an array of a type which is not a struct,
+    and the members may be named as they are declared, as
+    `struct name { int x; };` does on its own.
+
+    A member may be a pointer back at the struct it stands in, which is how
+    a type which refers to itself is written:
+
+        struct node { int value; struct node *next; };
+
+    What a struct value cannot do yet is be read or written as a whole, or
+    handed to a function: a member is not reachable until the next stage,
+    so the members of a struct can be laid out, but nothing may look at
+    them. An array of structs, arithmetic on a pointer to a struct, a
+    struct which contains itself by value, a struct with no members, and a
+    tag which is defined twice are all refused with a message saying so.
+    Two pointers to structs of different types are not told apart yet.

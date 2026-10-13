@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,8 +30,17 @@ public:
     idx_t Mark() const;
     void Restore(idx_t mark);
 
+    /*
+     * The tag of a struct is looked up on its own, because C lets a tag
+     * and a variable share a name: `struct fred` and `int fred` may both
+     * be declared, and only a tag is what `struct fred` names.
+     */
+    void AddTag(const std::shared_ptr<CompositeType>& type);
+    std::shared_ptr<CompositeType> FindTag(const std::string& name) const;
+
 private:
     std::vector<Symbol> symbols_;
+    std::vector<std::shared_ptr<CompositeType>> tags_;
 };
 
 }   /* namespace nuocc */
