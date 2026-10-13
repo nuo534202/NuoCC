@@ -232,6 +232,45 @@ public:
 };
 
 /*
+ * One arm of a switch: the left child holds the compound statement which
+ * runs when the arm is taken, and `value` is what the switch expression has
+ * to equal for that to happen. A default arm is taken when no other arm's
+ * value matches, so its value is not used.
+ */
+class AstCase : public AstNode
+{
+public:
+    AstCase(AstNodePtr& body, int32 value, bool is_default);
+    ~AstCase() = default;
+
+public:
+    int32 GetValue() const;
+    bool IsDefault() const;
+
+private:
+    int32 value_;
+    bool is_default_;
+};
+
+/*
+ * A switch statement. The left child is the expression whose value chooses
+ * an arm, and the arms are held in the order they are written. An arm which
+ * does not end in a break falls through into the arm after it.
+ */
+class AstSwitch : public AstNode
+{
+public:
+    AstSwitch(AstNodePtr& expression, std::vector<AstNodePtr>& cases);
+    ~AstSwitch() = default;
+
+public:
+    const std::vector<AstNodePtr>& GetCases() const;
+
+private:
+    std::vector<AstNodePtr> cases_;
+};
+
+/*
  * The declaration of a variable. Its symbol records whether the storage is
  * global or belongs to the current function's stack frame.
  */

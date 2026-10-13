@@ -194,13 +194,33 @@ private:
      * break_statement: 'break'  ;
      * continue_statement: 'continue'  ;
      *
-     * Both only make sense inside a loop, so each one asks how many loops
-     * are open around it and refuses to be written where there is none.
-     * The caller matches the semicolon.
+     * A break leaves the loop or the switch it stands in, and a continue
+     * begins the next pass of the loop it stands in, so each refuses to be
+     * written where there is nothing to leave or to go on with. The caller
+     * matches the semicolon.
      */
     AstNodePtr BreakStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
     AstNodePtr ContinueStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    /*
+     * switch_statement: 'switch' '(' expression ')' '{' case_list '}'  ;
+     *
+     * case_list: case_item
+     *      |   case_item case_list
+     *      ;
+     *
+     * case_item: 'case' number ':' compound_statement
+     *      |   'default' ':' compound_statement
+     *      ;
+     *
+     * The arms are tried in the order they are written and the first one
+     * whose value matches is taken; the default arm is taken when none
+     * does. An arm which does not end in a break falls through into the
+     * arm after it, and a switch may hold a break like a loop does.
+     */
+    AstNodePtr SwitchStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
 
     /*
@@ -402,11 +422,13 @@ private:
     int32 local_stack_size_ = 0;
 
     /*
-     * How many loops are open around the statement being parsed. A break
-     * or a continue is written inside one of them and not otherwise, and
-     * the count is put back to zero at the start of every function.
+     * How many loops and how many switches are open around the statement
+     * being parsed. A continue has to be written inside a loop and a break
+     * inside a loop or a switch, and both counts are put back to zero at
+     * the start of every function.
      */
     int32 loop_level_ = 0;
+    int32 switch_level_ = 0;
 
     /*
      * Whether the type just parsed was written as a definition of a tag.

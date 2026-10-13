@@ -60,6 +60,9 @@ typedef enum NodeTag
     T_Extern,
     T_Break,
     T_Continue,
+    T_Switch,
+    T_Case,
+    T_Default,
 
     T_Identifier,
 
@@ -73,6 +76,7 @@ typedef enum NodeTag
     T_Arrow,
     T_Semicolon,
     T_Comma,
+    T_Colon,
     T_EOF,
 
     /* Parser/AST Tags */
@@ -106,7 +110,9 @@ typedef enum AstNodeTag
     A_AstAddressExpr,
     A_AstFor,
     A_AstBreak,
-    A_AstContinue
+    A_AstContinue,
+    A_AstSwitch,
+    A_AstCase
 } AstNodeTag;
 
 }   /* namespace nuocc */

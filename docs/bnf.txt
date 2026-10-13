@@ -139,6 +139,7 @@ statement: print_statement
     | if_statement
     | while_statement
     | for_statement
+    | switch_statement
     | return_statement
     | break_statement
     | continue_statement
@@ -175,8 +176,9 @@ return_statement: 'return' '(' expression ')'
     ;
 
 /*
- * A break leaves the loop it stands in and a continue begins that loop's
- * next pass, so neither may be written where there is no loop around it.
+ * A break leaves the loop or the switch it stands in, and a continue
+ * begins that loop's next pass, so each may only be written where there is
+ * something to leave or to go on with.
  */
 break_statement: 'break' ';'
     ;
@@ -205,6 +207,25 @@ while_statement: 'while' '(' true_false_expression ')' compound_statement
 for_statement: 'for' '(' statement ';'
                        true_false_expression ';'
                        statement ')' compound_statement
+    ;
+
+/*
+ * A switch tries its arms in the order they are written and takes the
+ * first whose value matches, and the default arm when none does. An arm
+ * which does not end in a break falls through into the arm after it, so
+ * the arms are laid out one after another, and the default arm has to be
+ * the last one. A case value is an integer constant: a literal, or the
+ * name an enum gave to one.
+ */
+switch_statement: 'switch' '(' expression ')' '{' case_list '}'
+    ;
+
+case_list: case_item
+    | case_item case_list
+    ;
+
+case_item: 'case' number ':' compound_statement
+    | 'default' ':' compound_statement
     ;
 
 identifier: T_IDENT

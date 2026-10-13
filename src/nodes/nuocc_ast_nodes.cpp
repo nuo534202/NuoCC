@@ -179,6 +179,32 @@ AstBreak::AstBreak() : AstNode(A_AstBreak, PrimitiveType::kNone) {}
 /* AstContinue */
 AstContinue::AstContinue() : AstNode(A_AstContinue, PrimitiveType::kNone) {}
 
+/* AstCase */
+AstCase::AstCase(AstNodePtr& body, int32 value, bool is_default)
+    : AstNode(A_AstCase, PrimitiveType::kNone, body),
+      value_(value),
+      is_default_(is_default) {}
+
+int32 AstCase::GetValue() const
+{
+    return value_;
+}
+
+bool AstCase::IsDefault() const
+{
+    return is_default_;
+}
+
+/* AstSwitch */
+AstSwitch::AstSwitch(AstNodePtr& expression, std::vector<AstNodePtr>& cases)
+    : AstNode(A_AstSwitch, PrimitiveType::kNone, expression),
+      cases_(std::move(cases)) {}
+
+const std::vector<AstNodePtr>& AstSwitch::GetCases() const
+{
+    return cases_;
+}
+
 /* AstDeclare */
 AstDeclare::AstDeclare(const Symbol& symbol)
     : AstNode(A_AstDeclare, PrimitiveType::kNone),

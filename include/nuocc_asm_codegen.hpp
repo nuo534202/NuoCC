@@ -93,6 +93,15 @@ protected:
                                 label_idx label) = 0;
 
     /*
+     * Jump to the label when the two registers hold the same value, leaving
+     * both of them as they were: a switch compares its value against the
+     * value of every case in turn and has to keep it while it does.
+     */
+    virtual void JumpIfEqual(reg_idx reg1,
+                             reg_idx reg2,
+                             label_idx label) = 0;
+
+    /*
      * Jump when the value in a register is zero, which is the question a
      * condition which is not a comparison asks.
      */
@@ -140,6 +149,7 @@ protected:
     void GenIf(const AstNodePtr& root);
     void GenWhile(const AstNodePtr& root);
     void GenFor(const AstNodePtr& root);
+    void GenSwitch(const AstNodePtr& root);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);

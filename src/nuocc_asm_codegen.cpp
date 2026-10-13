@@ -125,6 +125,10 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             GenFor(root);
             return;
 
+        case A_AstSwitch:
+            GenSwitch(root);
+            return;
+
         case A_AstBreak:
             /* Leave the loop this statement stands in. */
             EmitJump(loop_break_label_);
@@ -305,6 +309,86 @@ void AsmCodegen::GenFor(const AstNodePtr& root)
 
     loop_break_label_ = saved_break;
     loop_continue_label_ = saved_continue;
+}
+
+/*
+ * Generate the code for a switch statement:
+ *
+ *      <expression>
+ *      compare against the value of every case, going to the arm which
+ *      matches
+ *      jmp Ldefault
+ * Lcase0:
+ *      <first arm>
+ * Lcase1:
+ *      <second arm>
+ * ...
+ * Ldefault:
+ *      <default arm, when there is one>
+ * Lend:
+ *
+ * The arms are laid out one after another, so an arm which does not end in
+ * a break falls through into the arm after it. A break of the switch goes
+ * to Lend, which is where Ldefault goes too when no arm matched and there
+ * is no default arm at all.
+ */
+void AsmCodegen::GenSwitch(const AstNodePtr& root)
+{
+    const AstSwitch *ast_switch = static_cast<const AstSwitch*>(root.get());
+    const std::vector<AstNodePtr>& cases = ast_switch->GetCases();
+
+    /* The value every arm is compared against, worked out once. */
+    reg_idx reg = GenExpr(root->GetLeft());
+
+    const label_idx end_label = NewLabel();
+
+    /* One label per arm, in the order the arms are written. */
+    std::vector<label_idx> labels;
+    label_idx default_label = end_label;
+
+    for (const AstNodePtr& arm : cases)
+    {
+        const AstCase *ast_case = static_cast<const AstCase*>(arm.get());
+
+        labels.push_back(NewLabel());
+
+        if (ast_case->IsDefault())
+            default_label = labels.back();
+    }
+
+    for (idx_t k = 0; k < cases.size(); k++)
+    {
+        const AstCase *ast_case = static_cast<const AstCase*>(cases[k].get());
+
+        if (ast_case->IsDefault())
+            continue;
+
+        reg_idx case_reg = LoadInt(ast_case->GetValue());
+        JumpIfEqual(reg, case_reg, labels[k]);
+        FreeRegister(case_reg);
+    }
+
+    FreeRegister(reg);
+    EmitJump(default_label);
+
+    /*
+     * The arms follow one another, so that the end of one falls through
+     * into the next. A break written in an arm leaves the switch, and a
+     * continue written in one still belongs to the loop the switch is in.
+     */
+    const label_idx saved_break = loop_break_label_;
+    loop_break_label_ = end_label;
+
+    for (idx_t k = 0; k < cases.size(); k++)
+    {
+        EmitLabel(labels[k]);
+        GenStatement(cases[k]->GetLeft());
+        FreeAllRegister();
+    }
+
+    loop_break_label_ = saved_break;
+
+    EmitLabel(end_label);
 }
 
 /*

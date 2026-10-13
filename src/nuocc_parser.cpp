@@ -221,6 +221,7 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
 
     current_function_type_ = type;
     loop_level_ = 0;
+    switch_level_ = 0;
     AstNodePtr body = CompoundStatement(token_list, i);
 
     current_function_type_ = {};
@@ -344,6 +345,8 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {BreakStatement(token_list, i), true};
         case T_Continue:
             return {ContinueStatement(token_list, i), true};
+        case T_Switch:
+            return {SwitchStatement(token_list, i), false};
         default:
             /*
              * A statement may declare a variable whose type is a name
@@ -680,10 +683,10 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::BreakStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    if (loop_level_ == 0)
+    if (loop_level_ == 0 && switch_level_ == 0)
     {
-        std::cerr << "syntax error: there is no loop to break out of!";
-        std::cerr << std::endl;
+        std::cerr << "syntax error: there is no loop or switch to break";
+        std::cerr << " out of!" << std::endl;
         std::exit(1);
     }
 
@@ -711,6 +714,126 @@ AstNodePtr Parser::ContinueStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_Continue, "continue");
 
     return std::make_unique<AstContinue>();
+}
+
+/*
+ * switch_statement: 'switch' '(' expression ')' '{' case_list '}'  ;
+ *
+ * Every arm is a compound statement, so that the end of one falls through
+ * into the next and a break is what leaves the switch altogether. The
+ * value a case names has to be an integer constant, which is a literal or
+ * a name an enum gave to one, and no two cases may name the same value.
+ */
+AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Switch, "switch");
+    Match(token_list, i, T_LParen, "(");
+
+    AstNodePtr expression = BinaryExpression(token_list, i, 0);
+
+    if (!IsIntType(expression->GetType()))
+    {
+        std::cerr << "syntax error: the switch expression is not an integer!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    Match(token_list, i, T_RParen, ")");
+    Match(token_list, i, T_LBrace, "{");
+
+    std::vector<AstNodePtr> cases;
+    std::vector<int32> values;
+    bool seen_default = false;
+
+    /* Every arm may hold a break which leaves this switch. */
+    switch_level_++;
+
+    while (TokenTag(token_list[i]) != T_RBrace)
+    {
+        if (TokenTag(token_list[i]) == T_EOF)
+        {
+            std::cerr << "syntax error: expect }!" << std::endl;
+            std::exit(1);
+        }
+
+        const NodeTag tag = TokenTag(token_list[i]);
+
+        if (tag != T_Case && tag != T_Default)
+        {
+            std::cerr << "syntax error: expect a case or a default!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        /* The default arm is the last one, so nothing may follow it. */
+        if (seen_default)
+        {
+            std::cerr << "syntax error: a case or a default after the";
+            std::cerr << " default!" << std::endl;
+            std::exit(1);
+        }
+
+        const bool is_default = tag == T_Default;
+        int32 value = 0;
+
+        if (is_default)
+        {
+            i++;
+            seen_default = true;
+        }
+        else
+        {
+            i++;
+
+            /*
+             * The value has to be an integer constant, so it is read as an
+             * expression and then asked to be a literal: `case pear` is
+             * one when an enum gave pear its number, while `case 3 * y`
+             * is not.
+             */
+            AstNodePtr value_tree = BinaryExpression(token_list, i, 0);
+
+            if (value_tree->GetAstNodeTag() != A_AstIntLit)
+            {
+                std::cerr << "syntax error: a case value has to be an";
+                std::cerr << " integer constant!" << std::endl;
+                std::exit(1);
+            }
+
+            value = static_cast<const AstIntLit*>(value_tree.get())
+                        ->GetValue();
+
+            if (std::find(values.begin(), values.end(), value) !=
+                values.end())
+            {
+                std::cerr << "syntax error: duplicate case value " << value;
+                std::cerr << "!" << std::endl;
+                std::exit(1);
+            }
+
+            values.push_back(value);
+        }
+
+        Match(token_list, i, T_Colon, ":");
+
+        AstNodePtr body = CompoundStatement(token_list, i);
+
+        cases.push_back(std::make_unique<AstCase>(body, value, is_default));
+    }
+
+    switch_level_--;
+
+    i++;    /* step over the right brace */
+
+    if (cases.empty())
+    {
+        std::cerr << "syntax error: a switch needs at least one case!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    return std::make_unique<AstSwitch>(expression, cases);
 }
 
 /*

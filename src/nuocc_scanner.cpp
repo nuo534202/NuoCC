@@ -305,6 +305,7 @@ void Scanner::CommitToken(const std::string& token)
         case T_Dec:
         case T_Amper:
         case T_Comma:
+        case T_Colon:
         case T_LogAnd:
         case T_LogOr:
         case T_Or:
@@ -418,7 +419,8 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"void", T_Void}, {"return", T_Return},
     {"enum", T_Enum}, {"typedef", T_Typedef},
     {"extern", T_Extern},
-    {"break", T_Break}, {"continue", T_Continue}
+    {"break", T_Break}, {"continue", T_Continue},
+    {"switch", T_Switch}, {"case", T_Case}, {"default", T_Default}
 };
 
 /*
@@ -427,7 +429,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
  */
 const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'+', T_Plus}, {'-', T_Minus}, {'*', T_Star}, {'/', T_Slash},
-    {'=', T_Assign}, {';', T_Semicolon}, {',', T_Comma},
+    {'=', T_Assign}, {';', T_Semicolon}, {',', T_Comma}, {':', T_Colon},
     {'<', T_LT}, {'>', T_GT},
     {'{', T_LBrace}, {'}', T_RBrace},
     {'(', T_LParen}, {')', T_RParen},
@@ -444,7 +446,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
 };
 
 const std::unordered_set<char> Scanner::kAlphabet = {
-    '+', '-', '*', '/', '=', ';', ',', '_', '.',
+    '+', '-', '*', '/', '=', ';', ',', ':', '_', '.',
     '<', '>', '!', '{', '}', '(', ')', '[', ']', '&', '|', '^', '~',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',

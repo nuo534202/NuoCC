@@ -554,6 +554,15 @@ void X86Codegen::CompareAndJump(NodeTag op_type,
  * Jump when the value in a register is zero. test sets the flags from the
  * value anded with itself, and je is taken when that result was zero.
  */
+void X86Codegen::JumpIfEqual(reg_idx reg1,
+    reg_idx reg2,
+    label_idx label)
+{
+    ofs_ << "\tcmpq\t" << reg_list_[reg2] << ", " << reg_list_[reg1];
+    ofs_ << std::endl;
+    ofs_ << "\tje\tL" << label << std::endl;
+}
+
 void X86Codegen::JumpIfZero(reg_idx reg, label_idx label)
 {
     ofs_ << "\ttest\t" << reg_list_[reg] << ", ";

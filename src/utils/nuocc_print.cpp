@@ -146,6 +146,15 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Continue:
             out = "continue";
             break;
+        case T_Switch:
+            out = "switch";
+            break;
+        case T_Case:
+            out = "case";
+            break;
+        case T_Default:
+            out = "default";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;
@@ -178,6 +187,9 @@ std::string NodeTagToString(const NodeTag& tag)
             break;
         case T_Comma:
             out = ",";
+            break;
+        case T_Colon:
+            out = ":";
             break;
         case T_EOF:
             out = "EOF";
@@ -311,6 +323,17 @@ std::string DescribeNode(const AstNode& node)
             return "break";
         case A_AstContinue:
             return "continue";
+        case A_AstSwitch:
+            return "switch";
+        case A_AstCase:
+        {
+            const AstCase *ast_case = static_cast<const AstCase*>(&node);
+
+            if (ast_case->IsDefault())
+                return "default";
+
+            return "case " + std::to_string(ast_case->GetValue());
+        }
         case A_AstReturn:
             return "return";
         case A_AstOperator:
@@ -402,6 +425,15 @@ void PrintNode(const AstNodePtr& node, int32 depth)
 
         for (const AstNodePtr& argument : call->GetArguments())
             PrintNode(argument, depth + 1);
+    }
+
+    /* The arms of a switch are held as a list rather than as children. */
+    if (node->GetAstNodeTag() == A_AstSwitch)
+    {
+        const AstSwitch *arms = static_cast<const AstSwitch*>(node.get());
+
+        for (const AstNodePtr& arm : arms->GetCases())
+            PrintNode(arm, depth + 1);
     }
 
     PrintNode(node->GetLeft(), depth + 1);

@@ -574,6 +574,15 @@ void Arm64Codegen::CompareAndJump(NodeTag op_type,
  * Jump when the value in a register is zero, which AArch64 can do in one
  * instruction of its own.
  */
+void Arm64Codegen::JumpIfEqual(reg_idx reg1,
+    reg_idx reg2,
+    label_idx label)
+{
+    ofs_ << "\tcmp\t" << xreg_list_[reg1] << ", " << xreg_list_[reg2];
+    ofs_ << std::endl;
+    ofs_ << "\tb.eq\tL" << label << std::endl;
+}
+
 void Arm64Codegen::JumpIfZero(reg_idx reg, label_idx label)
 {
     ofs_ << "\tcbz\t" << xreg_list_[reg] << ", L" << label << std::endl;

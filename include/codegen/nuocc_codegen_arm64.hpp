@@ -66,6 +66,9 @@ protected:
                         reg_idx reg1,
                         reg_idx reg2,
                         label_idx label) override;
+    void JumpIfEqual(reg_idx reg1,
+                     reg_idx reg2,
+                     label_idx label) override;
     void JumpIfZero(reg_idx reg, label_idx label) override;
 
     void PushArgument(reg_idx reg) override;

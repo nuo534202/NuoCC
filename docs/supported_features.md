@@ -279,3 +279,22 @@
     in a for loop still runs that step. Written where no loop is around
     it, either one is refused with `there is no loop to break out of!` or
     `there is no loop to continue!`.
+
+33. Switch Statements (acwj Stage 37, `37_Switch`). `switch (expression)`
+    chooses one arm out of a list of `case` arms: the value of the
+    expression is worked out once and compared against the value each
+    `case` names, and the arm whose value matches is run. The expression
+    has to be an integer, and every case value has to be an integer
+    constant, which is a literal or the name an enum gave to one. An arm
+    which does not end in a `break` falls through into the arm after it,
+    and a `break` leaves the switch altogether, so a `break` is allowed in
+    a switch the way it is in a loop. A `continue` written in a switch
+    still belongs to the loop the switch stands in, so it begins that
+    loop's next pass rather than leaving the switch.
+
+    A `default` arm runs when no case value matches and has to be the last
+    arm. A switch without a default arm runs no arm and goes on with the
+    statement after it when nothing matches. A switch with no arms, one on
+    an expression which is not an integer, a case value which is not an
+    integer constant, a case value written twice, and an arm written after
+    the default arm are all refused with a message saying so.
