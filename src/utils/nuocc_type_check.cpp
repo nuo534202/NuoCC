@@ -83,7 +83,7 @@ int32 ValueSize(PrimitiveType type,
 {
     /* A pointer to a struct is a pointer like any other. It is a struct
      * value whose room comes from the definition and not from the type. */
-    if (type == PrimitiveType::kStruct)
+    if (type == PrimitiveType::kComposite)
         return composite ? composite->size : 0;
 
     return PrimitiveSize(type);
@@ -95,7 +95,7 @@ int32 ValueAlignment(PrimitiveType type,
     if (IsPointerType(type))
         return 8;
 
-    if (type == PrimitiveType::kStruct)
+    if (type == PrimitiveType::kComposite)
         return composite ? composite->alignment : 1;
 
     const int32 size = PrimitiveSize(type);
@@ -194,16 +194,16 @@ bool ModifyType(AstNodePtr& tree,
         {
             /*
              * How far along the next value is is the size of what the
-             * pointer points at, and a struct only knows that once its
-             * definition says so and not from the type value, which the
-             * tree being scaled here does not carry. Stepping a pointer
-             * to a struct along is therefore refused rather than scaled
+             * pointer points at, and a composite type only knows that
+             * once its definition says so and not from the type value,
+             * which the tree being scaled here does not carry. Stepping a
+             * pointer to one along is therefore refused rather than scaled
              * by a size of zero.
              */
-            if (ValueAt(wanted) == PrimitiveType::kStruct)
+            if (ValueAt(wanted) == PrimitiveType::kComposite)
             {
                 std::cerr << "syntax error: arithmetic on a pointer to a";
-                std::cerr << " struct is not supported yet!" << std::endl;
+                std::cerr << " composite value is not supported yet!" << std::endl;
                 std::exit(1);
             }
 
@@ -224,8 +224,8 @@ bool ModifyType(AstNodePtr& tree,
 
 bool ModifyType(AstNodePtr& tree, const TypeRef& wanted,
                 std::optional<NodeTag> op) {
-    if (BaseType(tree->GetType()) == PrimitiveType::kStruct &&
-        BaseType(wanted.type) == PrimitiveType::kStruct &&
+    if (BaseType(tree->GetType()) == PrimitiveType::kComposite &&
+        BaseType(wanted.type) == PrimitiveType::kComposite &&
         tree->GetComposite() != wanted.composite) {
         return false;
     }

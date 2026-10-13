@@ -107,17 +107,25 @@ private:
                             StorageClass storage);
 
     /*
+     * composite_type: struct_type | union_type
+     *      ;
+     *
      * struct_type: 'struct' opt_tag '{' member_list '}'
      *      |       'struct' tag
      *      ;
      *
-     * The `struct` keyword has been read. What follows is either the tag
-     * of a type which is already known, which is how a variable of it, or
-     * a pointer to it, is written, or the members of a new type between
-     * braces. A type may be written without a tag, which is how a type
-     * which is used once and never named again is declared.
+     * union_type: 'union' opt_tag '{' member_list '}'
+     *      |      'union' tag
+     *      ;
+     *
+     * The `struct` or `union` keyword has been read. What follows is
+     * either the tag of a type which is already known, which is how a
+     * variable of it, or a pointer to it, is written, or the members of a
+     * new type between braces. A type may be written without a tag, which
+     * is how a type which is used once and never named again is declared.
      */
-    TypeRef StructType(const std::vector<NodePtr>& token_list, idx_t& i);
+    TypeRef CompositeTypeDeclaration(const std::vector<NodePtr>& token_list,
+                                     idx_t& i);
 
     /*
      * member_list: type identifier ';'
@@ -129,9 +137,9 @@ private:
      * type, and the room the whole type takes is worked out once they
      * have all been read.
      */
-    void StructMembers(const std::vector<NodePtr>& token_list,
-                       idx_t& i,
-                       const std::shared_ptr<CompositeType>& type);
+    void ParseMembers(const std::vector<NodePtr>& token_list,
+                      idx_t& i,
+                      const std::shared_ptr<CompositeType>& type);
 
     AstNodePtr CompoundStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);

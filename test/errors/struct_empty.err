@@ -1,1 +1,1 @@
-syntax error: a struct needs at least one member!
+syntax error: a composite type needs at least one member!

@@ -86,8 +86,8 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
     if (!root)
         return;
 
-    if (root->GetType() == PrimitiveType::kStruct) {
-        std::cerr << "syntax error: whole struct values are not supported yet!"
+    if (root->GetType() == PrimitiveType::kComposite) {
+        std::cerr << "syntax error: whole composite values are not supported yet!"
                   << std::endl;
         std::exit(1);
     }
@@ -278,7 +278,7 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
      * point at the padding in front of the block.
      */
     if (symbol.stype == StructuralType::kArray ||
-        symbol.type == PrimitiveType::kStruct)
+        symbol.type == PrimitiveType::kComposite)
     {
         ofs_ << "\t.balign\t" << SymbolAlignment(symbol) << std::endl;
         ofs_ << GlobName(symbol.name) << ":\t.space\t" << size << std::endl;
@@ -348,8 +348,8 @@ std::string AsmCodegen::GlobName(const std::string& name) const
  */
 reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 {
-    if (root->GetType() == PrimitiveType::kStruct) {
-        std::cerr << "syntax error: whole struct values are not supported yet!"
+    if (root->GetType() == PrimitiveType::kComposite) {
+        std::cerr << "syntax error: whole composite values are not supported yet!"
                   << std::endl;
         std::exit(1);
     }

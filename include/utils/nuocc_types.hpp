@@ -49,16 +49,16 @@ enum class PrimitiveType : uint8
     kInt = 0x30,
     kLong = 0x40,
     /*
-     * A struct is a type of its own, but which struct a value is of is
-     * said by the definition it carries and not by the type value, so
-     * that a struct and a pointer to it are put together the same way a
+     * A struct and a union are composite types. Which one a value is of
+     * is said by the definition it carries and not by the type value, so
+     * that either one and a pointer to it are put together the same way a
      * char and its pointers are.
      */
-    kStruct = 0x50
+    kComposite = 0x50
 };
 
-/* The definition of a struct type, which a value of the type carries so
- * that its members can be reached from it. */
+/* The definition of a struct or a union, which a value of the type
+ * carries so that its members can be reached from it. */
 struct CompositeType;
 
 /* What a symbol names. */
@@ -128,11 +128,21 @@ struct Symbol
 };
 
 /*
- * The definition of a struct: the tag it was declared with, the members it
- * is made of in the order they were written, and the room a value of the
- * type takes. A member is a symbol because a member is a variable in
- * everything but where it lives, which is what lets one of them be an
- * array, or a struct of its own.
+ * The two shapes a composite type can have. A struct lays its members out
+ * one after another; a union lays every one of them at the same place.
+ */
+enum class CompositeKind : uint8
+{
+    kStruct = 0,
+    kUnion
+};
+
+/*
+ * The definition of a composite type: the tag it was declared with, the
+ * members it is made of in the order they were written, and the room a
+ * value of the type takes. A member is a symbol because a member is a
+ * variable in everything but where it lives, which is what lets one of
+ * them be an array, or a composite of its own.
  *
  * A struct may contain a pointer to itself, so the definition is known by
  * its tag before its members have been read. Until they have, its size is
@@ -140,6 +150,7 @@ struct Symbol
  */
 struct CompositeType
 {
+    CompositeKind kind = CompositeKind::kStruct;
     /* The tag it was declared with, empty when it was written without one. */
     std::string name;
     std::vector<Symbol> members;
@@ -158,7 +169,7 @@ using AstNodePtr = std::unique_ptr<class AstNode>;
  */
 struct Program
 {
-    /* Every struct type the program declared, in the order it was given. */
+    /* Every composite type the program declared, in declaration order. */
     std::vector<std::shared_ptr<CompositeType>> types;
     /* Every function of the program, in the order it was declared. */
     std::vector<AstNodePtr> functions;

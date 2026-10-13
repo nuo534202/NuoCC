@@ -47,6 +47,7 @@ typedef enum NodeTag
     T_Char,
     T_Long,
     T_Struct,
+    T_Union,
     T_Print,
     T_If,
     T_Else,

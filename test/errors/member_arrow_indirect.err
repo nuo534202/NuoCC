@@ -1,1 +1,1 @@
-syntax error: -> needs a struct pointer!
+syntax error: -> needs a pointer to a composite value!

@@ -1,1 +1,1 @@
-syntax error: the member inner is a struct which is not finished!
+syntax error: the member inner is a composite type which is not finished!

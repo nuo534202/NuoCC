@@ -57,11 +57,11 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     TypeRef type = ParseType(token_list, i);
 
     /*
-     * A struct definition which no variable follows declares the type and
-     * nothing else, as `struct fred { int x; };` does.
+     * A composite definition which no variable follows declares the type
+     * and nothing else, as `struct fred { int x; };` does.
      */
     if (TokenTag(token_list[i]) == T_Semicolon &&
-        type.type == PrimitiveType::kStruct)
+        type.type == PrimitiveType::kComposite)
     {
         Match(token_list, i, T_Semicolon, ";");
         return;
@@ -113,8 +113,8 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     const TypeRef& type,
     const std::string& name)
 {
-    if (type.type == PrimitiveType::kStruct) {
-        std::cerr << "syntax error: returning a struct by value"
+    if (type.type == PrimitiveType::kComposite) {
+        std::cerr << "syntax error: returning a composite value"
                   << " is not supported yet!" << std::endl;
         std::exit(1);
     }
@@ -289,6 +289,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Char:
         case T_Long:
         case T_Struct:
+        case T_Union:
             return {DeclareStatement(token_list, i), true};
         case T_If:
             return {IfStatement(token_list, i), false};
@@ -329,10 +330,10 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 {
     TypeRef type = ParseType(token_list, i);
 
-    /* A struct definition which no variable follows declares the type and
-     * nothing else; the semicolon is left to the caller. */
+    /* A composite definition which no variable follows declares the type
+     * and nothing else; the semicolon is left to the caller. */
     if (TokenTag(token_list[i]) == T_Semicolon &&
-        type.type == PrimitiveType::kStruct)
+        type.type == PrimitiveType::kComposite)
         return nullptr;
 
     std::string name = MatchIdentifier(token_list, i, "a variable name");
@@ -429,9 +430,9 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
      * the first one, and the room a struct takes is only known from its
      * definition, which an index does not carry yet.
      */
-    if (element_type.type == PrimitiveType::kStruct)
+    if (element_type.type == PrimitiveType::kComposite)
     {
-        std::cerr << "syntax error: an array of structs is not supported";
+        std::cerr << "syntax error: an array of composite values is not supported";
         std::cerr << " yet!" << std::endl;
         std::exit(1);
     }
@@ -677,8 +678,8 @@ std::vector<Symbol> Parser::FunctionParameters(
         }
 
         TypeRef type = ParseType(token_list, i);
-        if (type.type == PrimitiveType::kStruct) {
-            std::cerr << "syntax error: passing a struct by value"
+        if (type.type == PrimitiveType::kComposite) {
+            std::cerr << "syntax error: passing a composite value"
                       << " is not supported yet!" << std::endl;
             std::exit(1);
         }
@@ -1027,9 +1028,9 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
             }
             const Symbol& symbol =
                 static_cast<const AstIdentifier&>(*operand).GetSymbol();
-            if (BaseType(symbol.type) == PrimitiveType::kStruct) {
-                std::cerr << "syntax error: increment and decrement of structs"
-                          << " or struct pointers are not supported yet!"
+            if (BaseType(symbol.type) == PrimitiveType::kComposite) {
+                std::cerr << "syntax error: increment and decrement of composite"
+                          << " values or pointers to them are not supported yet!"
                           << std::endl;
                 std::exit(1);
             }
@@ -1126,9 +1127,9 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             {
                 bool increment = TokenTag(token_list[i]) == T_Inc;
                 i++;
-                if (BaseType(symbol.type) == PrimitiveType::kStruct) {
+                if (BaseType(symbol.type) == PrimitiveType::kComposite) {
                     std::cerr << "syntax error: increment and decrement of"
-                              << " structs or struct pointers are not"
+                              << " composite values or pointers to them are not"
                               << " supported yet!"
                               << std::endl;
                     std::exit(1);
@@ -1174,12 +1175,13 @@ AstNodePtr Parser::MemberAccess(AstNodePtr base,
                                idx_t& i) {
     const bool through_pointer = TokenTag(token_list[i]) == T_Arrow;
     const PrimitiveType wanted = through_pointer
-        ? PointerTo(PrimitiveType::kStruct) : PrimitiveType::kStruct;
+        ? PointerTo(PrimitiveType::kComposite) : PrimitiveType::kComposite;
     if (base->GetType() != wanted || !base->GetComposite() ||
         (!through_pointer && !IsLvalue(base->GetAstNodeTag()))) {
         std::cerr << "syntax error: " << (through_pointer ? "->" : ".")
-                  << " needs " << (through_pointer ? "a struct pointer" :
-                                                        "a struct value")
+                  << " needs " << (through_pointer ?
+                                     "a pointer to a composite value" :
+                                     "a composite value")
                   << "!" << std::endl;
         std::exit(1);
     }
@@ -1190,7 +1192,7 @@ AstNodePtr Parser::MemberAccess(AstNodePtr base,
     const auto member = std::find_if(members.begin(), members.end(),
         [&name](const Symbol& candidate) { return candidate.name == name; });
     if (member == members.end()) {
-        std::cerr << "syntax error: struct has no member " << name << "!"
+        std::cerr << "syntax error: composite type has no member " << name << "!"
                   << std::endl;
         std::exit(1);
     }
@@ -1244,12 +1246,13 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
     switch (TokenTag(token_list[i]))
     {
         /*
-         * A struct is a type like any other, so the keyword and whatever
+         * A composite type is like any other, so the keyword and whatever
          * it names are read here and the stars which follow are read with
          * every other type's below.
          */
         case T_Struct:
-            type = StructType(token_list, i);
+        case T_Union:
+            type = CompositeTypeDeclaration(token_list, i);
             break;
         case T_Char:
             type.type = PrimitiveType::kChar;
@@ -1282,26 +1285,31 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
 }
 
 /*
- * struct_type: 'struct' opt_tag '{' member_list '}'
- *      |       'struct' tag
+ * composite_type: struct_type | union_type
  *      ;
  *
- * A type which is already known is named by its tag, and the definition
- * may be written here as well, either for a type which has a tag of its
- * own or for one which is never named again. The members are read with the
- * definition already known by its tag, so that a member may be a pointer
- * back at the struct it stands in.
+ * The `struct` or `union` keyword has already been read. A named type is
+ * looked up in the same tag space for both shapes, so a later definition
+ * cannot turn one shape into the other.
  */
-TypeRef Parser::StructType(const std::vector<NodePtr>& token_list, idx_t& i)
+TypeRef Parser::CompositeTypeDeclaration(
+    const std::vector<NodePtr>& token_list,
+    idx_t& i)
 {
-    i++;    /* step over the struct keyword */
+    const NodeTag keyword = TokenTag(token_list[i]);
+    const std::string keyword_name = keyword == T_Union ? "union" : "struct";
+    const CompositeKind kind = keyword == T_Union
+        ? CompositeKind::kUnion : CompositeKind::kStruct;
+    i++;    /* step over the keyword */
 
     std::string name;
     std::shared_ptr<CompositeType> type;
 
     if (TokenTag(token_list[i]) == T_Identifier)
     {
-        name = MatchIdentifier(token_list, i, "a struct name");
+        name = MatchIdentifier(token_list, i,
+                               keyword_name == "union" ? "a union name"
+                                                       : "a struct name");
         type = symbol_table_.FindTag(name);
     }
 
@@ -1310,32 +1318,35 @@ TypeRef Parser::StructType(const std::vector<NodePtr>& token_list, idx_t& i)
     {
         if (!type)
         {
-            std::cerr << "syntax error: there is no struct " << name;
-            std::cerr << "!" << std::endl;
+            std::cerr << "syntax error: there is no " << keyword_name;
+            std::cerr << " " << name << "!" << std::endl;
             std::exit(1);
         }
 
-        return TypeRef{.type = PrimitiveType::kStruct, .composite = type};
+        return TypeRef{.type = PrimitiveType::kComposite,
+                       .composite = std::move(type)};
     }
 
     if (type)
     {
-        std::cerr << "syntax error: struct " << name;
+        std::cerr << "syntax error: " << keyword_name << " " << name;
         std::cerr << " is already defined!" << std::endl;
         std::exit(1);
     }
 
     type = std::make_shared<CompositeType>();
-    type->name = name;
+    type->kind = kind;
+    type->name = std::move(name);
 
-    if (!name.empty())
+    if (!type->name.empty())
         symbol_table_.AddTag(type);
 
     types_.push_back(type);
 
-    StructMembers(token_list, i, type);
+    ParseMembers(token_list, i, type);
 
-    return TypeRef{.type = PrimitiveType::kStruct, .composite = type};
+    return TypeRef{.type = PrimitiveType::kComposite,
+                   .composite = std::move(type)};
 }
 
 /*
@@ -1344,13 +1355,11 @@ TypeRef Parser::StructType(const std::vector<NodePtr>& token_list, idx_t& i)
  *      |       member_list member_list
  *      ;
  *
- * Every member is given the place it takes inside a value of the type,
- * and the room the whole type takes is worked out once they have all been
- * read. A member lines up to its own type, and the type as a whole lines
- * up to the strictest of its members, so that every member of every
- * element of an array of them lands where it should.
+ * A struct lines its members up one after another, each at its own
+ * alignment. A union puts every member at the start and takes as much
+ * room as the largest one, rounded up to the alignment they share.
  */
-void Parser::StructMembers(const std::vector<NodePtr>& token_list,
+void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
     idx_t& i,
     const std::shared_ptr<CompositeType>& type)
 {
@@ -1377,7 +1386,7 @@ void Parser::StructMembers(const std::vector<NodePtr>& token_list,
             [&name](const Symbol& previous) {
                 return previous.name == name;
             })) {
-            std::cerr << "syntax error: duplicate struct member " << name
+            std::cerr << "syntax error: duplicate composite member " << name
                       << "!" << std::endl;
             std::exit(1);
         }
@@ -1389,18 +1398,18 @@ void Parser::StructMembers(const std::vector<NodePtr>& token_list,
         Match(token_list, i, T_Semicolon, ";");
 
         /*
-         * A struct cannot hold a value of itself, because knowing how much
-         * room such a member takes would take knowing the size of the type
-         * it is being worked out for. A pointer to itself is a value of a
-         * size which is already known, and that is how a type which refers
-         * to itself is written.
+         * A composite cannot hold a value of itself, because knowing how
+         * much room such a member takes would take knowing the size of
+         * the type it is being worked out for. A pointer to itself is a
+         * value of a size which is already known, and that is how a type
+         * which refers to itself is written.
          */
         if (SymbolStorageSize(member) == 0)
         {
             if (member.composite)
             {
                 std::cerr << "syntax error: the member " << name;
-                std::cerr << " is a struct which is not finished!";
+                std::cerr << " is a composite type which is not finished!";
             }
             else
             {
@@ -1411,45 +1420,61 @@ void Parser::StructMembers(const std::vector<NodePtr>& token_list,
             std::exit(1);
         }
 
-        type->members.push_back(member);
+        type->members.push_back(std::move(member));
     }
 
     i++;    /* step over the right brace */
 
     if (type->members.empty())
     {
-        std::cerr << "syntax error: a struct needs at least one member!";
-        std::cerr << std::endl;
+        std::cerr << "syntax error: a composite type needs at least one";
+        std::cerr << " member!" << std::endl;
         std::exit(1);
     }
 
-    int32 offset = 0;
     int32 alignment = 1;
 
-    for (Symbol& member : type->members)
+    for (const Symbol& member : type->members)
     {
         const int32 member_alignment = SymbolAlignment(member);
-
         if (member_alignment > alignment)
             alignment = member_alignment;
-
-        const int32 remainder = offset % member_alignment;
-
-        if (remainder != 0)
-            offset += member_alignment - remainder;
-
-        member.member_offset = offset;
-        offset += SymbolStorageSize(member);
     }
 
     type->alignment = alignment;
 
-    const int32 remainder = offset % alignment;
+    if (type->kind == CompositeKind::kUnion)
+    {
+        const Symbol& largest = *std::max_element(
+            type->members.begin(), type->members.end(),
+            [](const Symbol& left, const Symbol& right) {
+                return SymbolStorageSize(left) < SymbolStorageSize(right);
+            });
 
+        const int32 remainder = SymbolStorageSize(largest) % alignment;
+        type->size = SymbolStorageSize(largest) +
+            (remainder == 0 ? 0 : alignment - remainder);
+        return;
+    }
+
+    int32 size = 0;
+    for (Symbol& member : type->members)
+    {
+        const int32 member_alignment = SymbolAlignment(member);
+
+        const int32 remainder = size % member_alignment;
+        if (remainder != 0)
+            size += member_alignment - remainder;
+
+        member.member_offset = size;
+        size += SymbolStorageSize(member);
+    }
+
+    const int32 remainder = size % alignment;
     if (remainder != 0)
-        offset += alignment - remainder;
+        size += alignment - remainder;
 
-    type->size = offset;
+    type->size = size;
 }
 
 Symbol Parser::Lookup(const NodePtr& token, std::string_view what)

@@ -28,7 +28,7 @@ parameter_list: type identifier
 /*
  * An array declares one name only, so it never joins an identifier_list.
  * The size is a fixed number of elements and may not be zero, and the
- * elements may not be void or structs.
+ * elements may not be void or composite values.
  */
 var_declaration: type identifier_list ';'
     | type identifier '[' number ']' ';'
@@ -39,7 +39,7 @@ identifier_list: identifier
     ;
 
 type: type_keyword opt_pointer
-    | struct_type opt_pointer
+    | composite_type opt_pointer
     ;
 
 type_keyword: 'char'
@@ -49,13 +49,22 @@ type_keyword: 'char'
     ;
 
 /*
- * A struct is named by its tag, and a type which is written without one can
- * only be used where it is defined. The members are read with the type
- * already known by its tag, so that a member may be a pointer back at the
- * struct it stands in. A struct with no members is refused.
+ * A struct or a union is named by its tag, and a type which is written
+ * without one can only be used where it is defined. The members are read
+ * with the type already known by its tag, so that a member may be a
+ * pointer back at the composite type it stands in. A type with no members
+ * is refused.
  */
+composite_type: struct_type
+    | union_type
+    ;
+
 struct_type: 'struct' opt_tag
     | 'struct' opt_tag '{' member_list '}'
+    ;
+
+union_type: 'union' opt_tag
+    | 'union' opt_tag '{' member_list '}'
     ;
 
 opt_tag: <empty>

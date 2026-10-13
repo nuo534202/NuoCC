@@ -202,3 +202,20 @@
     Incrementing a member or a struct pointer, taking the address of an
     entire array member, arrays of structs, arithmetic on a struct pointer
     and copying a whole struct remain unsupported.
+
+29. Unions (acwj Stage 33, `33_Union`). `union name { ... };` declares a
+    composite type whose members all start at offset zero, and an anonymous
+    union may be defined where a variable is declared. A union member can
+    be read and written in exactly the ways already supported for a struct
+    member: through `.`, through `->`, when nested in a struct or another
+    union, and when it is an array or a pointer. Writing one member changes
+    the bytes another member reads when they overlap; the test relies on
+    this to show a `char` array, an `int` and a `long` sharing one value.
+
+    The size of a union is the size of its largest member, rounded up to
+    the union's alignment, and its alignment is the strictest alignment
+    any member asks for. `union same` and `struct same` cannot share a
+    tag, and pointers to different composite types remain distinct. A
+    whole composite value still cannot be copied, passed by value or
+    returned, and arrays of composite values and arithmetic on pointers to
+    them are still refused.

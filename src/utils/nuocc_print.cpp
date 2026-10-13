@@ -107,6 +107,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Struct:
             out = "struct";
             break;
+        case T_Union:
+            out = "union";
+            break;
         case T_Print:
             out = "print";
             break;
@@ -232,8 +235,11 @@ std::string TypeName(PrimitiveType type,
         case PrimitiveType::kLong:
             name = "long";
             break;
-        case PrimitiveType::kStruct:
-            name = "struct";
+        case PrimitiveType::kComposite:
+            if (!composite || composite->kind == CompositeKind::kStruct)
+                name = "struct";
+            else
+                name = "union";
             if (composite && !composite->name.empty())
                 name += " " + composite->name;
             break;
@@ -388,7 +394,8 @@ void PrintSyntaxTree(const Program& program)
 {
     for (const std::shared_ptr<CompositeType>& type : program.types)
     {
-        std::cout << "struct ";
+        std::cout << (type->kind == CompositeKind::kUnion ? "union "
+                                                            : "struct ");
         std::cout << (type->name.empty() ? "(no tag)" : type->name);
         std::cout << ": " << type->size << " bytes, aligned to ";
         std::cout << type->alignment << std::endl;
