@@ -54,14 +54,22 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     Program& program)
 {
+    /* A typedef declares a name for a type and nothing else. */
+    if (TokenTag(token_list[i]) == T_Typedef)
+    {
+        TypedefDeclaration(token_list, i);
+        Match(token_list, i, T_Semicolon, ";");
+        return;
+    }
+
     TypeRef type = ParseType(token_list, i);
 
     /*
-     * A composite definition which no variable follows declares the type
-     * and nothing else, as `struct fred { int x; };` does.
+     * A definition which no variable follows declares the type and
+     * nothing else, as `struct fred { int x; };` and `enum fred { apple };`
+     * do.
      */
-    if (TokenTag(token_list[i]) == T_Semicolon &&
-        type.type == PrimitiveType::kComposite)
+    if (TokenTag(token_list[i]) == T_Semicolon && type_definition_)
     {
         Match(token_list, i, T_Semicolon, ";");
         return;
@@ -247,6 +255,13 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
         if (statement.semicolon)
             Match(token_list, i, T_Semicolon, ";");
 
+        /*
+         * A declaration which defines a type and names nothing builds no
+         * tree, so there is nothing to glue onto what came before it.
+         */
+        if (!statement.tree)
+            continue;
+
         /* Glue each statement onto the statements parsed before it. */
         if (!left)
         {
@@ -290,6 +305,8 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Long:
         case T_Struct:
         case T_Union:
+        case T_Enum:
+        case T_Typedef:
             return {DeclareStatement(token_list, i), true};
         case T_If:
             return {IfStatement(token_list, i), false};
@@ -300,6 +317,15 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Return:
             return {ReturnStatement(token_list, i), true};
         default:
+            /*
+             * A statement may declare a variable whose type is a name
+             * made with typedef, so a name which is one of those starts a
+             * declaration and not an expression.
+             */
+            if (TokenTag(token_list[i]) == T_Identifier &&
+                IsTypedefName(token_list[i]))
+                return {DeclareStatement(token_list, i), true};
+
             /* This covers an assignment, a call and any other expression. */
             return {BinaryExpression(token_list, i, 0), true};
     }
@@ -328,12 +354,18 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
+    /* A typedef declares a name for a type and nothing else. */
+    if (TokenTag(token_list[i]) == T_Typedef)
+    {
+        TypedefDeclaration(token_list, i);
+        return nullptr;
+    }
+
     TypeRef type = ParseType(token_list, i);
 
-    /* A composite definition which no variable follows declares the type
-     * and nothing else; the semicolon is left to the caller. */
-    if (TokenTag(token_list[i]) == T_Semicolon &&
-        type.type == PrimitiveType::kComposite)
+    /* A definition which no variable follows declares the type and
+     * nothing else; the semicolon is left to the caller. */
+    if (TokenTag(token_list[i]) == T_Semicolon && type_definition_)
         return nullptr;
 
     std::string name = MatchIdentifier(token_list, i, "a variable name");
@@ -1098,6 +1130,13 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             i++;
 
             /*
+             * An enum value is a name for a number, so reading it yields
+             * the number it was declared with and not a place holding it.
+             */
+            if (symbol.stype == StructuralType::kEnumValue)
+                return MakeIntLitLeaf(symbol.enum_value, PrimitiveType::kInt);
+
+            /*
              * An array named on its own stands for the address of its
              * first element, which is what lets one be given wherever a
              * pointer is wanted. The address of an array is fixed, so it
@@ -1243,6 +1282,12 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
 {
     TypeRef type;
 
+    /*
+     * Only a definition of a tag may stand alone in a declaration, so the
+     * flag is cleared here and set by the two cases which are one.
+     */
+    type_definition_ = false;
+
     switch (TokenTag(token_list[i]))
     {
         /*
@@ -1253,6 +1298,15 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
         case T_Struct:
         case T_Union:
             type = CompositeTypeDeclaration(token_list, i);
+            type_definition_ = true;
+            break;
+        /*
+         * An enum is a tag of its own, but a value of it is an int, so
+         * the type which comes back is one whatever the enum was called.
+         */
+        case T_Enum:
+            type = EnumType(token_list, i);
+            type_definition_ = true;
             break;
         case T_Char:
             type.type = PrimitiveType::kChar;
@@ -1268,6 +1322,14 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
             break;
         case T_Void:
             type.type = PrimitiveType::kVoid;
+            i++;
+            break;
+        /*
+         * Any other name for a type is one made with typedef, which the
+         * symbol table says the type behind.
+         */
+        case T_Identifier:
+            type = TypedefType(token_list[i]);
             i++;
             break;
         default:
@@ -1347,6 +1409,149 @@ TypeRef Parser::CompositeTypeDeclaration(
 
     return TypeRef{.type = PrimitiveType::kComposite,
                    .composite = std::move(type)};
+}
+
+/*
+ * enum_type: 'enum' opt_tag
+ *      |   'enum' opt_tag '{' enum_value_list '}'
+ *      ;
+ *
+ * An enum shares the tag namespace with structs and unions, so a tag
+ * which is already a struct or a union cannot become an enum, and one
+ * which is already an enum cannot be defined over. Every value between
+ * the braces is a name for a number in the ordinary namespace, where a
+ * variable also lives, so a name may be used once and no more.
+ */
+TypeRef Parser::EnumType(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    i++;    /* step over the keyword */
+
+    std::string name;
+    std::shared_ptr<CompositeType> tag;
+
+    if (TokenTag(token_list[i]) == T_Identifier)
+    {
+        name = MatchIdentifier(token_list, i, "an enum name");
+        tag = symbol_table_.FindTag(name);
+
+        /* A tag of another kind is a definition of the same name already. */
+        if (tag && !tag->is_enum)
+        {
+            std::cerr << "syntax error: enum " << name
+                      << " is already defined!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    /* Without a brace this only names a tag which is already known. */
+    if (TokenTag(token_list[i]) != T_LBrace)
+    {
+        if (!tag)
+        {
+            std::cerr << "syntax error: there is no enum " << name << "!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        return TypeRef{.type = PrimitiveType::kInt};
+    }
+
+    if (tag)
+    {
+        std::cerr << "syntax error: enum " << name
+                  << " is already defined!" << std::endl;
+        std::exit(1);
+    }
+
+    tag = std::make_shared<CompositeType>();
+    tag->is_enum = true;
+    tag->name = std::move(name);
+
+    if (!tag->name.empty())
+        symbol_table_.AddTag(tag);
+
+    Match(token_list, i, T_LBrace, "{");
+
+    /*
+     * The number the next name stands for, counting up from zero and
+     * starting again from every number written out.
+     */
+    int32 value = 0;
+
+    while (true)
+    {
+        std::string value_name =
+            MatchIdentifier(token_list, i, "an enum value name");
+
+        if (symbol_table_.FindSymbol(value_name))
+        {
+            std::cerr << "syntax error: enum value " << value_name
+                      << " is already defined!" << std::endl;
+            std::exit(1);
+        }
+
+        if (TokenTag(token_list[i]) == T_Assign)
+        {
+            i++;
+
+            if (TokenTag(token_list[i]) != T_IntLit)
+            {
+                std::cerr << "syntax error: expect an enum value!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
+            const Literal<int, T_IntLit> *lit =
+                static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
+            value = lit->GetValue();
+            i++;
+        }
+
+        symbol_table_.AddSymbol(Symbol{.name = value_name,
+                                       .type = PrimitiveType::kInt,
+                                       .stype = StructuralType::kEnumValue,
+                                       .enum_value = value});
+        value++;
+
+        if (TokenTag(token_list[i]) != T_Comma)
+            break;
+
+        i++;
+    }
+
+    Match(token_list, i, T_RBrace, "}");
+
+    return TypeRef{.type = PrimitiveType::kInt};
+}
+
+/*
+ * typedef_declaration: 'typedef' type identifier  ;
+ *
+ * The type is read with the same rule which reads the type of any other
+ * declaration, so a typedef may name a type made with another typedef, a
+ * struct, a union or an enum as well as a primitive one. The name becomes
+ * another way of writing that type and is looked up wherever a type is
+ * expected.
+ */
+void Parser::TypedefDeclaration(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Typedef, "typedef");
+
+    TypeRef type = ParseType(token_list, i);
+    std::string name = MatchIdentifier(token_list, i, "a type name");
+
+    if (symbol_table_.FindSymbol(name))
+    {
+        std::cerr << "syntax error: " << name << " is already defined!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    symbol_table_.AddSymbol(Symbol{.name = name,
+                                   .type = type.type,
+                                   .composite = type.composite,
+                                   .stype = StructuralType::kTypedef});
 }
 
 /*
@@ -1504,6 +1709,33 @@ Symbol Parser::Lookup(const NodePtr& token, std::string_view what)
     return *symbol;
 }
 
+TypeRef Parser::TypedefType(const NodePtr& token) const
+{
+    const Identifier *ident = static_cast<const Identifier *>(token.get());
+
+    std::optional<Symbol> symbol = symbol_table_.FindSymbol(ident->GetName());
+
+    if (!symbol || symbol->stype != StructuralType::kTypedef)
+    {
+        std::cerr << "syntax error: unknown type " << ident->GetName() << "!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    return TypeRef{.type = symbol->type, .composite = symbol->composite};
+}
+
+bool Parser::IsTypedefName(const NodePtr& token) const
+{
+    if (token->GetNodeTag() != T_Identifier)
+        return false;
+
+    const Identifier *ident = static_cast<const Identifier *>(token.get());
+    std::optional<Symbol> symbol = symbol_table_.FindSymbol(ident->GetName());
+
+    return symbol && symbol->stype == StructuralType::kTypedef;
+}
+
 void Parser::CheckKind(const Symbol& symbol,
     StructuralType wanted,
     std::string_view what) const
@@ -1536,6 +1768,14 @@ AstNodePtr Parser::MakeIntLitLeaf(const NodePtr& token, PrimitiveType type)
     AstNodePtr right = nullptr;
 
     return std::make_unique<AstIntLit>(left, right, lit->GetValue(), type);
+}
+
+AstNodePtr Parser::MakeIntLitLeaf(int32 value, PrimitiveType type)
+{
+    AstNodePtr left = nullptr;
+    AstNodePtr right = nullptr;
+
+    return std::make_unique<AstIntLit>(left, right, value, type);
 }
 
 AstNodePtr Parser::MakeIdentLeaf(const Symbol& symbol)

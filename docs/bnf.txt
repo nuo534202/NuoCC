@@ -4,6 +4,7 @@ program: global_declaration
 
 global_declaration: function_declaration
     | var_declaration
+    | typedef_declaration
     ;
 
 function_declaration:
@@ -38,8 +39,17 @@ identifier_list: identifier
     | identifier ',' identifier_list
     ;
 
+/*
+ * A type is a keyword with the stars which follow it, a composite or an
+ * enum named by its tag, or a name made with typedef, which stands for
+ * whatever type it was declared to be. Only the keywords and the tags may
+ * be followed by stars here: a typedef already carries the stars its own
+ * declaration gave it.
+ */
 type: type_keyword opt_pointer
     | composite_type opt_pointer
+    | enum_type opt_pointer
+    | identifier
     ;
 
 type_keyword: 'char'
@@ -65,6 +75,25 @@ struct_type: 'struct' opt_tag
 
 union_type: 'union' opt_tag
     | 'union' opt_tag '{' member_list '}'
+    ;
+
+/*
+ * An enum shares the tag namespace with structs and unions, so one tag
+ * cannot be reused as another kind. A value of an enum is an int, so the
+ * type is an int however the enum was written. The names between the
+ * braces are ordinary names for the numbers they stand for, counting up
+ * from zero and starting again from each number written out.
+ */
+enum_type: 'enum' opt_tag
+    | 'enum' opt_tag '{' enum_value_list '}'
+    ;
+
+enum_value_list: enum_value
+    | enum_value ',' enum_value_list
+    ;
+
+enum_value: identifier
+    | identifier '=' number
     ;
 
 opt_tag: <empty>
@@ -103,6 +132,15 @@ print_statement: 'print' expression ';'
 
 declaration: type identifier_list ';'
     | type identifier '[' number ']' ';'
+    | typedef_declaration
+    ;
+
+/*
+ * The type has already been read by the time the new name is reached, and
+ * the name becomes another way of writing that type. A type definition
+ * which names nothing may stand alone, as `enum fred { apple };` does.
+ */
+typedef_declaration: 'typedef' type identifier ';'
     ;
 
 function_call: identifier '(' opt_expression_list ')'

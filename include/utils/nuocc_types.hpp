@@ -72,7 +72,20 @@ enum class StructuralType : uint8
      * an expression is written with; `element_count` is how many of them
      * the declaration asked for.
      */
-    kArray
+    kArray,
+    /*
+     * The name an `enum` gives to a number. It is a name for a value and
+     * not a place which holds one, so it is never a variable: reading it
+     * stands for the number it was declared with, and nothing may be
+     * stored into it.
+     */
+    kEnumValue,
+    /*
+     * Another name for a type, made with `typedef`. A typedef stands
+     * wherever the type it names may stand, and the type checks see the
+     * type it is a name for rather than the name itself.
+     */
+    kTypedef
 };
 
 enum class StorageClass : uint8
@@ -125,6 +138,8 @@ struct Symbol
     int32 element_count = 0;
     /* Where a member starts, measured from the base of its struct. */
     int32 member_offset = 0;
+    /* The number an enum value stands for, and zero for anything else. */
+    int32 enum_value = 0;
 };
 
 /*
@@ -138,11 +153,17 @@ enum class CompositeKind : uint8
 };
 
 /*
- * The definition of a composite type: the tag it was declared with, the
- * members it is made of in the order they were written, and the room a
- * value of the type takes. A member is a symbol because a member is a
- * variable in everything but where it lives, which is what lets one of
- * them be an array, or a composite of its own.
+ * The definition a tag names: a struct, a union or an enum. A struct and a
+ * union carry the members they are made of in the order they were written
+ * and the room a value of the type takes. A member is a symbol because a
+ * member is a variable in everything but where it lives, which is what lets
+ * one of them be an array, or a composite of its own.
+ *
+ * An enum is the third kind of tag, and the only one with no layout of its
+ * own: it names no members and takes no room because a value of it is
+ * simply an int. It keeps a place in the tag namespace so that `enum fred`
+ * names the same tag wherever it is written, and so that the tag cannot be
+ * reused as a struct or a union.
  *
  * A struct may contain a pointer to itself, so the definition is known by
  * its tag before its members have been read. Until they have, its size is
@@ -157,6 +178,12 @@ struct CompositeType
     /* How many bytes a value of the type takes, and what it lines up to. */
     int32 size = 0;
     int32 alignment = 1;
+    /*
+     * Whether this is an enum tag. An enum has no members and no size, so
+     * the fields above say nothing about it; what sets it apart from a
+     * struct or a union is only that `enum fred` is a name for an int.
+     */
+    bool is_enum = false;
 };
 
 using NodePtr = std::unique_ptr<class Node>;

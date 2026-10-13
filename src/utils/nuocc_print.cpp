@@ -131,6 +131,12 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Return:
             out = "return";
             break;
+        case T_Enum:
+            out = "enum";
+            break;
+        case T_Typedef:
+            out = "typedef";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;

@@ -128,6 +128,37 @@ private:
                                      idx_t& i);
 
     /*
+     * enum_type: 'enum' opt_tag
+     *      |   'enum' opt_tag '{' enum_value_list '}'
+     *      ;
+     *
+     * enum_value_list: enum_value
+     *      |           enum_value ',' enum_value_list
+     *      ;
+     *
+     * enum_value: identifier
+     *      |      identifier '=' number
+     *      ;
+     *
+     * The `enum` keyword has been read. Without a brace what follows names
+     * a tag which is already known, and the type it yields is an int
+     * because that is all a value of an enum is. With a brace, every name
+     * between them is added to the symbol table as an ordinary name for
+     * the number it stands for, counting up from zero and starting again
+     * from every number written out.
+     */
+    TypeRef EnumType(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
+     * typedef_declaration: 'typedef' type identifier ';'  ;
+     *
+     * The `typedef` keyword has been read. The type it names has already
+     * been read by the time the new name is reached, and the name becomes
+     * another way of writing that type. The caller matches the semicolon.
+     */
+    void TypedefDeclaration(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
      * member_list: type identifier ';'
      *      |       type identifier '[' number ']' ';'
      *      |       member_list member_list
@@ -229,7 +260,12 @@ private:
                            const std::vector<NodePtr>& token_list,
                            idx_t& i);
 
-    /* Parse the type which starts a declaration and step over it. */
+    /*
+     * Parse the type which starts a declaration and step over it. The
+     * `type_definition_` flag is left saying whether the type was written
+     * as a definition of a tag, which is the one shape a declaration may
+     * end at without naming anything, as `enum fred { ... };` does.
+     */
     TypeRef ParseType(const std::vector<NodePtr>& token_list, idx_t& i);
 
     /*
@@ -239,6 +275,20 @@ private:
      * is refused rather than read as a name.
      */
     Symbol Lookup(const NodePtr& token, std::string_view what);
+
+    /*
+     * The type a name made with typedef stands for. The token has to be a
+     * name which is one; a name which is not is refused with a message
+     * saying that the type is unknown.
+     */
+    TypeRef TypedefType(const NodePtr& token) const;
+
+    /*
+     * Whether a token is a name made with typedef, which is what lets a
+     * declaration be told from an expression where both may start with a
+     * name.
+     */
+    bool IsTypedefName(const NodePtr& token) const;
 
     /*
      * Stop unless a symbol is the kind of symbol the grammar wants there,
@@ -273,6 +323,7 @@ private:
     AstNodePtr GlueStatements(std::vector<AstNodePtr>& statements);
 
     AstNodePtr MakeIntLitLeaf(const NodePtr& token, PrimitiveType type);
+    AstNodePtr MakeIntLitLeaf(int32 value, PrimitiveType type);
     AstNodePtr MakeIdentLeaf(const Symbol& symbol);
     AstNodePtr MakeOperatorNode(AstNodePtr& left,
                                 AstNodePtr& right,
@@ -329,6 +380,14 @@ private:
      */
     TypeRef current_function_type_;
     int32 local_stack_size_ = 0;
+
+    /*
+     * Whether the type just parsed was written as a definition of a tag.
+     * A declaration which names no variable may end where such a type
+     * ends, so the callers of ParseType ask this before they ask for a
+     * name.
+     */
+    bool type_definition_ = false;
 
     /* The struct types the program declared, in the order it declared
      * them, so that the whole program holds them once it is parsed. */

@@ -55,6 +55,8 @@ typedef enum NodeTag
     T_For,
     T_Void,
     T_Return,
+    T_Enum,
+    T_Typedef,
 
     T_Identifier,
 

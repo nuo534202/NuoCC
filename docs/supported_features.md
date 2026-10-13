@@ -219,3 +219,31 @@
     whole composite value still cannot be copied, passed by value or
     returned, and arrays of composite values and arithmetic on pointers to
     them are still refused.
+
+30. Enums and Typedefs (acwj Stage 34, `34_Enums_and_Typedefs`). An
+    `enum name { ... };` gives names to numbers, and each name may be
+    written wherever a number may, so in `enum fred { apple= 1, banana };`
+    the name `banana` stands for 2. Every name counts one past the one
+    before it, starting at zero, and a number which is written out sets
+    where the next name counts from, as `pear= 10` makes the name after it
+    stand for 11. A name between the braces is a name for a value and not
+    a place which holds one, so it cannot be stored into, and it cannot be
+    used again for a variable or for another value.
+
+    The tag shares one namespace with structs and unions, so a tag already
+    used by one kind cannot be reused as another and a tag cannot be
+    defined twice. A variable of an enum is an int, so `enum fred var1;`
+    declares one and `enum { red, green, blue } colour;` defines a type
+    without a tag and a variable of it in the same declaration. An enum
+    written without braces names a tag which is already known, and a tag
+    which is not known is refused.
+
+    `typedef type name;` makes `name` another way of writing `type`, so
+    `typedef int FOO; FOO x;` declares an int named `x`. The type may be
+    any the language has, including a pointer, a struct, a union, an enum
+    or another typedef, so `typedef struct bar BAR;` makes `BAR` stand for
+    `struct bar` and `typedef FOO COUNT;` makes `COUNT` stand for `int` as
+    well. A typedef name may be written wherever a type may, at the top
+    level of the program or inside a function, and it is the type behind
+    the name which the type checks see. A name which is already used for
+    something else cannot be made a typedef.
