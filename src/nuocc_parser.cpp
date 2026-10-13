@@ -54,6 +54,15 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     Program& program)
 {
+    /*
+     * `extern` says the storage of what is declared is given in another
+     * source file, so the name is added to the symbol table but nothing
+     * is emitted for it here.
+     */
+    const bool is_extern = ConsumeExtern(token_list, i);
+    const StorageClass storage = is_extern ? StorageClass::kExtern
+                                           : StorageClass::kGlobal;
+
     /* A typedef declares a name for a type and nothing else. */
     if (TokenTag(token_list[i]) == T_Typedef)
     {
@@ -91,19 +100,32 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     /* A '[' after the name declares an array of that many elements. */
     if (TokenTag(token_list[i]) == T_LBracket)
     {
-        Symbol symbol = ArrayDeclaration(token_list, i, type, name,
-                                         StorageClass::kGlobal);
+        Symbol symbol = ArrayDeclaration(token_list, i, type, name, storage);
         symbol_table_.AddSymbol(symbol);
 
         Match(token_list, i, T_Semicolon, ";");
-        program.globals.push_back(std::make_unique<AstDeclare>(symbol));
+
+        if (!is_extern)
+            program.globals.push_back(std::make_unique<AstDeclare>(symbol));
+
         return;
     }
 
-    IdentifierList(token_list, i, type, name, program.globals,
-                   StorageClass::kGlobal);
+    /*
+     * Every name of the list is declared, but only the ones whose storage
+     * belongs here are given any: an extern name is left for the file
+     * which defines it.
+     */
+    std::vector<AstNodePtr> declarations;
+    IdentifierList(token_list, i, type, name, declarations, storage);
 
     Match(token_list, i, T_Semicolon, ";");
+
+    if (!is_extern)
+    {
+        for (AstNodePtr& declaration : declarations)
+            program.globals.push_back(std::move(declaration));
+    }
 }
 
 /*
@@ -307,6 +329,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Union:
         case T_Enum:
         case T_Typedef:
+        case T_Extern:
             return {DeclareStatement(token_list, i), true};
         case T_If:
             return {IfStatement(token_list, i), false};
@@ -354,6 +377,15 @@ AstNodePtr Parser::PrintStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
+    /*
+     * An `extern` declaration names a global whose storage is given
+     * elsewhere, even when it is written inside a function, so it is given
+     * no room in the stack frame.
+     */
+    const bool is_extern = ConsumeExtern(token_list, i);
+    const StorageClass storage = is_extern ? StorageClass::kExtern
+                                           : StorageClass::kLocal;
+
     /* A typedef declares a name for a type and nothing else. */
     if (TokenTag(token_list[i]) == T_Typedef)
     {
@@ -372,8 +404,7 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 
     if (TokenTag(token_list[i]) == T_LBracket)
     {
-        Symbol symbol = ArrayDeclaration(token_list, i, type, name,
-                                         StorageClass::kLocal);
+        Symbol symbol = ArrayDeclaration(token_list, i, type, name, storage);
         symbol_table_.AddSymbol(symbol);
 
         return std::make_unique<AstDeclare>(symbol);
@@ -381,8 +412,7 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 
     /* The declaration may name more than one variable of that type. */
     std::vector<AstNodePtr> declarations;
-    IdentifierList(token_list, i, type, name, declarations,
-                   StorageClass::kLocal);
+    IdentifierList(token_list, i, type, name, declarations, storage);
 
     return GlueStatements(declarations);
 }
@@ -1723,6 +1753,15 @@ TypeRef Parser::TypedefType(const NodePtr& token) const
     }
 
     return TypeRef{.type = symbol->type, .composite = symbol->composite};
+}
+
+bool Parser::ConsumeExtern(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    if (TokenTag(token_list[i]) != T_Extern)
+        return false;
+
+    i++;
+    return true;
 }
 
 bool Parser::IsTypedefName(const NodePtr& token) const

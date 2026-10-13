@@ -25,6 +25,20 @@
 #define NUOCC_RUNTIME "lib/printint.c"
 #endif
 
+/*
+ * The C pre-processor the source of a program is put through before it is
+ * scanned, and the directory our own header files are found in. The
+ * pre-processor is told not to look in the system's include directory,
+ * because those header files use parts of C this compiler does not have.
+ */
+#ifndef NUOCC_CPP
+#define NUOCC_CPP "cpp"
+#endif
+
+#ifndef NUOCC_INCLUDE_DIR
+#define NUOCC_INCLUDE_DIR "lib/include"
+#endif
+
 namespace nuocc
 {
 
@@ -171,16 +185,69 @@ bool Driver::ParseOptions(int argc, const char* const* argv)
 }
 
 /*
+ * Run the pre-processor over one source file and answer with everything
+ * it wrote. Nothing comes back when it could not be run or stopped on an
+ * error, in which case it has already said why on the error stream.
+ */
+std::optional<std::string> Driver::Preprocess(const std::string& source) const
+{
+    /*
+     * The system's include directory is left out, since the header files
+     * there use parts of C this compiler does not have, and our own is
+     * named instead. The two words are joined so that the pre-processor
+     * reads one argument however the path is written.
+     */
+    const std::string command = std::string(NUOCC_CPP) +
+        " -nostdinc -I" + Quote(NUOCC_INCLUDE_DIR) + " " + Quote(source);
+
+    if (options_.verbose)
+        std::cout << command << std::endl;
+
+    FILE *pipe = popen(command.c_str(), "r");
+
+    if (pipe == nullptr)
+    {
+        std::cerr << "error: could not run " << NUOCC_CPP << std::endl;
+        return std::nullopt;
+    }
+
+    std::string text;
+    char buffer[4096];
+    size_t got;
+
+    while ((got = fread(buffer, 1, sizeof(buffer), pipe)) > 0)
+        text.append(buffer, got);
+
+    /*
+     * A pre-processor which stopped on an error leaves what it managed to
+     * write, which is not the whole program, so it is thrown away.
+     */
+    if (pclose(pipe) != 0)
+    {
+        std::cerr << "error: " << source << " could not be pre-processed";
+        std::cerr << std::endl;
+        return std::nullopt;
+    }
+
+    return text;
+}
+
+/*
  * Compile one source file down to assembly, and print what was read and
  * what it was made into when -T was given. An error in the source is
- * reported and ends the compilation from inside the compiler, so there is
- * nothing to answer with here.
+ * reported and ends the compilation from inside the compiler, so false
+ * only says that the pre-processor could not be run.
  */
-void Driver::CompileToAssembly(const std::string& source,
+bool Driver::CompileToAssembly(const std::string& source,
     const std::string& assembly) const
 {
+    std::optional<std::string> text = Preprocess(source);
+
+    if (!text)
+        return false;
+
     Scanner scanner;
-    scanner.Scan(source);
+    scanner.Scan(*text);
 
     if (options_.dump)
         PrintTokenList(scanner);
@@ -193,6 +260,8 @@ void Driver::CompileToAssembly(const std::string& source,
 
     std::unique_ptr<AsmCodegen> codegen = MakeCodegen(assembly);
     codegen->GenProgram(program);
+
+    return true;
 }
 
 bool Driver::RunCommand(const std::string& command) const
@@ -263,7 +332,8 @@ int Driver::Run(int argc, const char* const* argv)
         if (options_.verbose)
             std::cout << "compiling " << source << std::endl;
 
-        CompileToAssembly(source, assembly);
+        if (!CompileToAssembly(source, assembly))
+            return 1;
 
         /* -S asks for the assembly itself, and stops there. */
         if (!options_.assemble && !options_.link)

@@ -38,6 +38,10 @@ add_executable(nuocc ${SRC})
 
 # The runtime the generated programs are linked with, which holds printint()
 # and printchar(): the language may call them but does not define them. The
-# path is fixed here so that the compiler can be run from anywhere.
+# path is fixed here so that the compiler can be run from anywhere. The
+# pre-processor and the directory our own header files live in are fixed the
+# same way, so that a program may #include one of them from anywhere too.
 target_compile_definitions(nuocc PRIVATE
-    NUOCC_RUNTIME="${PROJECT_SOURCE_DIR}/lib/printint.c")
+    NUOCC_RUNTIME="${PROJECT_SOURCE_DIR}/lib/printint.c"
+    NUOCC_CPP="cpp"
+    NUOCC_INCLUDE_DIR="${PROJECT_SOURCE_DIR}/lib/include")

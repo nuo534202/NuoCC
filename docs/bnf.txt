@@ -1,10 +1,25 @@
+/*
+ * The source has been through the C pre-processor before it is scanned, so
+ * the comments, the #include and #define lines and the markers the
+ * pre-processor writes about the file and line it came from are all gone.
+ * What is left is the grammar below.
+ */
 program: global_declaration
     | global_declaration program
     ;
 
-global_declaration: function_declaration
-    | var_declaration
+/*
+ * A declaration may be written `extern`, which says that the storage of
+ * what it declares is given in another source file. It has to come before
+ * the type, and no storage is emitted for the names it declares.
+ */
+global_declaration: opt_extern function_declaration
+    | opt_extern var_declaration
     | typedef_declaration
+    ;
+
+opt_extern: <empty>
+    | 'extern'
     ;
 
 function_declaration:
@@ -130,8 +145,8 @@ statement: print_statement
 print_statement: 'print' expression ';'
     ;
 
-declaration: type identifier_list ';'
-    | type identifier '[' number ']' ';'
+declaration: opt_extern type identifier_list ';'
+    | opt_extern type identifier '[' number ']' ';'
     | typedef_declaration
     ;
 

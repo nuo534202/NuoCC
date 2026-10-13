@@ -291,6 +291,13 @@ private:
     bool IsTypedefName(const NodePtr& token) const;
 
     /*
+     * Step over an `extern` keyword when one stands here, and answer
+     * whether one did. It says that the storage of what is declared is
+     * given elsewhere, and it has to come before the type.
+     */
+    bool ConsumeExtern(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
      * Stop unless a symbol is the kind of symbol the grammar wants there,
      * such as a variable where a value is read.
      */

@@ -94,7 +94,13 @@ enum class StorageClass : uint8
     kLocal,
     /* A member of a struct lives inside a value of the struct rather than
      * in storage of its own. */
-    kMember
+    kMember,
+    /*
+     * A name declared with `extern`: it is visible like a global, but its
+     * storage is given in another source file, so none is emitted for it
+     * here.
+     */
+    kExtern
 };
 
 /*

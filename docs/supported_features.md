@@ -247,3 +247,25 @@
     level of the program or inside a function, and it is the type behind
     the name which the type checks see. A name which is already used for
     something else cannot be made a typedef.
+
+31. The C Pre-Processor and `extern` (acwj Stage 35, `35_Preprocessor`).
+    Every source file is put through the system C pre-processor before it
+    is scanned, so comments, `#include`, `#define`, `#ifdef` and the rest
+    of the pre-processor's language work. A `//` or `/* ... */` comment is
+    taken away before the compiler reads the program, so a comment may
+    stand anywhere a space may. The pre-processor is told not to look in
+    the system's include directory, because the header files there use
+    parts of C this compiler does not have; the directory it does search
+    is `lib/include`, which holds `stddef.h` and `stdio.h` to begin with.
+    A header file may include another one and may guard itself against
+    being read more than once, which is how a header used twice in one
+    program does no harm. The lines the pre-processor writes to say which
+    file and line the text after them came from begin with `#`, and the
+    scanner steps over them.
+
+    `extern` declares a name whose storage is given in another source
+    file, so the name may be used here but no storage is emitted for it.
+    It has to come before the type, as in `extern int shared;`, at the top
+    level of the program or inside a function. A name declared `extern` is
+    addressed the way a global is, so it is the definition, wherever it
+    stands, which gives it room.

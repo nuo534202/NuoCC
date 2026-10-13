@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,8 +44,17 @@ private:
     void Usage(const char* program) const;
 
     /* The stages of the compilation. */
-    void CompileToAssembly(const std::string& source,
+    bool CompileToAssembly(const std::string& source,
                            const std::string& assembly) const;
+
+    /*
+     * Feed one source file through the C pre-processor and answer with
+     * what it wrote, or nothing when it could not be pre-processed. The
+     * pre-processor is what expands the #include and #define lines and
+     * takes the comments away, so the scanner which follows only ever
+     * sees plain declarations.
+     */
+    std::optional<std::string> Preprocess(const std::string& source) const;
     bool Assemble(const std::string& assembly,
                   const std::string& object) const;
     bool Link(const std::vector<std::string>& objects) const;

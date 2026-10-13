@@ -26,12 +26,24 @@ public:
     ~Scanner() = default;
 
 public:
-    void Scan(const std::string& file);
+    /*
+     * Scan the whole program, which is the text the pre-processor wrote
+     * for one source file: the comments, the #include lines and the
+     * pre-processor's own markers are all handled here.
+     */
+    void Scan(const std::string& text);
     const std::vector<NodePtr>& GetTokenList() const;
 
 private:
     void StringToToken(const std::string& buf, idx_t& i);
     void SkipEmpty(const std::string& buf, idx_t& i);
+
+    /*
+     * Step over one line the pre-processor wrote to say which file and
+     * line the text after it came from. Such a line starts with '#', which
+     * is no character of the language and is never part of a program.
+     */
+    void SkipDirective(const std::string& buf, idx_t& i);
 
     void ScanCharLiteral(const std::string& buf, idx_t& i);
     void ScanStrLiteral(const std::string& buf, idx_t& i);

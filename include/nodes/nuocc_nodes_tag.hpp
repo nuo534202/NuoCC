@@ -57,6 +57,7 @@ typedef enum NodeTag
     T_Return,
     T_Enum,
     T_Typedef,
+    T_Extern,
 
     T_Identifier,
 

@@ -137,6 +137,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Typedef:
             out = "typedef";
             break;
+        case T_Extern:
+            out = "extern";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;

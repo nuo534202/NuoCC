@@ -2,7 +2,6 @@
 
 #include <cctype>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -11,30 +10,13 @@ namespace nuocc
 {
 
 /*
- * The whole file is read in at once because a literal may hold a space,
- * which the word at a time reading below would split in two.
+ * The whole program is scanned in one piece because a literal may hold a
+ * space, which reading it a word at a time would split in two.
  */
-void Scanner::Scan(const std::string& file)
+void Scanner::Scan(const std::string& text)
 {
-    std::ifstream ifs;
-
-    ifs.open(file.c_str(), std::ios::in);
-    if (!ifs.is_open())
-    {
-        std::cerr << "Error: Fail to open file " << file << std::endl;
-        std::exit(1);
-    }
-
-    std::string source;
-    std::string line;
-
-    while (std::getline(ifs, line))
-        source += line + '\n';
-
-    ifs.close();
-
     idx_t i = 0;
-    StringToToken(source, i);
+    StringToToken(text, i);
 
     token_list_.push_back(std::make_unique<Node>(T_EOF));
 }
@@ -52,6 +34,16 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
 
         if (i >= buf.size())
             return;
+
+        /*
+         * A line which begins with '#' is one the pre-processor wrote
+         * about itself and not part of the program, so it is stepped over.
+         */
+        if (buf[i] == '#')
+        {
+            SkipDirective(buf, i);
+            continue;
+        }
 
         if (buf[i] == '\'')
         {
@@ -224,6 +216,12 @@ void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
             break;
         }
     }
+}
+
+void Scanner::SkipDirective(const std::string& buf, idx_t& i)
+{
+    while (i < buf.size() && buf[i] != '\n')
+        i++;
 }
 
 bool Scanner::IsNewToken(const std::string& token, char ch)
@@ -418,7 +416,8 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"if", T_If}, {"else", T_Else},
     {"while", T_While}, {"for", T_For},
     {"void", T_Void}, {"return", T_Return},
-    {"enum", T_Enum}, {"typedef", T_Typedef}
+    {"enum", T_Enum}, {"typedef", T_Typedef},
+    {"extern", T_Extern}
 };
 
 /*
