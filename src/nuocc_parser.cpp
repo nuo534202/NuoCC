@@ -304,6 +304,93 @@ AstNodePtr Parser::CompoundStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
+ * A statement may stand alone as the body of an if, a while or a for loop,
+ * or a series of them may stand between braces as a compound statement. A
+ * single statement ends in a semicolon, which is matched here.
+ */
+AstNodePtr Parser::BodyStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    ParsedStatement statement = Statement(token_list, i);
+
+    if (statement.semicolon)
+        Match(token_list, i, T_Semicolon, ";");
+
+    return std::move(statement.tree);
+}
+
+/*
+ * case_body: <empty>
+ *      |   statement case_body
+ *      ;
+ *
+ * The statements of a switch arm are gathered until the arm ends, which is
+ * where the next case, the default or the end of the switch begins. More
+ * than one statement may stand there without braces, and a '{' simply
+ * begins a compound statement like it does anywhere else.
+ */
+AstNodePtr Parser::CaseBody(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    std::vector<AstNodePtr> statements;
+
+    while (true)
+    {
+        const NodeTag tag = TokenTag(token_list[i]);
+
+        if (tag == T_Case || tag == T_Default || tag == T_RBrace)
+            break;
+
+        if (tag == T_EOF)
+        {
+            std::cerr << "syntax error: expect }!" << std::endl;
+            std::exit(1);
+        }
+
+        ParsedStatement statement = Statement(token_list, i);
+
+        if (statement.semicolon)
+            Match(token_list, i, T_Semicolon, ";");
+
+        if (statement.tree)
+            statements.push_back(std::move(statement.tree));
+    }
+
+    return GlueStatements(statements);
+}
+
+/*
+ * expression_list: <empty>
+ *      |   expression
+ *      |   expression ',' expression_list
+ *      ;
+ *
+ * The expressions are glued left to right, so that they are worked out in
+ * the order they are written. An empty clause is allowed, which is how
+ * `for (; x < 3; x= x + 1)` is written.
+ */
+AstNodePtr Parser::ExpressionList(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    NodeTag end)
+{
+    std::vector<AstNodePtr> expressions;
+
+    if (TokenTag(token_list[i]) == end)
+        return nullptr;
+
+    while (true)
+    {
+        expressions.push_back(BinaryExpression(token_list, i, 0));
+
+        if (TokenTag(token_list[i]) != T_Comma)
+            break;
+
+        i++;
+    }
+
+    return GlueStatements(expressions);
+}
+
+/*
  * statement: print_statement
  *      |     declaration
  *      |     expression_statement
@@ -322,6 +409,12 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
 {
     switch (TokenTag(token_list[i]))
     {
+        /*
+         * Braces begin a compound statement, which is a statement of its
+         * own and needs no semicolon after it.
+         */
+        case T_LBrace:
+            return {CompoundStatement(token_list, i), false};
         case T_Print:
             return {PrintStatement(token_list, i), true};
         case T_Int:
@@ -546,10 +639,15 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
 /*
  * if_statement: if_head
- *      |        if_head 'else' compound_statement
+ *      |        if_head 'else' statement
  *      ;
  *
- * if_head: 'if' '(' true_false_expression ')' compound_statement  ;
+ * if_head: 'if' '(' true_false_expression ')' statement  ;
+ *
+ * Each branch is one statement, which may be a compound statement between
+ * braces. An else is taken by the if it stands nearest, because the branch
+ * of an if is parsed as far as it goes before the else is looked for, so
+ * `if (a) if (b) ...; else ...;` leaves the else with the inner if.
  */
 AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
@@ -557,7 +655,7 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_If, "if");
 
     AstNodePtr condition = Condition(token_list, i);
-    AstNodePtr true_branch = CompoundStatement(token_list, i);
+    AstNodePtr true_branch = BodyStatement(token_list, i);
     AstNodePtr false_branch = nullptr;
     bool has_else = false;
 
@@ -565,7 +663,7 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
     {
         has_else = true;
         i++;
-        false_branch = CompoundStatement(token_list, i);
+        false_branch = BodyStatement(token_list, i);
     }
 
     return std::make_unique<AstIf>(condition,
@@ -575,7 +673,7 @@ AstNodePtr Parser::IfStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * while_statement: 'while' '(' true_false_expression ')' compound_statement  ;
+ * while_statement: 'while' '(' true_false_expression ')' statement  ;
  */
 AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
@@ -589,25 +687,21 @@ AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
      * written in it finds this loop.
      */
     loop_level_++;
-    AstNodePtr body = CompoundStatement(token_list, i);
+    AstNodePtr body = BodyStatement(token_list, i);
     loop_level_--;
 
     return std::make_unique<AstWhile>(condition, body);
 }
 
 /*
- * for_statement: 'for' '(' preop_statement ';'
+ * for_statement: 'for' '(' expression_list ';'
  *                        true_false_expression ';'
- *                        postop_statement ')' compound_statement  ;
+ *                        expression_list ')' statement  ;
  *
- * The post statement is parsed before the body but has to run after it, so
- * the loop is desugared into an augmented while loop:
- *
- *      preop;
- *      while (condition) {
- *          body;
- *          postop;
- *      }
+ * The clauses before the first semicolon and after the second are lists of
+ * expressions which run in the order they are written, as in `for (x= 0, y=
+ * 1; x < 6; x++, y= y + 2)`. The clause between them says whether the loop
+ * goes round again, and the body is one statement.
  */
 AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
@@ -615,14 +709,14 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_For, "for");
     Match(token_list, i, T_LParen, "(");
 
-    ParsedStatement preop = Statement(token_list, i);
+    AstNodePtr preop = ExpressionList(token_list, i, T_Semicolon);
     Match(token_list, i, T_Semicolon, ";");
 
     AstNodePtr condition = BinaryExpression(token_list, i, 0);
     MakeCondition(condition);
 
     Match(token_list, i, T_Semicolon, ";");
-    ParsedStatement postop = Statement(token_list, i);
+    AstNodePtr postop = ExpressionList(token_list, i, T_RParen);
     Match(token_list, i, T_RParen, ")");
 
     /*
@@ -630,7 +724,7 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
      * written in it finds this loop.
      */
     loop_level_++;
-    AstNodePtr body = CompoundStatement(token_list, i);
+    AstNodePtr body = BodyStatement(token_list, i);
     loop_level_--;
 
     /*
@@ -638,9 +732,14 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
      * the body, because a continue goes on to it: `for (i= 0; i < 9; i=
      * i + 1) { continue; }` still counts.
      */
-    AstNodePtr loop = std::make_unique<AstFor>(condition, body, postop.tree);
+    AstNodePtr loop = std::make_unique<AstFor>(condition, body, postop);
 
-    return std::make_unique<AstGlue>(preop.tree, loop);
+    /* Nothing has to run before a loop which was written without a first
+     * clause, so the loop stands on its own. */
+    if (!preop)
+        return loop;
+
+    return std::make_unique<AstGlue>(preop, loop);
 }
 
 /*
@@ -817,7 +916,7 @@ AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
 
         Match(token_list, i, T_Colon, ":");
 
-        AstNodePtr body = CompoundStatement(token_list, i);
+        AstNodePtr body = CaseBody(token_list, i);
 
         cases.push_back(std::make_unique<AstCase>(body, value, is_default));
     }

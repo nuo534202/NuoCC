@@ -127,13 +127,17 @@ opt_pointer: <empty>
     | '*' opt_pointer
     ;
 
-compound_statement:
-      '{' '}'
+/*
+ * A block is a statement like any other, so braces are needed where more
+ * than one statement has to stand in a place which holds one.
+ */
+compound_statement: '{' '}'
     | '{' statement '}'
     | '{' statement statements '}'
     ;
 
-statement: print_statement
+statement: compound_statement
+    | print_statement
     | declaration
     | expression_statement
     | if_statement
@@ -168,6 +172,11 @@ opt_expression_list: <empty>
     | expression_list
     ;
 
+/*
+ * The expressions of a call are given one after another, and the same list
+ * is what stands in the first and the last clause of a for loop, where it
+ * may also be left empty.
+ */
 expression_list: expression
     | expression ',' expression_list
     ;
@@ -189,24 +198,30 @@ continue_statement: 'continue' ';'
 expression_statement: expression ';'
     ;
 
+/*
+ * The else is taken by the if it stands nearest, because the branch of an
+ * if is parsed as far as it goes before an else is looked for.
+ */
 if_statement: if_head
-    | if_head 'else' compound_statement
+    | if_head 'else' statement
     ;
 
-if_head: 'if' '(' true_false_expression ')' compound_statement
+if_head: 'if' '(' true_false_expression ')' statement
     ;
 
-while_statement: 'while' '(' true_false_expression ')' compound_statement
+while_statement: 'while' '(' true_false_expression ')' statement
     ;
 
 /*
- * The step between the last two semicolons runs at the end of every pass,
- * and is where a continue in the body goes on to, so it runs on that pass
- * as well.
+ * The first and the last clause are lists of expressions which run in the
+ * order they are written, as in `for (x= 0, y= 1; x < 6; x++, y= y + 2)`,
+ * and either may be left empty. The step between the last two semicolons
+ * runs at the end of every pass, and is where a continue in the body goes
+ * on to, so it runs on that pass as well.
  */
-for_statement: 'for' '(' statement ';'
+for_statement: 'for' '(' expression_list ';'
                        true_false_expression ';'
-                       statement ')' compound_statement
+                       expression_list ')' statement
     ;
 
 /*
@@ -224,8 +239,17 @@ case_list: case_item
     | case_item case_list
     ;
 
-case_item: 'case' number ':' compound_statement
-    | 'default' ':' compound_statement
+case_item: 'case' number ':' case_body
+    | 'default' ':' case_body
+    ;
+
+/*
+ * The statements of an arm run one after another, until the next case, the
+ * default or the end of the switch. More than one of them may stand there
+ * without braces, and a '{' simply begins a block like it does anywhere.
+ */
+case_body: <empty>
+    | statement case_body
     ;
 
 identifier: T_IDENT

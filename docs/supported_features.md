@@ -298,3 +298,34 @@
     an expression which is not an integer, a case value which is not an
     integer constant, a case value written twice, and an arm written after
     the default arm are all refused with a message saying so.
+
+34. Single Statements and Expression Lists (acwj Stage 38,
+    `38_Dangling_Else`). The body of an `if`, an `else`, a `while` or a
+    `for` is one statement, so braces are only needed where more than one
+    statement has to stand there:
+
+        if (x > 5)
+            x = x - 16;
+        else
+            x++;
+
+    A block written between braces is a statement like any other, so it may
+    stand wherever a statement may, including nested inside another block.
+    The statements of a `case` or a `default` arm need no braces either:
+    they are written one after another until the next arm or the end of the
+    switch. An `else` is taken by the `if` it stands nearest, so
+
+        if (a) if (b) x = 1; else x = 2;
+
+    leaves the `else` with the inner `if`, and a chain of decisions is
+    written by putting an `if` after the `else`:
+
+        if (a) x = 1;
+        else if (b) y = 2;
+        else z = 3;
+
+    The first and the last clause of a `for` loop are lists of expressions
+    which run in the order they are written, so
+    `for (x = 0, y = 1; x < 6; x = x + 1, y = y + 2)` initializes and steps
+    two variables at once. Either of those clauses may be left empty, as
+    `for (; x < 5; x = x + 1)` does.

@@ -177,6 +177,41 @@ private:
     ParsedStatement Statement(const std::vector<NodePtr>& token_list,
         idx_t& i);
 
+    /*
+     * The body of an if, a while or a for loop, which is one statement or a
+     * compound statement of several. Braces are only needed when more than
+     * one statement stands there; a single one ends in a semicolon, which
+     * is matched here.
+     */
+    AstNodePtr BodyStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    /*
+     * case_body: <empty>
+     *      |   statement case_body
+     *      ;
+     *
+     * The statements of a switch arm run one after another, until the next
+     * case, the default or the end of the switch. Unlike the body of an if
+     * or a loop, more than one statement may stand there without braces,
+     * and a '{' simply begins a compound statement like it does anywhere.
+     */
+    AstNodePtr CaseBody(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
+     * expression_list: <empty>
+     *      |   expression
+     *      |   expression ',' expression_list
+     *      ;
+     *
+     * The expressions run in the order they are written, which is how the
+     * first and the last clause of a for loop are written. The clause ends
+     * at the token the caller names.
+     */
+    AstNodePtr ExpressionList(const std::vector<NodePtr>& token_list,
+        idx_t& i,
+        NodeTag end);
+
     AstNodePtr PrintStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
     AstNodePtr DeclareStatement(const std::vector<NodePtr>& token_list,
