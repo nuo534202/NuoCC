@@ -63,6 +63,8 @@ typedef enum NodeTag
     T_RParen,
     T_LBracket,
     T_RBracket,
+    T_Dot,
+    T_Arrow,
     T_Semicolon,
     T_Comma,
     T_EOF,
@@ -93,7 +95,9 @@ typedef enum AstNodeTag
     A_AstLogNot,
     A_AstToBool,
     A_AstIncDec,
-    A_AstStrLit
+    A_AstStrLit,
+    A_AstMember,
+    A_AstAddressExpr
 } AstNodeTag;
 
 }   /* namespace nuocc */

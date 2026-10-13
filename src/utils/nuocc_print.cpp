@@ -104,6 +104,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Long:
             out = "long";
             break;
+        case T_Struct:
+            out = "struct";
+            break;
         case T_Print:
             out = "print";
             break;
@@ -145,6 +148,12 @@ std::string NodeTagToString(const NodeTag& tag)
             break;
         case T_RBracket:
             out = "]";
+            break;
+        case T_Dot:
+            out = ".";
+            break;
+        case T_Arrow:
+            out = "->";
             break;
         case T_Semicolon:
             out = ";";
@@ -313,6 +322,14 @@ std::string DescribeNode(const AstNode& node)
             const AstAddress *address = static_cast<const AstAddress*>(&node);
             return "address of " + address->GetSymbol().name;
         }
+        case A_AstMember:
+        {
+            const AstMember *member = static_cast<const AstMember*>(&node);
+            return "member " + member->GetMember().name + " : " +
+                   TypeName(type, member->GetMember().composite);
+        }
+        case A_AstAddressExpr:
+            return "address expression";
         case A_AstDeref:
             return "read through pointer : " + TypeName(type);
         case A_AstFuncCall:

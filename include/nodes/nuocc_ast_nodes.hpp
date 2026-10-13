@@ -53,6 +53,10 @@ public:
 
     AstNodeTag GetAstNodeTag() const;
     PrimitiveType GetType() const;
+    const std::shared_ptr<CompositeType>& GetComposite() const;
+
+protected:
+    void SetComposite(const std::shared_ptr<CompositeType>& composite);
 
 private:
     AstNodePtr left_;
@@ -60,6 +64,7 @@ private:
     AstNodePtr right_;
     AstNodeTag node_type_;
     PrimitiveType type_;
+    std::shared_ptr<CompositeType> composite_;
 };
 
 /* A binary operator, holding the type of the value it produces. */
@@ -316,6 +321,27 @@ class AstDeref : public AstNode
 public:
     AstDeref(AstNodePtr& pointer, PrimitiveType type);
     ~AstDeref() = default;
+};
+
+/* A member selected from a struct value with the `.` operator. */
+class AstMember : public AstNode {
+public:
+    AstMember(AstNodePtr& base, const Symbol& member, bool through_pointer);
+    ~AstMember() override = default;
+
+    const Symbol& GetMember() const;
+    bool IsThroughPointer() const;
+
+private:
+    Symbol member_;
+    bool through_pointer_;
+};
+
+/* The address of an lvalue which is not a standalone variable. */
+class AstAddressExpr : public AstNode {
+public:
+    explicit AstAddressExpr(AstNodePtr& lvalue);
+    ~AstAddressExpr() override = default;
 };
 
 /*

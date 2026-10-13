@@ -20,14 +20,15 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
      * generated code is linked with, so they are already known before
      * any of the program is parsed.
      */
+    const TypeRef int_type{.type = PrimitiveType::kInt};
     symbol_table_.AddSymbol(Symbol{.name = kPrintIntName,
                                    .type = PrimitiveType::kVoid,
                                    .stype = StructuralType::kFunction,
-                                   .parameter_types = {PrimitiveType::kInt}});
+                                   .parameter_types = {int_type}});
     symbol_table_.AddSymbol(Symbol{.name = kPrintCharName,
                                    .type = PrimitiveType::kVoid,
                                    .stype = StructuralType::kFunction,
-                                   .parameter_types = {PrimitiveType::kInt}});
+                                   .parameter_types = {int_type}});
 
     idx_t i = 0;
     Program program;
@@ -112,6 +113,12 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     const TypeRef& type,
     const std::string& name)
 {
+    if (type.type == PrimitiveType::kStruct) {
+        std::cerr << "syntax error: returning a struct by value"
+                  << " is not supported yet!" << std::endl;
+        std::exit(1);
+    }
+
     /* The name may already be known as a prototype, or as a function
      * which has been defined; a later declaration has to agree with what
      * is known, and a second body is refused. */
@@ -134,7 +141,8 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
                   .stype = StructuralType::kFunction};
 
     for (const Symbol& parameter : parameters)
-        symbol.parameter_types.push_back(parameter.type);
+        symbol.parameter_types.push_back(
+            TypeRef{.type = parameter.type, .composite = parameter.composite});
 
     if (previous)
         CheckPrototype(*previous, symbol);
@@ -181,10 +189,10 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
         symbol_table_.AddSymbol(parameter);
     }
 
-    current_function_type_ = type.type;
+    current_function_type_ = type;
     AstNodePtr body = CompoundStatement(token_list, i);
 
-    current_function_type_ = PrimitiveType::kNone;
+    current_function_type_ = {};
     const int32 local_size = local_stack_size_;
     symbol_table_.Restore(symbol_mark);
 
@@ -554,7 +562,7 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    if (current_function_type_ == PrimitiveType::kVoid)
+    if (current_function_type_.type == PrimitiveType::kVoid)
     {
         std::cerr << "syntax error: a void function cannot return a value!";
         std::cerr << std::endl;
@@ -669,6 +677,11 @@ std::vector<Symbol> Parser::FunctionParameters(
         }
 
         TypeRef type = ParseType(token_list, i);
+        if (type.type == PrimitiveType::kStruct) {
+            std::cerr << "syntax error: passing a struct by value"
+                      << " is not supported yet!" << std::endl;
+            std::exit(1);
+        }
         if (type.type == PrimitiveType::kVoid)
         {
             std::cerr << "syntax error: a parameter needs a value type!";
@@ -701,7 +714,7 @@ std::vector<Symbol> Parser::FunctionParameters(
  */
 void Parser::CheckPrototype(const Symbol& previous, const Symbol& symbol)
 {
-    if (previous.type != symbol.type)
+    if (previous.type != symbol.type || previous.composite != symbol.composite)
     {
         std::cerr << "syntax error: return type of function ";
         std::cerr << symbol.name << " does not match its prototype!";
@@ -802,7 +815,10 @@ AstNodePtr Parser::BinaryExpression(
              * the order the code generator wants: the value has to be
              * worked out before the location it is stored in.
              */
-            if (!IsLvalue(left->GetAstNodeTag()))
+            const bool array_member = left->GetAstNodeTag() == A_AstMember &&
+                static_cast<const AstMember&>(*left).GetMember().stype ==
+                    StructuralType::kArray;
+            if (!IsLvalue(left->GetAstNodeTag()) || array_member)
             {
                 std::cerr << "syntax error: an assignment can only store";
                 std::cerr << " into a variable or into a * pointer!";
@@ -810,7 +826,9 @@ AstNodePtr Parser::BinaryExpression(
                 std::exit(1);
             }
 
-            if (!ModifyType(right, left->GetType(), std::nullopt))
+            if (!ModifyType(right, TypeRef{.type = left->GetType(),
+                                           .composite = left->GetComposite()},
+                            std::nullopt))
             {
                 std::cerr << "syntax error: this value does not fit the";
                 std::cerr << " target of the assignment!" << std::endl;
@@ -890,6 +908,16 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
              */
             if (operand->GetAstNodeTag() == A_AstDeref)
                 return operand->ReleaseLeft();
+
+            if (operand->GetAstNodeTag() == A_AstMember) {
+                const auto& member = static_cast<const AstMember&>(*operand);
+                if (member.GetMember().stype == StructuralType::kArray) {
+                    std::cerr << "syntax error: the address of a whole array"
+                              << " is not supported yet!" << std::endl;
+                    std::exit(1);
+                }
+                return std::make_unique<AstAddressExpr>(operand);
+            }
 
             if (operand->GetAstNodeTag() != A_AstIdentifier)
             {
@@ -991,16 +1019,26 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
              * The value has somewhere to go back to, so an increment or a
              * decrement needs a variable and not an expression.
              */
-            Symbol symbol = LookupTyped(token_list[i],
-                                        StructuralType::kVariable,
-                                        "variable");
-            i++;
+            AstNodePtr operand = PostfixExpression(token_list, i);
+            if (operand->GetAstNodeTag() != A_AstIdentifier) {
+                std::cerr << "syntax error: increment and decrement need a"
+                          << " standalone variable!" << std::endl;
+                std::exit(1);
+            }
+            const Symbol& symbol =
+                static_cast<const AstIdentifier&>(*operand).GetSymbol();
+            if (BaseType(symbol.type) == PrimitiveType::kStruct) {
+                std::cerr << "syntax error: increment and decrement of structs"
+                          << " or struct pointers are not supported yet!"
+                          << std::endl;
+                std::exit(1);
+            }
 
             return std::make_unique<AstIncDec>(symbol, increment ? 1 : -1,
                                                false);
         }
         default:
-            return ParsePrimary(token_list, i);
+            return PostfixExpression(token_list, i);
     }
 }
 
@@ -1055,10 +1093,6 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             if (TokenTag(token_list[i + 1]) == T_LParen)
                 return FuncCall(token_list, i);
 
-            /* A '[' after the name indexes an array or a pointer. */
-            if (TokenTag(token_list[i + 1]) == T_LBracket)
-                return ArrayAccess(token_list, i);
-
             Symbol symbol = Lookup(token_list[i], "variable");
             i++;
 
@@ -1092,6 +1126,13 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             {
                 bool increment = TokenTag(token_list[i]) == T_Inc;
                 i++;
+                if (BaseType(symbol.type) == PrimitiveType::kStruct) {
+                    std::cerr << "syntax error: increment and decrement of"
+                              << " structs or struct pointers are not"
+                              << " supported yet!"
+                              << std::endl;
+                    std::exit(1);
+                }
 
                 return std::make_unique<AstIncDec>(symbol,
                                                    increment ? 1 : -1,
@@ -1108,42 +1149,62 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
     }
 }
 
-/*
- * array_access: identifier '[' expression ']'  ;
- *
- * The name has already been told apart from a call and from a plain read
- * of the name by the caller, which saw the '[' and came here.
- */
-AstNodePtr Parser::ArrayAccess(const std::vector<NodePtr>& token_list,
-    idx_t& i)
-{
-    Symbol symbol = Lookup(token_list[i], "variable");
-
-    /*
-     * The base the index is measured from is the address of an array, or
-     * the address a pointer holds when it is a pointer which is indexed:
-     * both start a row of values of one type. Anything else has no row to
-     * walk along.
-     */
-    AstNodePtr base;
-
-    if (symbol.stype == StructuralType::kArray)
-    {
-        base = std::make_unique<AstAddress>(symbol);
+// Member selection and indexing bind more tightly than prefix operators.
+AstNodePtr Parser::PostfixExpression(const std::vector<NodePtr>& token_list,
+                                    idx_t& i) {
+    AstNodePtr expression = ParsePrimary(token_list, i);
+    while (true) {
+        const NodeTag tag = TokenTag(token_list[i]);
+        if (tag == T_Dot || tag == T_Arrow) {
+            expression = MemberAccess(std::move(expression), token_list, i);
+        } else if (tag == T_LBracket) {
+            expression = ArrayAccess(std::move(expression), token_list, i);
+        } else if (tag == T_Inc || tag == T_Dec) {
+            std::cerr << "syntax error: increment and decrement need a"
+                      << " standalone variable!" << std::endl;
+            std::exit(1);
+        } else {
+            return expression;
+        }
     }
-    else if (symbol.stype == StructuralType::kVariable &&
-             IsPointerType(symbol.type))
-    {
-        base = MakeIdentLeaf(symbol);
-    }
-    else
-    {
-        std::cerr << "syntax error: " << symbol.name;
-        std::cerr << " cannot be indexed!" << std::endl;
+}
+
+AstNodePtr Parser::MemberAccess(AstNodePtr base,
+                               const std::vector<NodePtr>& token_list,
+                               idx_t& i) {
+    const bool through_pointer = TokenTag(token_list[i]) == T_Arrow;
+    const PrimitiveType wanted = through_pointer
+        ? PointerTo(PrimitiveType::kStruct) : PrimitiveType::kStruct;
+    if (base->GetType() != wanted || !base->GetComposite() ||
+        (!through_pointer && !IsLvalue(base->GetAstNodeTag()))) {
+        std::cerr << "syntax error: " << (through_pointer ? "->" : ".")
+                  << " needs " << (through_pointer ? "a struct pointer" :
+                                                        "a struct value")
+                  << "!" << std::endl;
         std::exit(1);
     }
 
-    i++;    /* step over the name */
+    ++i;
+    const std::string name = MatchIdentifier(token_list, i, "a member name");
+    const auto& members = base->GetComposite()->members;
+    const auto member = std::find_if(members.begin(), members.end(),
+        [&name](const Symbol& candidate) { return candidate.name == name; });
+    if (member == members.end()) {
+        std::cerr << "syntax error: struct has no member " << name << "!"
+                  << std::endl;
+        std::exit(1);
+    }
+    return std::make_unique<AstMember>(base, *member, through_pointer);
+}
+
+AstNodePtr Parser::ArrayAccess(AstNodePtr base,
+                             const std::vector<NodePtr>& token_list,
+                             idx_t& i) {
+    if (!IsPointerType(base->GetType())) {
+        std::cerr << "syntax error: this value cannot be indexed!" << std::endl;
+        std::exit(1);
+    }
+
     Match(token_list, i, T_LBracket, "[");
 
     AstNodePtr index = BinaryExpression(token_list, i, 0);
@@ -1311,6 +1372,15 @@ void Parser::StructMembers(const std::vector<NodePtr>& token_list,
                       .composite = member_type.composite,
                       .stype = StructuralType::kVariable,
                       .storage = StorageClass::kMember};
+
+        if (std::any_of(type->members.begin(), type->members.end(),
+            [&name](const Symbol& previous) {
+                return previous.name == name;
+            })) {
+            std::cerr << "syntax error: duplicate struct member " << name
+                      << "!" << std::endl;
+            std::exit(1);
+        }
 
         if (TokenTag(token_list[i]) == T_LBracket)
             member = ArrayDeclaration(token_list, i, member_type, name,
@@ -1575,6 +1645,7 @@ bool Parser::IsLvalue(AstNodeTag tag)
     {
         case A_AstIdentifier:
         case A_AstDeref:
+        case A_AstMember:
             return true;
         default:
             return false;

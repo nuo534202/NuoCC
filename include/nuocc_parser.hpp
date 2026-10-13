@@ -193,7 +193,7 @@ private:
 
     /*
      * Parse an expression which may start with the prefix operators '*'
-     * and '&', and fall back to a primary when it does not.
+     * and '&', and fall back to a postfix expression when it does not.
      */
     AstNodePtr PrefixExpression(const std::vector<NodePtr>& token_list,
         idx_t& i);
@@ -201,16 +201,25 @@ private:
     AstNodePtr ParsePrimary(const std::vector<NodePtr>& token_list,
         idx_t& i);
 
+    AstNodePtr PostfixExpression(const std::vector<NodePtr>& token_list,
+                                idx_t& i);
+
     /*
-     * array_access: identifier '[' expression ']'  ;
+     * array_access: postfix_expression '[' expression ']'  ;
      *
-     * The name is the array to index, or the pointer to walk along: both
+     * The base is the array to index, or the pointer to walk along: both
      * start a row of values of one type. The index counts elements and is
      * scaled into an offset before it is added to the base, and what
      * comes back is the element itself, which may stand on the left of an
      * assignment as well as be read.
      */
-    AstNodePtr ArrayAccess(const std::vector<NodePtr>& token_list, idx_t& i);
+    AstNodePtr ArrayAccess(AstNodePtr base,
+                          const std::vector<NodePtr>& token_list,
+                          idx_t& i);
+
+    AstNodePtr MemberAccess(AstNodePtr base,
+                           const std::vector<NodePtr>& token_list,
+                           idx_t& i);
 
     /* Parse the type which starts a declaration and step over it. */
     TypeRef ParseType(const std::vector<NodePtr>& token_list, idx_t& i);
@@ -310,7 +319,7 @@ private:
      * The return type of the function being parsed, kNone while no function
      * body is open. The caller sets and restores it.
      */
-    PrimitiveType current_function_type_ = PrimitiveType::kNone;
+    TypeRef current_function_type_;
     int32 local_stack_size_ = 0;
 
     /* The struct types the program declared, in the order it declared

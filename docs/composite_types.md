@@ -137,7 +137,7 @@ member access, once the shape of the offset arithmetic is in front of us.
 | Stage | What it does |
 |---|---|
 | 31 | parses `struct name { ... };`, its member offsets and its size |
-| 32 | reads and writes a member, as `base.member` |
+| 32 | reads and writes members with `base.member` and `pointer->member` |
 | 33 | unions: the members share an address, sized by the largest |
 | 34 | enums, whose names stand for numbers, and `typedef` |
 

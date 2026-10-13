@@ -84,6 +84,19 @@ enum class StorageClass : uint8
     kMember
 };
 
+/*
+ * A type as it is written down: which primitive type, and the struct which
+ * the value is of when it is one. The type value on its own cannot say
+ * which struct a value is of, so the two travel together.
+ */
+struct TypeRef
+{
+    PrimitiveType type = PrimitiveType::kNone;
+    std::shared_ptr<CompositeType> composite = nullptr;
+
+    bool operator==(const TypeRef&) const = default;
+};
+
 /* An entry of the symbol table. */
 struct Symbol
 {
@@ -94,7 +107,7 @@ struct Symbol
      * the definition it points at, so the members of the type a value is
      * of are reachable however many levels of pointer there are.
      */
-    std::shared_ptr<CompositeType> composite;
+    std::shared_ptr<CompositeType> composite = nullptr;
     StructuralType stype = StructuralType::kVariable;
     StorageClass storage = StorageClass::kGlobal;
     int32 stack_offset = 0;
@@ -102,7 +115,7 @@ struct Symbol
      * The types of the parameters of a function, in the order they are
      * declared. It is empty for everything which is not a function.
      */
-    std::vector<PrimitiveType> parameter_types;
+    std::vector<TypeRef> parameter_types = {};
     /*
      * Whether a function has been given a body. A prototype has none yet,
      * and the flag is false for everything which is not a function.
@@ -133,17 +146,6 @@ struct CompositeType
     /* How many bytes a value of the type takes, and what it lines up to. */
     int32 size = 0;
     int32 alignment = 1;
-};
-
-/*
- * A type as it is written down: which primitive type, and the struct which
- * the value is of when it is one. The type value on its own cannot say
- * which struct a value is of, so the two travel together.
- */
-struct TypeRef
-{
-    PrimitiveType type = PrimitiveType::kNone;
-    std::shared_ptr<CompositeType> composite;
 };
 
 using NodePtr = std::unique_ptr<class Node>;

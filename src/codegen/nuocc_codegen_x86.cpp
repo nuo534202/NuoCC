@@ -634,7 +634,13 @@ reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
 
     reg_idx out_reg = AllocRegister();
 
-    ofs_ << "\tmovq\t%rax, " << reg_list_[out_reg] << std::endl;
+    if (symbol.type == PrimitiveType::kInt) {
+        ofs_ << "\tmovslq\t%eax, " << reg_list_[out_reg] << '\n';
+    } else if (symbol.type == PrimitiveType::kChar) {
+        ofs_ << "\tmovzbq\t%al, " << reg_list_[out_reg] << '\n';
+    } else {
+        ofs_ << "\tmovq\t%rax, " << reg_list_[out_reg] << '\n';
+    }
 
     return out_reg;
 }
@@ -645,6 +651,11 @@ reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
  */
 void X86Codegen::Return(reg_idx reg)
 {
+    if (IsPointerType(function_return_type_)) {
+        ofs_ << "\tmovq\t" << reg_list_[reg] << ", %rax\n";
+        EmitJump(function_end_label_);
+        return;
+    }
     switch (function_return_type_)
     {
         case PrimitiveType::kChar:
@@ -699,10 +710,15 @@ reg_idx X86Codegen::AddressOf(const Symbol& symbol)
     return reg;
 }
 
-/*
+void X86Codegen::AddOffset(/*
  * The address of a string literal is reached the same way as a global
  * variable's, but a label is local, so it takes no mangled spelling.
  */
+reg_idx reg, int32 offset) {
+    if (offset != 0)
+        ofs_ << "\taddq\t$" << offset << ", " << reg_list_[reg] << '\n';
+}
+
 reg_idx X86Codegen::LoadStrAddress(label_idx label)
 {
     const std::string name = "L" + std::to_string(label);

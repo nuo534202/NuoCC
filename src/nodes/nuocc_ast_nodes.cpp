@@ -71,13 +71,27 @@ PrimitiveType AstNode::GetType() const
     return type_;
 }
 
+const std::shared_ptr<CompositeType>& AstNode::GetComposite() const
+{
+    return composite_;
+}
+
+void AstNode::SetComposite(const std::shared_ptr<CompositeType>& composite)
+{
+    composite_ = composite;
+}
+
 /* AstOperator */
 AstOperator::AstOperator(AstNodePtr& left,
     AstNodePtr& right,
     NodeTag op_type,
     PrimitiveType type)
     : AstNode(A_AstOperator, type, left, right),
-      op_type_(op_type) {}
+      op_type_(op_type)
+{
+    SetComposite(GetLeft()->GetComposite()
+                     ? GetLeft()->GetComposite() : GetRight()->GetComposite());
+}
 
 NodeTag AstOperator::GetOpType() const
 {
@@ -112,7 +126,10 @@ AstIdentifier::AstIdentifier(AstNodePtr& left,
     AstNodePtr& right,
     const Symbol& symbol)
     : AstNode(A_AstIdentifier, symbol.type, left, right),
-      symbol_(symbol) {}
+      symbol_(symbol)
+{
+    SetComposite(symbol.composite);
+}
 
 const Symbol& AstIdentifier::GetSymbol() const
 {
@@ -206,7 +223,10 @@ AstFuncCall::AstFuncCall(std::vector<AstNodePtr>& arguments,
     const Symbol& symbol)
     : AstNode(A_AstFuncCall, symbol.type),
       symbol_(symbol),
-      arguments_(std::move(arguments)) {}
+      arguments_(std::move(arguments))
+{
+    SetComposite(symbol.composite);
+}
 
 const Symbol& AstFuncCall::GetSymbol() const
 {
@@ -221,7 +241,10 @@ const std::vector<AstNodePtr>& AstFuncCall::GetArguments() const
 /* AstAddress */
 AstAddress::AstAddress(const Symbol& symbol)
     : AstNode(A_AstAddress, PointerTo(symbol.type)),
-      symbol_(symbol) {}
+      symbol_(symbol)
+{
+    SetComposite(symbol.composite);
+}
 
 const Symbol& AstAddress::GetSymbol() const
 {
@@ -230,7 +253,40 @@ const Symbol& AstAddress::GetSymbol() const
 
 /* AstDeref */
 AstDeref::AstDeref(AstNodePtr& pointer, PrimitiveType type)
-    : AstNode(A_AstDeref, type, pointer) {}
+    : AstNode(A_AstDeref, type, pointer)
+{
+    SetComposite(GetLeft()->GetComposite());
+}
+
+/* AstMember */
+AstMember::AstMember(AstNodePtr& base, const Symbol& member,
+    bool through_pointer)
+    : AstNode(A_AstMember,
+              member.stype == StructuralType::kArray
+                  ? PointerTo(member.type) : member.type,
+              base),
+      member_(member),
+      through_pointer_(through_pointer)
+{
+    SetComposite(member.composite);
+}
+
+const Symbol& AstMember::GetMember() const
+{
+    return member_;
+}
+
+bool AstMember::IsThroughPointer() const
+{
+    return through_pointer_;
+}
+
+/* AstAddressExpr */
+AstAddressExpr::AstAddressExpr(AstNodePtr& lvalue)
+    : AstNode(A_AstAddressExpr, PointerTo(lvalue->GetType()), lvalue)
+{
+    SetComposite(GetLeft()->GetComposite());
+}
 
 /* AstUnary */
 AstUnary::AstUnary(AstNodePtr& expression, AstNodeTag tag, PrimitiveType type)

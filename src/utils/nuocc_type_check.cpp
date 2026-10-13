@@ -222,4 +222,14 @@ bool ModifyType(AstNodePtr& tree,
     return false;
 }
 
+bool ModifyType(AstNodePtr& tree, const TypeRef& wanted,
+                std::optional<NodeTag> op) {
+    if (BaseType(tree->GetType()) == PrimitiveType::kStruct &&
+        BaseType(wanted.type) == PrimitiveType::kStruct &&
+        tree->GetComposite() != wanted.composite) {
+        return false;
+    }
+    return ModifyType(tree, wanted.type, op);
+}
+
 }   /* namespace nuocc */

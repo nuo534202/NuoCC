@@ -28,7 +28,7 @@ parameter_list: type identifier
 /*
  * An array declares one name only, so it never joins an identifier_list.
  * The size is a fixed number of elements and may not be zero, and the
- * elements may not be void or pointers.
+ * elements may not be void or structs.
  */
 var_declaration: type identifier_list ';'
     | type identifier '[' number ']' ';'
@@ -146,6 +146,7 @@ assignment_expression: logical_or_expression
 
 lvalue: identifier
     | array_access
+    | member_access
     | '*' prefix_expression
     ;
 
@@ -230,6 +231,8 @@ prefix_expression: postfix_expression
     ;
 
 postfix_expression: primary
+    | array_access
+    | member_access
     | identifier '++'
     | identifier '--'
     ;
@@ -239,14 +242,18 @@ postfix_expression: primary
  * so an array_access may also be written where a pointer is wanted, and
  * the index counts elements rather than bytes.
  */
-array_access: identifier '[' expression ']'
+array_access: postfix_expression '[' expression ']'
+    ;
+
+/* Members select a struct value or a pointer to one and may be chained. */
+member_access: postfix_expression '.' identifier
+    | postfix_expression '->' identifier
     ;
 
 primary: number
     | string_literal
     | identifier
     | function_call
-    | array_access
     | '(' expression ')'
     ;
 

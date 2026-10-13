@@ -169,10 +169,36 @@
 
         struct node { int value; struct node *next; };
 
-    What a struct value cannot do yet is be read or written as a whole, or
-    handed to a function: a member is not reachable until the next stage,
-    so the members of a struct can be laid out, but nothing may look at
-    them. An array of structs, arithmetic on a pointer to a struct, a
-    struct which contains itself by value, a struct with no members, and a
+    A struct value cannot be read, written, passed to a function or returned
+    as a whole yet. Members can be read and written as described below.
+    An array of structs, arithmetic on a pointer to a struct, a struct which
+    contains itself by value, a struct with no members, and a
     tag which is defined twice are all refused with a message saying so.
-    Two pointers to structs of different types are not told apart yet.
+    Pointers to different struct types are distinct even when their members
+    have the same names and layout.
+
+28. Struct Member Access (acwj Stage 32, `32_Struct_Access_pt1`).
+    `item.number` selects a member of a struct value and `ptr->number`
+    selects a member through a pointer to a struct. Both work for global
+    and local variables, and a member can be read, assigned, used in an
+    expression or passed to a function. Reading an `int` member preserves
+    its sign, reading a `char` yields its unsigned value, and a store writes
+    only the bytes of that member. A function may take or return a struct
+    pointer, and negative `int` return values retain their sign at a call.
+
+    Member selection may be chained: `box.data.number` accesses a nested
+    struct and `head.next->next->value` follows linked nodes. Parentheses
+    and dereferencing work with selection, as in `(*ptr).number` and
+    `(*indirect)->number`. An array member decays to the address of its
+    first element and can be indexed, as in `box.slots[2]`; a pointer member
+    can be indexed too. `&item.number` and `&ptr->number` take the address
+    of a scalar member, while `&box.slots[2]` takes an element's address.
+    A nested struct's address can be taken and used as a struct pointer.
+
+    `.` requires a struct value and `->` exactly one level of pointer to
+    a struct. Unknown or missing member names, duplicate member names,
+    assigning to an array member as a whole, and incompatible struct
+    pointers in assignments, calls, returns and prototypes are refused.
+    Incrementing a member or a struct pointer, taking the address of an
+    entire array member, arrays of structs, arithmetic on a struct pointer
+    and copying a whole struct remain unsupported.

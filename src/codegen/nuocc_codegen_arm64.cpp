@@ -614,7 +614,13 @@ reg_idx Arm64Codegen::Call(const Symbol& symbol, int32 arg_count)
 
     reg_idx out_reg = AllocRegister();
 
-    ofs_ << "\tmov\t" << xreg_list_[out_reg] << ", x0" << std::endl;
+    if (symbol.type == PrimitiveType::kInt) {
+        ofs_ << "\tsxtw\t" << xreg_list_[out_reg] << ", w0\n";
+    } else if (symbol.type == PrimitiveType::kChar) {
+        ofs_ << "\tuxtb\t" << wreg_list_[out_reg] << ", w0\n";
+    } else {
+        ofs_ << "\tmov\t" << xreg_list_[out_reg] << ", x0\n";
+    }
 
     return out_reg;
 }
@@ -625,6 +631,11 @@ reg_idx Arm64Codegen::Call(const Symbol& symbol, int32 arg_count)
  */
 void Arm64Codegen::Return(reg_idx reg)
 {
+    if (IsPointerType(function_return_type_)) {
+        ofs_ << "\tmov\tx0, " << xreg_list_[reg] << '\n';
+        EmitJump(function_end_label_);
+        return;
+    }
     switch (function_return_type_)
     {
         case PrimitiveType::kChar:
@@ -674,10 +685,25 @@ reg_idx Arm64Codegen::AddressOf(const Symbol& symbol)
     return reg;
 }
 
-/*
+void Arm64Codegen::AddOffset(/*
  * The address of a string literal is reached the same way as a global
  * variable's, but a label is local, so it takes no GlobName() spelling.
  */
+reg_idx reg, int32 offset) {
+    if (offset == 0)
+        return;
+    if (offset <= 4095) {
+        ofs_ << "\tadd\t" << xreg_list_[reg] << ", " << xreg_list_[reg]
+             << ", #" << offset << '\n';
+        return;
+    }
+    ofs_ << "\tmovz\t" << kScratchReg << ", #" << (offset & 0xFFFF) << '\n';
+    ofs_ << "\tmovk\t" << kScratchReg << ", #" << (offset >> 16)
+         << ", lsl #16\n";
+    ofs_ << "\tadd\t" << xreg_list_[reg] << ", " << xreg_list_[reg]
+         << ", " << kScratchReg << '\n';
+}
+
 reg_idx Arm64Codegen::LoadStrAddress(label_idx label)
 {
     const std::string name = "L" + std::to_string(label);

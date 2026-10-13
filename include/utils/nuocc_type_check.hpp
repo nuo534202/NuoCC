@@ -73,4 +73,9 @@ bool ModifyType(AstNodePtr& tree,
                 PrimitiveType wanted,
                 std::optional<NodeTag> op);
 
+// Preserve the identity of struct types when checking pointer conversions.
+bool ModifyType(AstNodePtr& tree,
+                const TypeRef& wanted,
+                std::optional<NodeTag> op);
+
 }   /* namespace nuocc */

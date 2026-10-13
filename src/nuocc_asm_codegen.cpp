@@ -86,6 +86,12 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
     if (!root)
         return;
 
+    if (root->GetType() == PrimitiveType::kStruct) {
+        std::cerr << "syntax error: whole struct values are not supported yet!"
+                  << std::endl;
+        std::exit(1);
+    }
+
     switch (root->GetAstNodeTag())
     {
         case A_AstGlue:
@@ -132,6 +138,10 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         case A_AstOperator:
         case A_AstFuncCall:
         case A_AstIncDec:
+        case A_AstMember:
+        case A_AstDeref:
+        case A_AstIdentifier:
+        case A_AstAddressExpr:
         {
             reg_idx reg = GenExpr(root);
             FreeRegister(reg);
@@ -338,6 +348,11 @@ std::string AsmCodegen::GlobName(const std::string& name) const
  */
 reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 {
+    if (root->GetType() == PrimitiveType::kStruct) {
+        std::cerr << "syntax error: whole struct values are not supported yet!"
+                  << std::endl;
+        std::exit(1);
+    }
     switch (root->GetAstNodeTag())
     {
         case A_AstIntLit:
@@ -390,6 +405,16 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 
             return Deref(reg, root->GetLeft()->GetType());
         }
+        case A_AstMember:
+        {
+            const auto& member = static_cast<const AstMember&>(*root);
+            const reg_idx reg = GenAddress(root);
+            if (member.GetMember().stype == StructuralType::kArray)
+                return reg;
+            return Deref(reg, PointerTo(root->GetType()));
+        }
+        case A_AstAddressExpr:
+            return GenAddress(root->GetLeft());
         /*
          * A unary operation works on the value its child leaves in a
          * register, and the tag of the node says which one it is.
@@ -485,9 +510,9 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
             return value_reg;
         }
         case A_AstDeref:
+        case A_AstMember:
         {
-            /* The child of the dereference is the pointer, not the value. */
-            reg_idx address_reg = GenExpr(target->GetLeft());
+            reg_idx address_reg = GenAddress(target);
 
             StoreDeref(value_reg, address_reg, target->GetType());
             FreeRegister(address_reg);
@@ -500,6 +525,27 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
     std::cerr << "Error: node " << target->GetAstNodeTag();
     std::cerr << " cannot be assigned to!" << std::endl;
     std::exit(1);
+}
+
+// Compute an lvalue's address without loading the value stored there.
+reg_idx AsmCodegen::GenAddress(const AstNodePtr& root) {
+    switch (root->GetAstNodeTag()) {
+        case A_AstIdentifier:
+            return AddressOf(static_cast<const AstIdentifier&>(*root)
+                                 .GetSymbol());
+        case A_AstDeref:
+            return GenExpr(root->GetLeft());
+        case A_AstMember: {
+            const auto& member = static_cast<const AstMember&>(*root);
+            const reg_idx reg = member.IsThroughPointer()
+                ? GenExpr(root->GetLeft()) : GenAddress(root->GetLeft());
+            AddOffset(reg, member.GetMember().member_offset);
+            return reg;
+        }
+        default:
+            std::cerr << "Error: expression has no address!" << std::endl;
+            std::exit(1);
+    }
 }
 
 reg_idx AsmCodegen::GenOperator(NodeTag op_type,

@@ -113,6 +113,7 @@ protected:
     virtual void PrintInt(reg_idx reg) = 0;
 
     virtual reg_idx AddressOf(const Symbol& symbol) = 0;
+    virtual void AddOffset(reg_idx reg, int32 offset) = 0;
     virtual reg_idx LoadStrAddress(label_idx label) = 0;
     virtual reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) = 0;
     virtual void StoreDeref(reg_idx value_reg,
@@ -142,6 +143,7 @@ protected:
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);
     reg_idx GenAssign(const AstNodePtr& root);
+    reg_idx GenAddress(const AstNodePtr& root);
     reg_idx GenOperator(NodeTag op_type, reg_idx left_reg, reg_idx right_reg);
 
     reg_idx AllocRegister();
