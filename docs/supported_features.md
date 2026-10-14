@@ -70,6 +70,8 @@
 16. Function-local Variables. Variables declared inside a function are
     stored in that function's stack frame, are released when the function
     returns, and may have the same name as a variable in another function.
+    Nothing is put in that storage before the function uses it, so a local
+    holds whatever was there until a value is stored in it.
 17. Function Parameters. A function may bind up to six typed parameters, such
     as `int add(int a, int b)`, and a caller has to give one expression for
     each of them. Parameterless functions may be called with empty
@@ -94,9 +96,11 @@
     stands for the address of its first element, which is what `p= a;`
     stores and what lets an array be given wherever a pointer is wanted,
     and the address of an element is taken with `&a[2]`. A pointer may be
-    indexed the same way, so `p[4]` reads just as `a[4]` does. Every
-    element starts out zero unless the array is given values where it is
-    declared. An array may stand in a declaration beside
+    indexed the same way, so `p[4]` reads just as `a[4]` does. The
+    elements of a global array start out zero unless it is given values
+    where it is declared, while those of a local one hold whatever the
+    storage it was given held until a value is stored in each of them. An
+    array may stand in a declaration beside
     other names, since each name brings its own size: `int a[2], b;`
     declares an array and a plain variable. The address of the whole array
     is not a value which may be stored into, so `a= p;` and `a++;` are
@@ -359,8 +363,10 @@
     variable of type `char *` is given a string: its characters are put in
     the data section and the address of them is the value the variable
     starts with, so `char *str= "Hello";` begins at a `'H'` and `char
-    *empty= "";` at a zero byte. A name which is not a global one cannot be
-    given a value here yet, and neither can a struct or a union.
+    *empty= "";` at a zero byte. A struct or a union cannot be given a
+    value where it is declared, and neither can an `extern` name, whose
+    storage belongs to another source file; a local name is given its value
+    by an assignment instead, which the next item describes.
 
     An array is given a list of values between braces. The values left over
     when there are fewer of them than the array has room for start at zero,
@@ -370,6 +376,21 @@
     strings fills a row of pointers, so `char *d[]= { "apple", "banana",
     "peach" };` is three of them. An array with a size but no values starts
     out all zero, as it always has. A list with more values than the array
-    has room for, a value which is not a literal, a local or an `extern`
-    name given a value, and an array written with neither a size nor values
-    are all refused with a message saying so.
+    has room for, a value which is not a literal, an `extern` name given a
+    value, a local array given a list of values, and an array written with
+    neither a size nor values are all refused with a message saying so.
+
+37. Local Variable Initialisation (acwj Stage 41, `41_Local_Var_Init`). A
+    local variable may be given the value it starts with, and that value is
+    any expression and not only a literal: `int x= 3, y= 14;`, `int z= 2 * x
+    + y;` and `char *str= "Hello world";` all work. The declaration becomes
+    an assignment which runs where it stands, so the value is worked out
+    again every time the statement is reached, and a name may be written in
+    terms of the ones declared before it in the same declaration, as `y= x +
+    3` is above. The value has to fit the type the variable was declared
+    with, and the same rules as an assignment written by hand then apply.
+
+    A local variable may also be given no value, in which case it holds
+    whatever its storage held until a value is stored in it. An array is
+    given its values only when it is global, so a local array may not be
+    written with a list of values yet.

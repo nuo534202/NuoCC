@@ -36,6 +36,18 @@ struct ParsedStatement
 class Parser
 {
 private:
+    /*
+     * One name a declaration declared, and what has to run to give it the
+     * value it starts with. A global name has that value stored in its own
+     * storage and needs nothing to run; a local one is given it by an
+     * assignment which stands where the declaration does.
+     */
+    struct DeclaredName
+    {
+        Symbol symbol;
+        AstNodePtr initialiser = nullptr;
+    };
+
     /* Operator precedence: every binary operator has a precedence above 0 */
     static const std::unordered_map<NodeTag, uint8> kOpPrecedence;
 
@@ -91,16 +103,17 @@ private:
      * base of every type in the list: each name adds its own stars and its
      * own array size to it, so `int a, *b, c[40], *d[100];` declares four
      * variables of four different types. Each name is declared as it is
-     * read, and the symbols come back in the order they are written so that
-     * the caller can give the ones which belong to it some storage. A name
-     * may also be given the values it starts with, which only a global one
-     * may have yet. The semicolon is left to the caller, the same way it is
-     * for every other statement.
+     * read, so that the value it starts with may name the variables before
+     * it, and the names come back in the order they are written together
+     * with anything which has to run to give a local one its value. The
+     * semicolon is left to the caller, the same way it is for every other
+     * statement.
      */
-    std::vector<Symbol> VariableList(const std::vector<NodePtr>& token_list,
-                                     idx_t& i,
-                                     const TypeRef& base,
-                                     StorageClass storage);
+    std::vector<DeclaredName> VariableList(
+        const std::vector<NodePtr>& token_list,
+        idx_t& i,
+        const TypeRef& base,
+        StorageClass storage);
 
     /*
      * Whether the name which follows the type declares a function: some
@@ -112,9 +125,11 @@ private:
                               idx_t i) const;
 
     /*
-     * Stop unless a name of this class may be given a value where it is
-     * declared. Only a global one may be yet, so a local or an extern name
-     * is refused with a message saying which of the two it is.
+     * Stop unless the storage of a name is given where the name is
+     * declared. A global one has the value stored in its own storage and a
+     * local one is given it by an assignment, but the storage of an extern
+     * name belongs to another source file, so no value may be put in it
+     * from here.
      */
     void CheckInitialisable(StorageClass storage,
                             const std::string& name) const;
@@ -128,6 +143,16 @@ private:
     InitialValue ParseInitialValue(const TypeRef& type,
                                    const std::vector<NodePtr>& token_list,
                                    idx_t& i);
+
+    /*
+     * Build the assignment which gives a local variable the value it is
+     * declared with, and leave the token after the value for the caller.
+     * The expression is worked out and stored where the variable is, which
+     * is exactly what an assignment written by hand does.
+     */
+    AstNodePtr InitialiserAssignment(const Symbol& symbol,
+                                     const std::vector<NodePtr>& token_list,
+                                     idx_t& i);
 
     /*
      * array_declaration: identifier '[' number ']'  ;

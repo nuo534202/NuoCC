@@ -104,7 +104,7 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
         return;
     }
 
-    std::vector<Symbol> symbols = VariableList(token_list, i, type, storage);
+    std::vector<DeclaredName> names = VariableList(token_list, i, type, storage);
 
     Match(token_list, i, T_Semicolon, ";");
 
@@ -115,8 +115,8 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
     if (is_extern)
         return;
 
-    for (const Symbol& symbol : symbols)
-        program.globals.push_back(std::make_unique<AstDeclare>(symbol));
+    for (const DeclaredName& name : names)
+        program.globals.push_back(std::make_unique<AstDeclare>(name.symbol));
 }
 
 /*
@@ -493,41 +493,71 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
         return nullptr;
 
     /* The declaration may name more than one variable of that base type. */
-    std::vector<Symbol> symbols = VariableList(token_list, i, type, storage);
+    std::vector<DeclaredName> names = VariableList(token_list, i, type, storage);
 
     std::vector<AstNodePtr> declarations;
 
-    for (const Symbol& symbol : symbols)
-        declarations.push_back(std::make_unique<AstDeclare>(symbol));
+    for (DeclaredName& name : names)
+    {
+        declarations.push_back(std::make_unique<AstDeclare>(name.symbol));
+
+        /* A name given a value is given it by an assignment. */
+        if (name.initialiser)
+            declarations.push_back(std::move(name.initialiser));
+    }
 
     return GlueStatements(declarations);
 }
 
 /*
- * Stop unless a name of this class may be given a value where it is
- * declared. Only a global name may be yet, because the value of a global is
- * put into its storage by the compiler while a local one would have to be
- * worked out at run time.
+ * Stop unless the storage of a name is given where the name is declared.
+ * The value of a global goes into its own storage and a local one is given
+ * its value by an assignment, but the storage of an extern name belongs to
+ * another source file, so a value may not be put in it from here.
  */
 void Parser::CheckInitialisable(StorageClass storage,
     const std::string& name) const
 {
-    if (storage == StorageClass::kGlobal)
+    if (storage != StorageClass::kExtern)
         return;
 
-    if (storage == StorageClass::kLocal)
+    std::cerr << "syntax error: " << name;
+    std::cerr << " cannot be given a value where it is declared!";
+    std::cerr << std::endl;
+    std::exit(1);
+}
+
+/*
+ * Build the assignment which gives a local variable the value it is
+ * declared with. The value is worked out and stored where the variable is,
+ * which is what an assignment written by hand does, and what the caller
+ * runs in place of the declaration once the variable exists.
+ */
+AstNodePtr Parser::InitialiserAssignment(const Symbol& symbol,
+    const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    AstNodePtr expression = BinaryExpression(token_list, i, 0);
+
+    /* The value has to fit the type the variable was declared with. */
+    if (!ModifyType(expression,
+                    TypeRef{.type = symbol.type,
+                            .composite = symbol.composite},
+                    std::nullopt))
     {
-        std::cerr << "syntax error: initialising a local variable is not";
-        std::cerr << " supported yet!" << std::endl;
-    }
-    else
-    {
-        std::cerr << "syntax error: " << name;
-        std::cerr << " cannot be given a value where it is declared!";
-        std::cerr << std::endl;
+        std::cerr << "syntax error: this value does not fit the variable ";
+        std::cerr << symbol.name << "!" << std::endl;
+        std::exit(1);
     }
 
-    std::exit(1);
+    const PrimitiveType type = expression->GetType();
+    AstNodePtr target = MakeIdentLeaf(symbol);
+
+    /*
+     * The value is the left child and the variable it is stored in is the
+     * right one, which is the order every assignment is built in.
+     */
+    return std::make_unique<AstOperator>(expression, target, T_Assign, type);
 }
 
 /*
@@ -601,17 +631,20 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
  * declared as soon as it has been read, so a later one can be written in
  * terms of the ones before it.
  */
-std::vector<Symbol> Parser::VariableList(const std::vector<NodePtr>& token_list,
+std::vector<Parser::DeclaredName> Parser::VariableList(
+    const std::vector<NodePtr>& token_list,
     idx_t& i,
     const TypeRef& base,
     StorageClass storage)
 {
-    std::vector<Symbol> symbols;
+    std::vector<DeclaredName> names;
 
     while (true)
     {
         TypeRef type = ParseStars(token_list, i, base);
         std::string name = MatchIdentifier(token_list, i, "a variable name");
+
+        const bool is_array = TokenTag(token_list[i]) == T_LBracket;
 
         Symbol symbol{.name = name,
                       .type = type.type,
@@ -619,36 +652,44 @@ std::vector<Symbol> Parser::VariableList(const std::vector<NodePtr>& token_list,
                       .stype = StructuralType::kVariable,
                       .storage = storage};
 
-        if (TokenTag(token_list[i]) == T_LBracket)
-        {
-            /* A '[' after the name makes it an array of that many
-             * elements rather than one value. */
+        if (is_array)
             symbol = ArrayDeclaration(token_list, i, type, name, storage);
-        }
-        else
-        {
-            /*
-             * The name may be given the value it starts with, which only a
-             * global one may have yet.
-             */
-            if (TokenTag(token_list[i]) == T_Assign)
-            {
-                CheckInitialisable(storage, name);
-                i++;    /* step over '=' */
+        else if (storage == StorageClass::kLocal)
+            symbol.stack_offset = AllocateLocal(type);
 
-                symbol.initial_values.push_back(
+        /*
+         * The name is declared before the value it starts with is read, so
+         * that the value may name the variables declared before it in the
+         * same declaration: `int x= 2, y= x + 3;`.
+         */
+        symbol_table_.AddSymbol(symbol);
+
+        DeclaredName declared;
+        declared.symbol = symbol;
+
+        /*
+         * A name may be given the value it starts with. A global one has it
+         * stored in its own storage, while a local one is given it by an
+         * assignment which the caller runs where the declaration stands.
+         */
+        if (!is_array && TokenTag(token_list[i]) == T_Assign)
+        {
+            CheckInitialisable(storage, name);
+            i++;    /* step over '=' */
+
+            if (storage == StorageClass::kGlobal)
+            {
+                declared.symbol.initial_values.push_back(
                     ParseInitialValue(type, token_list, i));
             }
-
-            if (storage == StorageClass::kLocal)
+            else
             {
-                /* An ordinary local takes room in its function's frame. */
-                symbol.stack_offset = AllocateLocal(type);
+                declared.initialiser =
+                    InitialiserAssignment(symbol, token_list, i);
             }
         }
 
-        symbol_table_.AddSymbol(symbol);
-        symbols.push_back(symbol);
+        names.push_back(std::move(declared));
 
         /* A ',' continues the list with another name of that base type. */
         if (TokenTag(token_list[i]) != T_Comma)
@@ -657,7 +698,7 @@ std::vector<Symbol> Parser::VariableList(const std::vector<NodePtr>& token_list,
         i++;
     }
 
-    return symbols;
+    return names;
 }
 
 bool Parser::IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
@@ -755,6 +796,20 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     if (TokenTag(token_list[i]) == T_Assign)
     {
         CheckInitialisable(storage, name);
+
+        /*
+         * The values of an array are put in the array itself by the
+         * compiler, which can only be done for an array declared in this
+         * file: a local one would have to have them put there at run time.
+         */
+        if (storage != StorageClass::kGlobal)
+        {
+            std::cerr << "syntax error: initialising an array where it is";
+            std::cerr << " declared is only supported for a global array!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
         i++;    /* step over '=' */
 
         Match(token_list, i, T_LBrace, "{");
