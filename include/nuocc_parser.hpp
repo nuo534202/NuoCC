@@ -83,8 +83,8 @@ private:
      *      |           declarator ',' declarator_list
      *      ;
      *
-     * declarator: opt_pointer identifier
-     *      |   opt_pointer identifier '[' number ']'
+     * declarator: opt_pointer identifier opt_value
+     *      |   opt_pointer identifier '[' opt_number ']' opt_values
      *      ;
      *
      * The type has already been parsed by the caller, but it is only the
@@ -92,9 +92,10 @@ private:
      * own array size to it, so `int a, *b, c[40], *d[100];` declares four
      * variables of four different types. Each name is declared as it is
      * read, and the symbols come back in the order they are written so that
-     * the caller can give the ones which belong to it some storage. The
-     * semicolon is left to the caller, the same way it is for every other
-     * statement.
+     * the caller can give the ones which belong to it some storage. A name
+     * may also be given the values it starts with, which only a global one
+     * may have yet. The semicolon is left to the caller, the same way it is
+     * for every other statement.
      */
     std::vector<Symbol> VariableList(const std::vector<NodePtr>& token_list,
                                      idx_t& i,
@@ -111,12 +112,35 @@ private:
                               idx_t i) const;
 
     /*
+     * Stop unless a name of this class may be given a value where it is
+     * declared. Only a global one may be yet, so a local or an extern name
+     * is refused with a message saying which of the two it is.
+     */
+    void CheckInitialisable(StorageClass storage,
+                            const std::string& name) const;
+
+    /*
+     * Parse the one value a global variable or one element of it is given
+     * where it is declared, and leave the token after it for the caller. A
+     * pointer to a char is given a string, whose address the value becomes;
+     * every other type takes an integer literal which has to fit it.
+     */
+    InitialValue ParseInitialValue(const TypeRef& type,
+                                   const std::vector<NodePtr>& token_list,
+                                   idx_t& i);
+
+    /*
      * array_declaration: identifier '[' number ']'  ;
+     *      |           identifier '[' ']'
+     *      |           identifier '[' number ']' '=' '{' value_list '}'
+     *      |           identifier '[' ']' '=' '{' value_list '}'
+     *      ;
      *
      * The type and the name have already been parsed by the caller. The
      * number is how many elements the array holds, and the whole array
      * takes room for all of them at once: one element of the declared
-     * type for each. The caller matches the semicolon.
+     * type for each. The number may be left out when the values the array
+     * is given are its size instead, and the caller matches the semicolon.
      */
     Symbol ArrayDeclaration(const std::vector<NodePtr>& token_list,
                             idx_t& i,

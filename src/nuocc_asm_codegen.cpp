@@ -3,6 +3,8 @@
 #include <stdlib.h>
 
 #include <iostream>
+#include <variant>
+#include <vector>
 
 #include "utils/nuocc_type_check.hpp"
 
@@ -75,6 +77,30 @@ void AsmCodegen::GenProgram(const Program& program)
         function_return_type_ = PrimitiveType::kNone;
         function_local_size_ = 0;
     }
+}
+
+/*
+ * Write the start of a global variable's storage, which everything a global
+ * holds is written after.
+ */
+void AsmCodegen::EmitGlobHeading(const Symbol& symbol)
+{
+    ofs_ << "\t.data" << std::endl;
+    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+
+    /*
+     * The storage is lined up to what it holds, so that every element of it
+     * lands where its type says and so that a pointer an element holds can
+     * be written into it. The data section of some machines lines a pointer
+     * up no further than this whatever the assembler is told, which is why
+     * the alignment is asked for here rather than left to them.
+     */
+    const int32 alignment = SymbolAlignment(symbol);
+
+    if (alignment > 1)
+        ofs_ << "\t.balign\t" << alignment << std::endl;
+
+    ofs_ << GlobName(symbol.name) << ":" << std::endl;
 }
 
 /*
@@ -431,48 +457,84 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
  */
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
-    const int32 size = SymbolStorageSize(symbol);
-
-    ofs_ << "\t.data" << std::endl;
-    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
-
     /*
-     * An array and a struct are each one block of room holding everything
-     * they are made of, all of it starting out zero, and the block is
-     * lined up to what it holds so that every part of it lands where its
-     * type says. The label has to come after that alignment or it would
-     * point at the padding in front of the block.
+     * A struct or a union is one block of room which starts out zero: it
+     * cannot be given a value where it is declared.
      */
-    if (symbol.stype == StructuralType::kArray ||
-        symbol.type == PrimitiveType::kComposite)
+    if (symbol.type == PrimitiveType::kComposite)
     {
-        ofs_ << "\t.balign\t" << SymbolAlignment(symbol) << std::endl;
-        ofs_ << GlobName(symbol.name) << ":\t.space\t" << size << std::endl;
+        EmitGlobHeading(symbol);
+        ofs_ << "\t.space\t" << SymbolStorageSize(symbol) << std::endl;
         ofs_ << "\t.text" << std::endl;
         return;
     }
 
-    ofs_ << GlobName(symbol.name) << ":\t";
+    /*
+     * A variable holds one element unless it is an array, which holds as
+     * many elements as it was declared with.
+     */
+    const bool is_array = symbol.stype == StructuralType::kArray;
+    const int32 element_count = is_array ? symbol.element_count : 1;
+    const int32 element_size = ValueSize(symbol.type, symbol.composite);
 
-    /* How much room the variable needs is decided by its type. */
-    switch (size)
+    /*
+     * An element given a string holds the address of a string, so that
+     * string needs room of its own. Every one of them is given a label
+     * before the variable is written, so that the address an element holds
+     * is known by the time it is.
+     */
+    std::vector<label_idx> string_labels(element_count, 0);
+
+    for (idx_t k = 0;
+         k < string_labels.size() && k < symbol.initial_values.size();
+         k++)
     {
-        case 1:
-            ofs_ << ".byte";
-            break;
-        case 4:
-            ofs_ << ".long";
-            break;
-        case 8:
-            ofs_ << ".quad";
-            break;
-        default:
-            std::cerr << "Error: bad type for variable ";
-            std::cerr << symbol.name << "!" << std::endl;
-            std::exit(1);
+        if (const std::string* text =
+                std::get_if<std::string>(&symbol.initial_values[k]))
+        {
+            string_labels[k] = NewLabel();
+            GenStrStorage(string_labels[k], *text);
+        }
     }
 
-    ofs_ << "\t0" << std::endl;
+    EmitGlobHeading(symbol);
+
+    for (int32 k = 0; k < element_count; k++)
+    {
+        /* An element given a string holds the address of that string. */
+        if (string_labels[k] != 0)
+        {
+            ofs_ << "\t.quad\tL" << string_labels[k] << std::endl;
+            continue;
+        }
+
+        /*
+         * An element which was not given a value starts out zero, which is
+         * what an array with fewer values than elements needs.
+         */
+        int32 value = 0;
+
+        if (k < static_cast<int32>(symbol.initial_values.size()))
+            value = std::get<int32>(symbol.initial_values[k]);
+
+        switch (element_size)
+        {
+            case 1:
+                ofs_ << "\t.byte\t" << value << std::endl;
+                break;
+            case 4:
+                ofs_ << "\t.long\t" << value << std::endl;
+                break;
+            case 8:
+                ofs_ << "\t.quad\t" << value << std::endl;
+                break;
+            default:
+                std::cerr << "Error: bad type for variable ";
+                std::cerr << symbol.name << "!" << std::endl;
+                std::exit(1);
+        }
+    }
+
     ofs_ << "\t.text" << std::endl;
 }
 

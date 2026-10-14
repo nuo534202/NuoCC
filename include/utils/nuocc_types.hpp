@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace nuocc
@@ -104,6 +105,14 @@ enum class StorageClass : uint8
 };
 
 /*
+ * One value a global variable is given where it is declared. A variable of
+ * type char * is given the characters of a string, whose address the value
+ * becomes; every other variable is given a number, so a value is one of the
+ * two and the type of the variable says which.
+ */
+using InitialValue = std::variant<int32, std::string>;
+
+/*
  * A type as it is written down: which primitive type, and the struct which
  * the value is of when it is one. The type value on its own cannot say
  * which struct a value is of, so the two travel together.
@@ -146,6 +155,13 @@ struct Symbol
     int32 member_offset = 0;
     /* The number an enum value stands for, and zero for anything else. */
     int32 enum_value = 0;
+    /*
+     * The values a global variable is given where it is declared, in the
+     * order they are written: one for the variable itself, or one for every
+     * element of an array. It is empty when the variable was declared
+     * without a value, in which case its storage starts out zero.
+     */
+    std::vector<InitialValue> initial_values = {};
 };
 
 /*

@@ -140,6 +140,14 @@ protected:
     void GenGlobSymbol(const Symbol& symbol);
 
     /*
+     * Write the start of a global variable's storage: the data section, its
+     * name as a global, the room its alignment needs and the label the
+     * storage begins at. The label comes after the alignment, or it would
+     * point at the padding in front of the storage.
+     */
+    void EmitGlobHeading(const Symbol& symbol);
+
+    /*
      * Give a string literal storage in the data section, under a label
      * of its own, so that the code can take the address of it.
      */

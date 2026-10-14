@@ -504,6 +504,92 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 }
 
 /*
+ * Stop unless a name of this class may be given a value where it is
+ * declared. Only a global name may be yet, because the value of a global is
+ * put into its storage by the compiler while a local one would have to be
+ * worked out at run time.
+ */
+void Parser::CheckInitialisable(StorageClass storage,
+    const std::string& name) const
+{
+    if (storage == StorageClass::kGlobal)
+        return;
+
+    if (storage == StorageClass::kLocal)
+    {
+        std::cerr << "syntax error: initialising a local variable is not";
+        std::cerr << " supported yet!" << std::endl;
+    }
+    else
+    {
+        std::cerr << "syntax error: " << name;
+        std::cerr << " cannot be given a value where it is declared!";
+        std::cerr << std::endl;
+    }
+
+    std::exit(1);
+}
+
+/*
+ * Parse the one value a global variable, or one element of a global array,
+ * is given where it is declared. A pointer to a char is given the
+ * characters of a string, and the value becomes the address the code
+ * generator stores them at; every other type takes an integer literal which
+ * has to fit it. The token after the value is left for the caller.
+ */
+InitialValue Parser::ParseInitialValue(const TypeRef& type,
+    const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    if (IsPointerType(type.type))
+    {
+        if (type.type != PointerTo(PrimitiveType::kChar) ||
+            TokenTag(token_list[i]) != T_StrLit)
+        {
+            std::cerr << "syntax error: only a pointer to a char may be";
+            std::cerr << " given a string as its value!" << std::endl;
+            std::exit(1);
+        }
+
+        std::string text =
+            static_cast<const Literal<std::string, T_StrLit>*>(
+                token_list[i].get())
+                ->GetValue();
+        i++;
+
+        return text;
+    }
+
+    if (!IsIntType(type.type))
+    {
+        std::cerr << "syntax error: this type cannot be given a value where";
+        std::cerr << " it is declared!" << std::endl;
+        std::exit(1);
+    }
+
+    if (TokenTag(token_list[i]) != T_IntLit)
+    {
+        std::cerr << "syntax error: expect an integer value!" << std::endl;
+        std::exit(1);
+    }
+
+    const Literal<int, T_IntLit> *lit =
+        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
+    const int32 value = lit->GetValue();
+    i++;
+
+    /* A char holds 0 to 255, so a larger value does not fit it. */
+    if (type.type == PrimitiveType::kChar && value > 255)
+    {
+        std::cerr << "syntax error: the value " << value;
+        std::cerr << " is too big for a char!" << std::endl;
+        std::exit(1);
+    }
+
+    return value;
+}
+
+/*
  * declarator_list: declarator | declarator ',' declarator_list  ;
  *
  * declarator: opt_pointer identifier
@@ -539,10 +625,26 @@ std::vector<Symbol> Parser::VariableList(const std::vector<NodePtr>& token_list,
              * elements rather than one value. */
             symbol = ArrayDeclaration(token_list, i, type, name, storage);
         }
-        else if (storage == StorageClass::kLocal)
+        else
         {
-            /* An ordinary local takes room in its function's frame. */
-            symbol.stack_offset = AllocateLocal(type);
+            /*
+             * The name may be given the value it starts with, which only a
+             * global one may have yet.
+             */
+            if (TokenTag(token_list[i]) == T_Assign)
+            {
+                CheckInitialisable(storage, name);
+                i++;    /* step over '=' */
+
+                symbol.initial_values.push_back(
+                    ParseInitialValue(type, token_list, i));
+            }
+
+            if (storage == StorageClass::kLocal)
+            {
+                /* An ordinary local takes room in its function's frame. */
+                symbol.stack_offset = AllocateLocal(type);
+            }
         }
 
         symbol_table_.AddSymbol(symbol);
@@ -584,18 +686,30 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 {
     Match(token_list, i, T_LBracket, "[");
 
-    if (TokenTag(token_list[i]) != T_IntLit)
+    /*
+     * The size may be left out when the array is given its values where it
+     * is declared, since how many values there are is then how many
+     * elements it holds. A token which is neither a size nor the closing
+     * bracket is not a size at all.
+     */
+    int32 size = 0;
+    bool has_size = false;
+
+    if (TokenTag(token_list[i]) == T_IntLit)
+    {
+        const Literal<int, T_IntLit> *lit =
+            static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
+        size = lit->GetValue();
+        has_size = true;
+        i++;
+    }
+    else if (TokenTag(token_list[i]) != T_RBracket)
     {
         std::cerr << "syntax error: expect an array size!" << std::endl;
         std::exit(1);
     }
 
-    const Literal<int, T_IntLit> *lit =
-        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
-    const int32 element_count = lit->GetValue();
-    i++;
-
-    if (element_count <= 0)
+    if (has_size && size <= 0)
     {
         std::cerr << "syntax error: an array must have at least one element!";
         std::cerr << std::endl;
@@ -624,29 +738,82 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
         std::exit(1);
     }
 
-    /* The room for the whole array has to be countable in bytes. */
-    if (element_count > std::numeric_limits<int32>::max() / element_size)
-    {
-        std::cerr << "syntax error: the array " << name << " is too large!";
-        std::cerr << std::endl;
-        std::exit(1);
-    }
-
     Match(token_list, i, T_RBracket, "]");
-
-    const int32 element_alignment = ValueAlignment(element_type.type,
-                                                   element_type.composite);
 
     Symbol symbol{.name = name,
                   .type = element_type.type,
                   .composite = element_type.composite,
                   .stype = StructuralType::kArray,
                   .storage = storage,
-                  .stack_offset = storage == StorageClass::kLocal
-                                      ? AllocateLocal(element_size * element_count,
-                                                      element_alignment)
-                                      : 0,
-                  .element_count = element_count};
+                  .element_count = size};
+
+    /*
+     * The values the array is given where it is declared. Only a global
+     * array may have them yet, and they may give it the size it was not
+     * written with.
+     */
+    if (TokenTag(token_list[i]) == T_Assign)
+    {
+        CheckInitialisable(storage, name);
+        i++;    /* step over '=' */
+
+        Match(token_list, i, T_LBrace, "{");
+
+        std::vector<InitialValue> values;
+
+        while (TokenTag(token_list[i]) != T_RBrace)
+        {
+            values.push_back(ParseInitialValue(element_type, token_list, i));
+
+            /* A ',' separates two values, and the last one needs none. */
+            if (TokenTag(token_list[i]) != T_Comma)
+                break;
+
+            i++;
+        }
+
+        Match(token_list, i, T_RBrace, "}");
+
+        if (has_size && static_cast<int32>(values.size()) > size)
+        {
+            std::cerr << "syntax error: too many values for the array ";
+            std::cerr << name << "!" << std::endl;
+            std::exit(1);
+        }
+
+        /*
+         * An array written without a size holds exactly the values it was
+         * given; one with room for more than it was given keeps that room
+         * and the elements left over start out zero.
+         */
+        if (!has_size)
+            symbol.element_count = static_cast<int32>(values.size());
+
+        symbol.initial_values = std::move(values);
+    }
+
+    if (symbol.element_count == 0)
+    {
+        std::cerr << "syntax error: the array " << name;
+        std::cerr << " needs a size or a list of values!" << std::endl;
+        std::exit(1);
+    }
+
+    /* The room for the whole array has to be countable in bytes. */
+    if (symbol.element_count >
+        std::numeric_limits<int32>::max() / element_size)
+    {
+        std::cerr << "syntax error: the array " << name << " is too large!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    if (storage == StorageClass::kLocal)
+    {
+        symbol.stack_offset = AllocateLocal(
+            element_size * symbol.element_count,
+            ValueAlignment(element_type.type, element_type.composite));
+    }
 
     return symbol;
 }

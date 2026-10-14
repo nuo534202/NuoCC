@@ -95,7 +95,8 @@
     stores and what lets an array be given wherever a pointer is wanted,
     and the address of an element is taken with `&a[2]`. A pointer may be
     indexed the same way, so `p[4]` reads just as `a[4]` does. Every
-    element starts out zero. An array may stand in a declaration beside
+    element starts out zero unless the array is given values where it is
+    declared. An array may stand in a declaration beside
     other names, since each name brings its own size: `int a[2], b;`
     declares an array and a plain variable. The address of the whole array
     is not a value which may be stored into, so `a= p;` and `a++;` are
@@ -349,3 +350,26 @@
     `charptr` stand for `char *`, and a function may return a pointer, so
     `char *g();` declares one. Initializers are not part of the language
     yet, so a value may not be given where a name is declared.
+
+36. Global Variable Initialisation (acwj Stage 40,
+    `40_Var_Initialisation_pt2`). A global variable may be given the value
+    or the values it starts with where it is declared. A `char`, an `int`
+    or a `long` is given a number which has to fit it, so `int x= 2;` and
+    `long big= 100000;` are taken while `char c= 300;` is refused. A
+    variable of type `char *` is given a string: its characters are put in
+    the data section and the address of them is the value the variable
+    starts with, so `char *str= "Hello";` begins at a `'H'` and `char
+    *empty= "";` at a zero byte. A name which is not a global one cannot be
+    given a value here yet, and neither can a struct or a union.
+
+    An array is given a list of values between braces. The values left over
+    when there are fewer of them than the array has room for start at zero,
+    so `int e[4]= { 1, 4, 17 };` holds `1`, `4`, `17` and `0`; the size may
+    be left out, in which case the array holds exactly the values it was
+    given, so `int f[]= { 9, 8, 7, 6 };` holds four of them. A list of
+    strings fills a row of pointers, so `char *d[]= { "apple", "banana",
+    "peach" };` is three of them. An array with a size but no values starts
+    out all zero, as it always has. A list with more values than the array
+    has room for, a value which is not a literal, a local or an `extern`
+    name given a value, and an array written with neither a size nor values
+    are all refused with a message saying so.
