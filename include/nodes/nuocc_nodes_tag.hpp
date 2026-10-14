@@ -68,6 +68,7 @@ typedef enum NodeTag
     T_Case,
     T_Default,
     T_Sizeof,
+    T_Static,
 
     T_Identifier,
 

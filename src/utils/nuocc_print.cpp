@@ -170,6 +170,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Sizeof:
             out = "sizeof";
             break;
+        case T_Static:
+            out = "static";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;

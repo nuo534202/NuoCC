@@ -48,6 +48,19 @@ private:
         AstNodePtr initialiser = nullptr;
     };
 
+    /*
+     * What stands in front of the type of a declaration: `extern`, which
+     * says the storage of the name belongs to another source file, or
+     * `static`, which says the name is visible only in this one. Neither
+     * changes where the storage of a global name is put; what changes is
+     * who may reach it.
+     */
+    struct DeclarationPrefix
+    {
+        StorageClass storage = StorageClass::kGlobal;
+        bool is_static = false;
+    };
+
     /* Operator precedence: every binary operator has a precedence above 0 */
     static const std::unordered_map<NodeTag, uint8> kOpPrecedence;
 
@@ -86,7 +99,8 @@ private:
     AstNodePtr FunctionDeclaration(const std::vector<NodePtr>& token_list,
         idx_t& i,
         const TypeRef& type,
-        const std::string& name);
+        const std::string& name,
+        bool is_static);
 
     /*
      * var_declaration: type declarator_list ';'  ;
@@ -113,7 +127,7 @@ private:
         const std::vector<NodePtr>& token_list,
         idx_t& i,
         const TypeRef& base,
-        StorageClass storage);
+        const DeclarationPrefix& prefix);
 
     /*
      * Whether the name which follows the type declares a function: some
@@ -494,11 +508,16 @@ private:
     bool IsTypedefName(const NodePtr& token) const;
 
     /*
-     * Step over an `extern` keyword when one stands here, and answer
-     * whether one did. It says that the storage of what is declared is
-     * given elsewhere, and it has to come before the type.
+     * Read the storage a declaration is given before its type, which is
+     * what `plain` says when neither word stands there. `extern` says the
+     * storage of the name belongs to another source file and `static` that
+     * it belongs to this one alone; the two may not be written together,
+     * and a static name may only be declared at the top level of a program.
      */
-    bool ConsumeExtern(const std::vector<NodePtr>& token_list, idx_t& i);
+    DeclarationPrefix ParseDeclarationPrefix(
+        const std::vector<NodePtr>& token_list,
+        idx_t& i,
+        StorageClass plain);
 
     /*
      * Stop unless a symbol is the kind of symbol the grammar wants there,

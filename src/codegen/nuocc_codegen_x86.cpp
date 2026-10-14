@@ -78,7 +78,12 @@ void X86Codegen::EmitFunctionPreamble(
     const std::vector<Symbol>& parameters)
 {
     ofs_ << "\t.text" << std::endl;
-    ofs_ << "\t.globl\t" << symbol.name << std::endl;
+
+    /* A function declared static belongs to this file alone, so the
+     * assembler is not told that another file may reach it. */
+    if (!symbol.is_static)
+        ofs_ << "\t.globl\t" << symbol.name << std::endl;
+
     ofs_ << "\t.type\t" << symbol.name << ", @function" << std::endl;
     ofs_ << symbol.name << ":" << std::endl;
     ofs_ << "\tpushq\t%rbp" << std::endl;

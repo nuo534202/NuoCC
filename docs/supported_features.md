@@ -535,3 +535,23 @@
     where `sizeof(&buffer[0])` would be the size of a pointer. A type which
     cannot hold a value, such as `void`, is refused, and so is a `sizeof`
     which is not followed by a parenthesis.
+
+45. Static Names (acwj Stage 48, `48_Static`). `static` may stand in front
+    of the type of a variable or a function declared at the top level of a
+    program, and says that the name belongs to the source file it is
+    written in: the assembler is not told another file may reach it, so two
+    files may each declare a static name of the same one and each sees only
+    its own. Everything else about the name is as it is for any global one,
+    so a static variable may be given the value it starts with and a static
+    function may be called from anywhere in its file:
+
+        static int counter= 0;
+        static int fred(void) { return(counter++); }
+
+    A name declared static inside a function is refused, as are the two
+    words `extern` and `static` written together, which would say both that
+    the storage belongs to another file and that the name belongs to this
+    one. The third kind of static name a C compiler has, a variable inside
+    a function whose value lives on between calls to it, is not part of the
+    language: a name declared static has to be declared where the whole
+    file can be seen.

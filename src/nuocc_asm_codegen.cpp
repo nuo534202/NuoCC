@@ -86,7 +86,13 @@ void AsmCodegen::GenProgram(const Program& program)
 void AsmCodegen::EmitGlobHeading(const Symbol& symbol)
 {
     ofs_ << "\t.data" << std::endl;
-    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+
+    /*
+     * The assembler is told which name other files may reach, and left to
+     * itself about one declared static, which only this file may.
+     */
+    if (!symbol.is_static)
+        ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
 
     /*
      * The storage is lined up to what it holds, so that every element of it

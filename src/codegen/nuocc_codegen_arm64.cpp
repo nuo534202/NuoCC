@@ -93,7 +93,12 @@ void Arm64Codegen::EmitFunctionPreamble(
     const std::vector<Symbol>& parameters)
 {
     ofs_ << "\t.text" << std::endl;
-    ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+
+    /* A function declared static belongs to this file alone, so the
+     * assembler is not told that another file may reach it. */
+    if (!symbol.is_static)
+        ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
+
     ofs_ << GlobName(symbol.name) << ":" << std::endl;
 
     /* The stack has to stay a multiple of sixteen bytes at every call. */

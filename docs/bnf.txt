@@ -9,17 +9,20 @@ program: global_declaration
     ;
 
 /*
- * A declaration may be written `extern`, which says that the storage of
- * what it declares is given in another source file. It has to come before
- * the type, and no storage is emitted for the names it declares.
+ * A declaration may be written with one of two words in front of its type.
+ * `extern` says that the storage of the name belongs to another source
+ * file, so no storage is emitted for it here, and `static` that it belongs
+ * to this one alone, so the assembler is not told another file may reach
+ * it. The two may not be written together.
  */
-global_declaration: opt_extern function_declaration
-    | opt_extern var_declaration
+global_declaration: opt_storage_class function_declaration
+    | opt_storage_class var_declaration
     | typedef_declaration
     ;
 
-opt_extern: <empty>
+opt_storage_class: <empty>
     | 'extern'
+    | 'static'
     ;
 
 function_declaration:
@@ -199,6 +202,11 @@ statement: compound_statement
 print_statement: 'print' expression ';'
     ;
 
+/*
+ * A name declared inside a function may be `extern`, but not `static`: a
+ * static name belongs to the file it is written in, so it can only be
+ * declared where the whole file can be seen.
+ */
 declaration: opt_extern type declarator_list ';'
     | typedef_declaration
     ;

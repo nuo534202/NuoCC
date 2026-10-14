@@ -57,12 +57,13 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 {
     /*
      * `extern` says the storage of what is declared is given in another
-     * source file, so the name is added to the symbol table but nothing
-     * is emitted for it here.
+     * source file, so the name is added to the symbol table but nothing is
+     * emitted for it here; `static` says the name belongs to this file
+     * alone, and its storage is put here like any other global one.
      */
-    const bool is_extern = ConsumeExtern(token_list, i);
-    const StorageClass storage = is_extern ? StorageClass::kExtern
-                                           : StorageClass::kGlobal;
+    const DeclarationPrefix prefix =
+        ParseDeclarationPrefix(token_list, i, StorageClass::kGlobal);
+    const bool is_extern = prefix.storage == StorageClass::kExtern;
 
     /* A typedef declares a name for a type and nothing else. */
     if (TokenTag(token_list[i]) == T_Typedef)
@@ -97,7 +98,8 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 
         /* A prototype declares no body, so it adds no function. */
         AstNodePtr function =
-            FunctionDeclaration(token_list, i, return_type, name);
+            FunctionDeclaration(token_list, i, return_type, name,
+                                prefix.is_static);
 
         if (function)
             program.functions.push_back(std::move(function));
@@ -105,7 +107,7 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
         return;
     }
 
-    std::vector<DeclaredName> names = VariableList(token_list, i, type, storage);
+    std::vector<DeclaredName> names = VariableList(token_list, i, type, prefix);
 
     Match(token_list, i, T_Semicolon, ";");
 
@@ -133,7 +135,8 @@ void Parser::GlobalDeclaration(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     const TypeRef& type,
-    const std::string& name)
+    const std::string& name,
+    bool is_static)
 {
     if (type.type == PrimitiveType::kComposite) {
         std::cerr << "syntax error: returning a composite value"
@@ -160,7 +163,8 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     Symbol symbol{.name = name,
                   .type = type.type,
                   .composite = type.composite,
-                  .stype = StructuralType::kFunction};
+                  .stype = StructuralType::kFunction,
+                  .is_static = is_static};
 
     for (const Symbol& parameter : parameters)
         symbol.parameter_types.push_back(
@@ -425,6 +429,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Enum:
         case T_Typedef:
         case T_Extern:
+        case T_Static:
             return {DeclareStatement(token_list, i), true};
         case T_If:
             return {IfStatement(token_list, i), false};
@@ -483,9 +488,8 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
      * elsewhere, even when it is written inside a function, so it is given
      * no room in the stack frame.
      */
-    const bool is_extern = ConsumeExtern(token_list, i);
-    const StorageClass storage = is_extern ? StorageClass::kExtern
-                                           : StorageClass::kLocal;
+    const DeclarationPrefix prefix =
+        ParseDeclarationPrefix(token_list, i, StorageClass::kLocal);
 
     /* A typedef declares a name for a type and nothing else. */
     if (TokenTag(token_list[i]) == T_Typedef)
@@ -502,7 +506,7 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
         return nullptr;
 
     /* The declaration may name more than one variable of that base type. */
-    std::vector<DeclaredName> names = VariableList(token_list, i, type, storage);
+    std::vector<DeclaredName> names = VariableList(token_list, i, type, prefix);
 
     std::vector<AstNodePtr> declarations;
 
@@ -758,7 +762,7 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
     const std::vector<NodePtr>& token_list,
     idx_t& i,
     const TypeRef& base,
-    StorageClass storage)
+    const DeclarationPrefix& prefix)
 {
     std::vector<DeclaredName> names;
 
@@ -773,12 +777,19 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
                       .type = type.type,
                       .composite = type.composite,
                       .stype = StructuralType::kVariable,
-                      .storage = storage};
+                      .storage = prefix.storage,
+                      .is_static = prefix.is_static};
 
         if (is_array)
-            symbol = ArrayDeclaration(token_list, i, type, name, storage);
-        else if (storage == StorageClass::kLocal)
+        {
+            symbol = ArrayDeclaration(token_list, i, type, name,
+                                      prefix.storage);
+            symbol.is_static = prefix.is_static;
+        }
+        else if (prefix.storage == StorageClass::kLocal)
+        {
             symbol.stack_offset = AllocateLocal(type);
+        }
 
         /*
          * The name is declared before the value it starts with is read, so
@@ -797,10 +808,10 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
          */
         if (!is_array && TokenTag(token_list[i]) == T_Assign)
         {
-            CheckInitialisable(storage, name);
+            CheckInitialisable(prefix.storage, name);
             i++;    /* step over '=' */
 
-            if (storage == StorageClass::kGlobal)
+            if (prefix.storage == StorageClass::kGlobal)
             {
                 declared.symbol.initial_values.push_back(
                     ParseConstantValue(type, token_list, i));
@@ -2530,13 +2541,64 @@ TypeRef Parser::TypedefType(const NodePtr& token) const
     return TypeRef{.type = symbol->type, .composite = symbol->composite};
 }
 
-bool Parser::ConsumeExtern(const std::vector<NodePtr>& token_list, idx_t& i)
+Parser::DeclarationPrefix Parser::ParseDeclarationPrefix(
+    const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    StorageClass plain)
 {
-    if (TokenTag(token_list[i]) != T_Extern)
-        return false;
+    DeclarationPrefix prefix;
+    prefix.storage = plain;
 
-    i++;
-    return true;
+    bool seen_extern = false;
+    bool seen_static = false;
+
+    while (TokenTag(token_list[i]) == T_Extern ||
+           TokenTag(token_list[i]) == T_Static)
+    {
+        const bool is_extern = TokenTag(token_list[i]) == T_Extern;
+
+        if (is_extern && seen_static)
+        {
+            std::cerr << "syntax error: a name cannot be both extern and";
+            std::cerr << " static!" << std::endl;
+            std::exit(1);
+        }
+
+        if (!is_extern && seen_extern)
+        {
+            std::cerr << "syntax error: a name cannot be both extern and";
+            std::cerr << " static!" << std::endl;
+            std::exit(1);
+        }
+
+        /*
+         * A static name belongs to the file it is written in, so it can
+         * only be declared where the whole file can be seen rather than
+         * inside one function.
+         */
+        if (!is_extern && plain == StorageClass::kLocal)
+        {
+            std::cerr << "syntax error: a static declaration is only";
+            std::cerr << " supported at the top level of a program!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        if (is_extern)
+        {
+            seen_extern = true;
+            prefix.storage = StorageClass::kExtern;
+        }
+        else
+        {
+            seen_static = true;
+            prefix.is_static = true;
+        }
+
+        i++;
+    }
+
+    return prefix;
 }
 
 bool Parser::IsTypedefName(const NodePtr& token) const

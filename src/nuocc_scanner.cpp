@@ -536,7 +536,8 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"extern", T_Extern},
     {"break", T_Break}, {"continue", T_Continue},
     {"switch", T_Switch}, {"case", T_Case}, {"default", T_Default},
-    {"sizeof", T_Sizeof}
+    {"sizeof", T_Sizeof},
+    {"static", T_Static}
 };
 
 /*

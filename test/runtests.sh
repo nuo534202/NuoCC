@@ -71,10 +71,18 @@ programs=$(
 )
 
 for name in $programs; do
-    source=$script_dir/$name.c
     expected=$script_dir/expected/$name.out
 
-    if ! (cd "$work_dir" && "$nuocc" -o out "$source" >compiler.log 2>&1); then
+    # A test is one source file, or several when it is about what more than
+    # one file of a program sees: they are named testN.c, testN_2.c and so
+    # on, and they are all compiled together.
+    set -- "$script_dir/$name.c"
+    for extra in "$script_dir/$name"_*.c; do
+        [ -f "$extra" ] || continue
+        set -- "$@" "$extra"
+    done
+
+    if ! (cd "$work_dir" && "$nuocc" -o out "$@" >compiler.log 2>&1); then
         echo "FAIL $name: the compiler could not build it"
         sed -n '1,3p' "$work_dir/compiler.log"
         failed=$((failed + 1))

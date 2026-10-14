@@ -138,6 +138,13 @@ struct Symbol
     std::shared_ptr<CompositeType> composite = nullptr;
     StructuralType stype = StructuralType::kVariable;
     StorageClass storage = StorageClass::kGlobal;
+    /*
+     * Whether the name was declared static, which means it is visible only
+     * in the source file where it is declared. Its storage is put where it
+     * stands like any other global one; what changes is that the assembler
+     * is not told another file may reach it.
+     */
+    bool is_static = false;
     int32 stack_offset = 0;
     /*
      * The types of the parameters of a function, in the order they are
