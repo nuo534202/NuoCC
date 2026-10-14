@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "nodes/nuocc_scanner_nodes.hpp"
+#include "nuocc_optimise.hpp"
 #include "utils/nuocc_print.hpp"
 #include "utils/nuocc_runtime.hpp"
 
@@ -236,6 +237,13 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
             std::exit(1);
         }
     }
+
+    /*
+     * The body is optimised once it is complete, so that the code
+     * generator, and anyone reading the tree, sees the tree the compiler
+     * would have written down had it worked out its numbers itself.
+     */
+    body = Optimise(std::move(body));
 
     return std::make_unique<AstFunction>(body, symbol, local_size, parameters);
 }

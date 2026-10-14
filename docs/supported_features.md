@@ -445,3 +445,26 @@
     numbers, and `case -1:` may be written. A `char` holds 0 to 255, so a
     negative value is refused there unless a cast says to keep the low byte
     of it, as `char byte= (char)-1;` does, which stores 255.
+
+41. Constant Folding (acwj Stage 44, `44_Fold_Optimisation`). An operation
+    whose operands the compiler already knows is worked out while the
+    program is being compiled, so `int x= 2000 + 3 + 4 * 5 + 6;` stores
+    2029, `print 2 * 3 + 4;` prints 10, and no code is generated to work
+    any of it out. The folding reaches every operation on two numbers:
+    `+`, `-`, `*`, `/`, `&`, `|`, `^`, `<<`, `>>`, the comparisons, `&&`
+    and `||`, along with `-`, `~` and `!` in front of a number. It works
+    from the inside out, so `2 * 3 + 4` becomes `6 + 4` and then `10`, and
+    it reaches into the condition of a statement, the value of a switch,
+    the arms of a switch and the arguments of a call.
+
+    A folded operation always holds the value it would have had when the
+    program ran. The machine works in whole registers, which are wider than
+    an int, so an operation is worked out in a wider number and is only
+    folded when the answer fits an int: `2000000000 + 2000000000` is
+    therefore left for the program, and gives 4000000000 when it runs,
+    while `1000 * 1000 * 1000` is folded. A division by zero and a shift of
+    a whole register or more are left for the program for the same reason:
+    they have to fail, or wrap round, the way they do at run time. What a
+    global variable or a `case` is given still has to be a number written
+    where it stands, since the folding happens once the program has been
+    read rather than while it is being read.

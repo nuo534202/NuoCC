@@ -19,7 +19,10 @@ set(NUOCC_TARGET "x86_64" CACHE STRING "the target to generate code for")
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/src/*.cpp)
+# The sources are found when the build is configured, and looked for
+# again whenever the build runs, so that a new file of the compiler is
+# picked up without having to configure it by hand.
+file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # The code generators are picked one at a time, so remove them all first.
 list(FILTER SRC EXCLUDE REGEX "/codegen/")

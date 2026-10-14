@@ -45,6 +45,16 @@ public:
     const AstNodePtr& GetRight() const;
 
     /*
+     * The same children of a node which is not const. A tree which is being
+     * worked on rather than read, such as one an optimisation is folding,
+     * takes a child this way so that a smaller tree can be left in its
+     * place.
+     */
+    AstNodePtr& GetLeft();
+    AstNodePtr& GetMid();
+    AstNodePtr& GetRight();
+
+    /*
      * Move the left child out of this node, which is left without one. It
      * is how '&' of a dereference takes back the expression the '*' was
      * written before, as '&*p' is p itself.
@@ -266,6 +276,9 @@ public:
 public:
     const std::vector<AstNodePtr>& GetCases() const;
 
+    /* The arms of a switch which is being worked on rather than read. */
+    std::vector<AstNodePtr>& GetCases();
+
 private:
     std::vector<AstNodePtr> cases_;
 };
@@ -364,6 +377,9 @@ public:
 public:
     const Symbol& GetSymbol() const;
     const std::vector<AstNodePtr>& GetArguments() const;
+
+    /* The arguments of a call which is being worked on rather than read. */
+    std::vector<AstNodePtr>& GetArguments();
 
 private:
     Symbol symbol_;

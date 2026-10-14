@@ -56,6 +56,21 @@ const AstNodePtr& AstNode::GetRight() const
     return right_;
 }
 
+AstNodePtr& AstNode::GetLeft()
+{
+    return left_;
+}
+
+AstNodePtr& AstNode::GetMid()
+{
+    return mid_;
+}
+
+AstNodePtr& AstNode::GetRight()
+{
+    return right_;
+}
+
 AstNodePtr AstNode::ReleaseLeft()
 {
     return std::move(left_);
@@ -205,6 +220,11 @@ const std::vector<AstNodePtr>& AstSwitch::GetCases() const
     return cases_;
 }
 
+std::vector<AstNodePtr>& AstSwitch::GetCases()
+{
+    return cases_;
+}
+
 /* AstDeclare */
 AstDeclare::AstDeclare(const Symbol& symbol)
     : AstNode(A_AstDeclare, PrimitiveType::kNone),
@@ -274,6 +294,11 @@ const Symbol& AstFuncCall::GetSymbol() const
 }
 
 const std::vector<AstNodePtr>& AstFuncCall::GetArguments() const
+{
+    return arguments_;
+}
+
+std::vector<AstNodePtr>& AstFuncCall::GetArguments()
 {
     return arguments_;
 }
