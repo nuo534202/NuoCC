@@ -1342,6 +1342,19 @@ std::vector<Symbol> Parser::FunctionParameters(
     if (TokenTag(token_list[i]) == T_RParen)
         return parameters;
 
+    /*
+     * A `void` which is the whole parameter list says that the function
+     * takes nothing, which is what `int fred(void);` means. `void *` is a
+     * parameter like any other and is not this: it is followed by a star
+     * rather than by the ')' which ends the list.
+     */
+    if (TokenTag(token_list[i]) == T_Void &&
+        TokenTag(token_list[i + 1]) == T_RParen)
+    {
+        i++;    /* step over the void */
+        return parameters;
+    }
+
     while (true)
     {
         if (parameters.size() == kMaxArguments)

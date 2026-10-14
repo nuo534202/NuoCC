@@ -33,7 +33,12 @@ function_declaration:
  * which follows has to agree with the prototype it repeats.
  */
 
+/*
+ * A parameter list may also be the one word `void`, which says the same as
+ * an empty list: the function takes nothing.
+ */
 opt_parameter_list: <empty>
+    | 'void'
     | parameter_list
     ;
 
@@ -448,8 +453,13 @@ primary: number
 /*
  * A character literal scans as a number whose value is the character's
  * code and which the parser gives the type char when it fits, so it is
- * not a production of its own. A string literal is a token of its own
- * and has the type char *.
+ * not a production of its own. A string literal is a token of its own and
+ * has the type char *.
+ *
+ * A number is written in the radix it says it is written in: ten, or
+ * eight when it begins with a zero, or sixteen when it begins with 0x.
+ * A character may also be named by its code, in octal or in hexadecimal,
+ * inside a character or a string literal.
  */
 number: T_INTLIT
     ;

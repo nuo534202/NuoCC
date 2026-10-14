@@ -113,21 +113,23 @@
     has the value of that character's code, and has the type `char`, so it
     may be assigned to a `char` and passed to a function like any other
     small number. The escapes `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v`,
-    `\\`, `\"` and `\'` stand for the characters they name. A literal
-    which is empty, holds more than one character, is not closed by a
-    quote before the end of the line or of the file, ends with a bare
-    backslash, or uses an escape which is not in that list (so an octal
-    code or a Unicode value) is refused.
+    `\\`, `\"` and `\'` stand for the characters they name, and a
+    character may also be named by its code: in octal, as up to three
+    digits, so `'\101'` is `'A'`, or in hexadecimal after an `x`, as in
+    `'\x41'`. A literal which is empty, holds more than one character, is
+    not closed by a quote before the end of the line or of the file, ends
+    with a bare backslash, or uses an escape which is not one of those, or
+    names a code larger than a byte, is refused.
 22. String Literals. `"Hello world"` is zero or more characters between
     two double quotes, may hold spaces, and has the type `char *`. It
     stands for the address of its first character, its storage holds a
     zero byte after the last character, and it may be assigned to a
     pointer, indexed with `p[0]`, read through with `*p`, and walked with
     `p= p + 1` exactly like a pointer to a `char`. The same escapes as a
-    character literal are known. A string which is not closed before the
-    end of the line or of the file, or uses an unknown escape, is
-    refused, and a string may not be given to `print` or stored into a
-    number.
+    character literal are known, so a string may hold a zero byte or any
+    other code of its own. A string which is not closed before the end of
+    the line or of the file, or uses an unknown escape, is refused, and a
+    string may not be given to `print` or stored into a number.
 23. The `printchar()` Runtime Function. `printchar(x)` is called like any
     other function and prints the one character whose code is `x`,
     without a newline after it, so it is how the characters of a string
@@ -499,3 +501,18 @@
     1024);` keeps the low byte of the value and `char *none= NULL;` writes a
     pointer which points at nothing. A string is a value of its own, and one
     given where a number is wanted is refused.
+
+43. Void Parameters, and Numbers of Any Radix (acwj Stage 46,
+    `46_Void_Functions`). A parameter list may be the one word `void`,
+    which says the same thing as an empty list: the function takes
+    nothing, so `int fred(void);` may be written as well as `int fred();`.
+    A `void *` parameter is a parameter like any other, so `int count(void
+    *start, int limit);` declares two of them, and a `void` with a name
+    after it is still refused, since a parameter has to hold a value.
+
+    A number may be written in another radix than ten. One which begins
+    with a zero is written in octal, so `0173` is 123, and one which
+    begins with `0x` is written in hexadecimal, so `0x7b` is also 123.
+    A digit which the radix has no room for, a `0x` with no digits after
+    it, and a number too large to be held in an `int` are all refused,
+    each with a message saying what is wrong with it.
