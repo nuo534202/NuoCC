@@ -685,6 +685,15 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             if (op_type == T_Assign)
                 return GenAssign(root);
 
+            /*
+             * A compound assignment combines the value of the target with
+             * the value on the right before storing the result, so it is
+             * not an operation on the two children the way every other
+             * operator is.
+             */
+            if (IsCompoundAssign(op_type))
+                return GenAssignOp(root, CompoundAssignOperator(op_type));
+
             reg_idx left_reg = GenExpr(root->GetLeft());
             reg_idx right_reg = GenExpr(root->GetRight());
 
@@ -768,6 +777,61 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
 }
 
 // Compute an lvalue's address without loading the value stored there.
+/*
+ * Generate the code for a compound assignment, whose target holds the value
+ * it is combined with:
+ *
+ *      value = <right>
+ *      current = <the value the target holds now>
+ *      result = current <op> value
+ *      <target> = result
+ *
+ * The address of the target is worked out once, so that an index or a call
+ * written inside it runs once, the way it does for an assignment.
+ */
+reg_idx AsmCodegen::GenAssignOp(const AstNodePtr& root, NodeTag op_type)
+{
+    const AstNodePtr& target = root->GetRight();
+
+    /* The value on the right is worked out first, so that nothing the
+     * target needs while it is read can disturb it. */
+    reg_idx value_reg = GenExpr(root->GetLeft());
+
+    switch (target->GetAstNodeTag())
+    {
+        case A_AstIdentifier:
+        {
+            const AstIdentifier *ident =
+                static_cast<const AstIdentifier*>(target.get());
+
+            reg_idx current_reg = LoadSymbol(ident->GetSymbol());
+            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg);
+
+            StoreSymbol(ident->GetSymbol(), result_reg);
+            return result_reg;
+        }
+
+        case A_AstDeref:
+        case A_AstMember:
+        {
+            reg_idx address_reg = GenAddress(target);
+            reg_idx current_reg = LoadDeref(address_reg, target->GetType());
+            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg);
+
+            StoreDeref(result_reg, address_reg, target->GetType());
+            FreeRegister(address_reg);
+            return result_reg;
+        }
+
+        default:
+            break;
+    }
+
+    std::cerr << "Error: node " << target->GetAstNodeTag();
+    std::cerr << " cannot be assigned to!" << std::endl;
+    std::exit(1);
+}
+
 reg_idx AsmCodegen::GenAddress(const AstNodePtr& root) {
     switch (root->GetAstNodeTag()) {
         case A_AstIdentifier:

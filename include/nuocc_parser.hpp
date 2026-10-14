@@ -145,6 +145,24 @@ private:
                                    idx_t& i);
 
     /*
+     * The number a constant is written with, which is an integer literal
+     * with a minus in front of it when the number is negative. The message
+     * names what the number was wanted for, and is used when there is no
+     * number there at all.
+     */
+    int32 ParseConstantInt(const std::vector<NodePtr>& token_list,
+                           idx_t& i,
+                           std::string_view what);
+
+    /*
+     * The number a constant expression stands for, when it is only a number:
+     * a literal, or a minus in front of one. Anything the compiler cannot
+     * work out while it is compiling the program answers no, which is what
+     * a case value has to be.
+     */
+    bool ConstantValue(const AstNode& node, int32& value) const;
+
+    /*
      * Build the assignment which gives a local variable the value it is
      * declared with, and leave the token after the value for the caller.
      * The expression is worked out and stored where the variable is, which

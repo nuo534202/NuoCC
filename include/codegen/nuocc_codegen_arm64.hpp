@@ -83,6 +83,7 @@ protected:
     void AddOffset(reg_idx reg, int32 offset) override;
     reg_idx LoadStrAddress(label_idx label) override;
     reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) override;
+    reg_idx LoadDeref(reg_idx address_reg, PrimitiveType type) override;
     void StoreDeref(reg_idx value_reg,
                     reg_idx address_reg,
                     PrimitiveType type) override;

@@ -77,8 +77,17 @@ opt_values: <empty>
     | '=' '{' value_list '}'
     ;
 
-value: number
+/*
+ * A value of a global name is what the compiler stores in it, so a number
+ * may be written with a minus in front of it; a local name is given an
+ * expression instead, which is read rather than stored.
+ */
+value: signed_number
     | string_literal
+    ;
+
+signed_number: number
+    | '-' number
     ;
 
 value_list: <empty>
@@ -144,7 +153,7 @@ enum_value_list: enum_value
     ;
 
 enum_value: identifier
-    | identifier '=' number
+    | identifier '=' signed_number
     ;
 
 opt_tag: <empty>
@@ -278,7 +287,7 @@ case_list: case_item
     | case_item case_list
     ;
 
-case_item: 'case' number ':' case_body
+case_item: 'case' signed_number ':' case_body
     | 'default' ':' case_body
     ;
 
@@ -303,8 +312,17 @@ identifier: T_IDENT
 expression: assignment_expression
     ;
 
+/*
+ * Every assignment takes what stands on its right first, so they all bind
+ * to the right. `=` stores the value as it stands, while `+=`, `-=`, `*=`
+ * and `/=` combine it with the value the target holds.
+ */
 assignment_expression: logical_or_expression
     | lvalue '=' assignment_expression
+    | lvalue '+=' assignment_expression
+    | lvalue '-=' assignment_expression
+    | lvalue '*=' assignment_expression
+    | lvalue '/=' assignment_expression
     ;
 
 lvalue: identifier

@@ -529,6 +529,65 @@ void Parser::CheckInitialisable(StorageClass storage,
 }
 
 /*
+ * The number a constant is written with: an integer literal, and the minus
+ * in front of it which makes the number negative. A minus which is not
+ * followed by a number is the subtraction operator and is not read here.
+ */
+int32 Parser::ParseConstantInt(const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    std::string_view what)
+{
+    bool negative = false;
+
+    if (TokenTag(token_list[i]) == T_Minus)
+    {
+        negative = true;
+        i++;
+    }
+
+    if (TokenTag(token_list[i]) != T_IntLit)
+    {
+        std::cerr << "syntax error: expect " << what << "!" << std::endl;
+        std::exit(1);
+    }
+
+    const Literal<int, T_IntLit> *lit =
+        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
+    const int32 value = lit->GetValue();
+    i++;
+
+    return negative ? -value : value;
+}
+
+bool Parser::ConstantValue(const AstNode& node, int32& value) const
+{
+    /*
+     * A small literal is a char which is widened to an int before a minus
+     * flips its sign, so the number may stand behind a widening as well as
+     * behind the minus itself.
+     */
+    if (node.GetAstNodeTag() == A_AstWiden && node.GetLeft())
+        return ConstantValue(*node.GetLeft(), value);
+
+    if (node.GetAstNodeTag() == A_AstIntLit)
+    {
+        value = static_cast<const AstIntLit&>(node).GetValue();
+        return true;
+    }
+
+    /* A minus in front of a literal is part of the number, not a
+     * subtraction which has to wait until the program runs. */
+    if (node.GetAstNodeTag() == A_AstNegate && node.GetLeft() &&
+        ConstantValue(*node.GetLeft(), value))
+    {
+        value = -value;
+        return true;
+    }
+
+    return false;
+}
+
+/*
  * Build the assignment which gives a local variable the value it is
  * declared with. The value is worked out and stored where the variable is,
  * which is what an assignment written by hand does, and what the caller
@@ -620,20 +679,6 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
         return text;
     }
 
-    if (TokenTag(token_list[i]) != T_IntLit)
-    {
-        std::cerr << "syntax error: expect an integer value!" << std::endl;
-        std::exit(1);
-    }
-
-    const Literal<int, T_IntLit> *lit =
-        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
-    const int32 value = lit->GetValue();
-    i++;
-
-    /* A number is what a variable which holds numbers is given, and a
-     * pointer is only given one behind a cast, which is how a pointer which
-     * points at nothing is written. */
     if (!IsIntType(type.type) && !IsPointerType(type.type))
     {
         std::cerr << "syntax error: this type cannot be given a value where";
@@ -648,13 +693,25 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
         std::exit(1);
     }
 
-    /* A char holds 0 to 255, so a larger value is only taken behind a cast,
-     * which cuts it down to the bits a char holds when it is stored. */
-    if (type.type == PrimitiveType::kChar && value > 255 && !has_cast)
+    const int32 value = ParseConstantInt(token_list, i, "an integer value");
+
+    /* A char holds 0 to 255, so a value outside that is only taken behind a
+     * cast, which cuts it down to the bits a char holds when it is stored. */
+    if (type.type == PrimitiveType::kChar && !has_cast)
     {
-        std::cerr << "syntax error: the value " << value;
-        std::cerr << " is too big for a char!" << std::endl;
-        std::exit(1);
+        if (value > 255)
+        {
+            std::cerr << "syntax error: the value " << value;
+            std::cerr << " is too big for a char!" << std::endl;
+            std::exit(1);
+        }
+
+        if (value < 0)
+        {
+            std::cerr << "syntax error: the value " << value;
+            std::cerr << " is too small for a char!" << std::endl;
+            std::exit(1);
+        }
     }
 
     return value;
@@ -1164,21 +1221,19 @@ AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
 
             /*
              * The value has to be an integer constant, so it is read as an
-             * expression and then asked to be a literal: `case pear` is
-             * one when an enum gave pear its number, while `case 3 * y`
-             * is not.
+             * expression and then asked to be one: `case pear` is one when
+             * an enum gave pear its number and `case -1` is one because the
+             * minus in front of a literal is part of the number, while
+             * `case 3 * y` is not.
              */
             AstNodePtr value_tree = BinaryExpression(token_list, i, 0);
 
-            if (value_tree->GetAstNodeTag() != A_AstIntLit)
+            if (!ConstantValue(*value_tree, value))
             {
                 std::cerr << "syntax error: a case value has to be an";
                 std::cerr << " integer constant!" << std::endl;
                 std::exit(1);
             }
-
-            value = static_cast<const AstIntLit*>(value_tree.get())
-                        ->GetValue();
 
             if (std::find(values.begin(), values.end(), value) !=
                 values.end())
@@ -1430,12 +1485,15 @@ AstNodePtr Parser::BinaryExpression(
         AstNodePtr right = BinaryExpression(token_list, i, op_prec);
         NodeTag op_type = TokenTag(token_list[op_idx]);
 
-        if (op_type == T_Assign)
+        if (op_type == T_Assign || IsCompoundAssign(op_type))
         {
             /*
              * An assignment is the one operator whose two operands are not
              * made to agree with each other: the target keeps the type it
              * was declared with, and it is the value which has to fit it.
+             * A compound assignment combines that value with the one the
+             * target holds, so the two have to agree the way the operator
+             * it combines with would make them.
              *
              * The two are then switched around, so that the value ends up
              * in the left child and the target in the right one. That is
@@ -1453,9 +1511,19 @@ AstNodePtr Parser::BinaryExpression(
                 std::exit(1);
             }
 
+            /*
+             * A plain assignment stores the value as it stands, so there is
+             * no operator for it to be made to fit through; a compound one
+             * combines the value with what the target holds.
+             */
+            std::optional<NodeTag> combine;
+
+            if (IsCompoundAssign(op_type))
+                combine = CompoundAssignOperator(op_type);
+
             if (!ModifyType(right, TypeRef{.type = left->GetType(),
                                            .composite = left->GetComposite()},
-                            std::nullopt))
+                            combine))
             {
                 std::cerr << "syntax error: this value does not fit the";
                 std::cerr << " target of the assignment!" << std::endl;
@@ -2173,18 +2241,7 @@ TypeRef Parser::EnumType(const std::vector<NodePtr>& token_list, idx_t& i)
         if (TokenTag(token_list[i]) == T_Assign)
         {
             i++;
-
-            if (TokenTag(token_list[i]) != T_IntLit)
-            {
-                std::cerr << "syntax error: expect an enum value!";
-                std::cerr << std::endl;
-                std::exit(1);
-            }
-
-            const Literal<int, T_IntLit> *lit =
-                static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
-            value = lit->GetValue();
-            i++;
+            value = ParseConstantInt(token_list, i, "an enum value");
         }
 
         symbol_table_.AddSymbol(Symbol{.name = value_name,
@@ -2508,6 +2565,10 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_LogAnd:
         case T_LogOr:
         case T_Assign:
+        case T_PlusAssign:
+        case T_MinusAssign:
+        case T_StarAssign:
+        case T_SlashAssign:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag(), type);
         default:
@@ -2597,7 +2658,9 @@ std::string Parser::MatchIdentifier(const std::vector<NodePtr>& token_list,
 
 bool Parser::IsRightAssociative(NodeTag tag)
 {
-    return tag == T_Assign;
+    /* Every assignment, plain or compound, takes what stands on its right
+     * first, so `a= b= 3` and `a += b += 3` both start at the right. */
+    return tag == T_Assign || IsCompoundAssign(tag);
 }
 
 bool Parser::IsLvalue(AstNodeTag tag)
@@ -2658,6 +2721,8 @@ int32 Parser::AllocateLocal(int32 size, int32 alignment)
  */
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
     {T_Assign, 10},
+    {T_PlusAssign, 10}, {T_MinusAssign, 10},
+    {T_StarAssign, 10}, {T_SlashAssign, 10},
 
     {T_LogOr, 20},
 

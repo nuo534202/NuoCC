@@ -68,6 +68,18 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_LogNot:
             out = "!";
             break;
+        case T_PlusAssign:
+            out = "+=";
+            break;
+        case T_MinusAssign:
+            out = "-=";
+            break;
+        case T_StarAssign:
+            out = "*=";
+            break;
+        case T_SlashAssign:
+            out = "/=";
+            break;
         case T_EQ:
             out = "==";
             break;

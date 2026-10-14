@@ -418,3 +418,30 @@
     cast whose type does not agree with the variable it is given to, and a
     number given to a pointer without a cast are all refused with a message
     saying so.
+
+39. Compound Assignments (acwj Stage 43, `43_More_Operators`). `+=`, `-=`,
+    `*=`, and `/=` combine the value the target holds with the value on
+    their right and store the result back in the target, so `y += x;` adds
+    `x` to `y`. Each of them is an expression whose value is the one it
+    stored, so `print x += 4;` stores and then prints 5, and each takes
+    what stands on its right first, so `x += y += 3;` adds three to `y`
+    before adding the new `y` to `x`. What may stand on the left is what an
+    assignment may store into, so a variable, the location a pointer holds
+    and a member all work: `*p += 5;`, `p[0] *= 2;` and `box[x++] += 1;`.
+
+    The address of the target is worked out once, so an index or a call
+    written inside it runs once, as it does for a plain assignment. The
+    value on the right has to fit the target under the operator it combines
+    with, so `c += x;` is refused when `c` is a `char` and `x` is an `int`,
+    the same way `c= c + x;` is, since the result would have to be narrowed
+    to fit.
+
+40. Negative Constants (acwj Stage 43, `43_More_Operators`). Wherever the
+    compiler has to know a number while it is compiling the program, that
+    number may be written with a minus in front of it: an enum value, the
+    value a global variable or one element of a global array starts with,
+    and the value of a `case`. So `enum numbers { low= -1, zero };` counts
+    from `-1`, `int x= -5;` and `int table[3]= { -1, 0, 1 };` hold negative
+    numbers, and `case -1:` may be written. A `char` holds 0 to 255, so a
+    negative value is refused there unless a cast says to keep the low byte
+    of it, as `char byte= (char)-1;` does, which stores 255.

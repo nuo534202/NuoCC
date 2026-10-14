@@ -25,6 +25,10 @@ typedef enum NodeTag
     T_Dec,
     T_Invert,
     T_LogNot,
+    T_PlusAssign,
+    T_MinusAssign,
+    T_StarAssign,
+    T_SlashAssign,
 
     /* Comparison Operator */
     T_EQ,
@@ -115,5 +119,39 @@ typedef enum AstNodeTag
     A_AstCase,
     A_AstCast
 } AstNodeTag;
+
+/*
+ * Whether an assignment combines the value on its right with the one the
+ * target holds rather than storing it as it stands. `=` stores, while `+=`
+ * and its three companions combine.
+ */
+inline bool IsCompoundAssign(NodeTag tag)
+{
+    return tag == T_PlusAssign || tag == T_MinusAssign ||
+           tag == T_StarAssign || tag == T_SlashAssign;
+}
+
+/*
+ * The operator a compound assignment combines its two sides with: `+=`
+ * adds, `-=` subtracts, `*=` multiplies and `/=` divides. The caller asks
+ * this only after IsCompoundAssign has said which tags are the compound
+ * ones, so any other tag is answered with itself and used by nobody.
+ */
+inline NodeTag CompoundAssignOperator(NodeTag tag)
+{
+    switch (tag)
+    {
+        case T_PlusAssign:
+            return T_Plus;
+        case T_MinusAssign:
+            return T_Minus;
+        case T_StarAssign:
+            return T_Star;
+        case T_SlashAssign:
+            return T_Slash;
+        default:
+            return tag;
+    }
+}
 
 }   /* namespace nuocc */

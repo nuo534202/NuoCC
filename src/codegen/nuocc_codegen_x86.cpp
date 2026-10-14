@@ -804,6 +804,32 @@ reg_idx X86Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
  * much is written is decided by the type of the value, so that storing
  * into a char does not run over the value stored next to it.
  */
+reg_idx X86Codegen::LoadDeref(reg_idx address_reg, PrimitiveType type)
+{
+    reg_idx value_reg = AllocRegister();
+
+    switch (PrimitiveSize(type))
+    {
+        case 1:
+            ofs_ << "\tmovzbq\t(" << reg_list_[address_reg] << "), ";
+            ofs_ << reg_list_[value_reg] << std::endl;
+            break;
+        case 4:
+            ofs_ << "\tmovslq\t(" << reg_list_[address_reg] << "), ";
+            ofs_ << reg_list_[value_reg] << std::endl;
+            break;
+        case 8:
+            ofs_ << "\tmovq\t(" << reg_list_[address_reg] << "), ";
+            ofs_ << reg_list_[value_reg] << std::endl;
+            break;
+        default:
+            std::cerr << "Error: cannot read through this pointer!" << std::endl;
+            std::exit(1);
+    }
+
+    return value_reg;
+}
+
 void X86Codegen::StoreDeref(reg_idx value_reg,
     reg_idx address_reg,
     PrimitiveType type)

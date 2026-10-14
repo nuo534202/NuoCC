@@ -792,6 +792,31 @@ reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
  * much is written is decided by the type of the value, so that storing
  * into a char does not run over the value stored next to it.
  */
+reg_idx Arm64Codegen::LoadDeref(reg_idx address_reg, PrimitiveType type)
+{
+    reg_idx value_reg = AllocRegister();
+
+    switch (PrimitiveSize(type))
+    {
+        case 1:
+            ofs_ << "\tldrb\t" << wreg_list_[value_reg] << ", [";
+            break;
+        case 4:
+            ofs_ << "\tldrsw\t" << xreg_list_[value_reg] << ", [";
+            break;
+        case 8:
+            ofs_ << "\tldr\t" << xreg_list_[value_reg] << ", [";
+            break;
+        default:
+            std::cerr << "Error: cannot read through this pointer!" << std::endl;
+            std::exit(1);
+    }
+
+    ofs_ << xreg_list_[address_reg] << "]" << std::endl;
+
+    return value_reg;
+}
+
 void Arm64Codegen::StoreDeref(reg_idx value_reg,
     reg_idx address_reg,
     PrimitiveType type)

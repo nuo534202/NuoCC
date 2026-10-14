@@ -135,6 +135,14 @@ protected:
     virtual void AddOffset(reg_idx reg, int32 offset) = 0;
     virtual reg_idx LoadStrAddress(label_idx label) = 0;
     virtual reg_idx Deref(reg_idx reg, PrimitiveType pointer_type) = 0;
+
+    /*
+     * Read the value at an address into a register of its own, leaving the
+     * address where it is. A read followed by a write to the same place
+     * needs the address to survive the read, which is what a compound
+     * assignment does; the type is the type of the value read.
+     */
+    virtual reg_idx LoadDeref(reg_idx address_reg, PrimitiveType type) = 0;
     virtual void StoreDeref(reg_idx value_reg,
                             reg_idx address_reg,
                             PrimitiveType type) = 0;
@@ -172,6 +180,14 @@ protected:
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);
     reg_idx GenAssign(const AstNodePtr& root);
+
+    /*
+     * Generate the code for a compound assignment, which combines the value
+     * the target holds now with the value on its right and stores the
+     * result back where the target is. The operator is the one the
+     * assignment combines with.
+     */
+    reg_idx GenAssignOp(const AstNodePtr& root, NodeTag op_type);
     reg_idx GenAddress(const AstNodePtr& root);
     reg_idx GenOperator(NodeTag op_type, reg_idx left_reg, reg_idx right_reg);
 
