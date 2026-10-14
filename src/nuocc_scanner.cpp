@@ -9,6 +9,29 @@
 namespace nuocc
 {
 
+namespace
+{
+
+/*
+ * The value of one digit of a number, or -1 when the character is not a
+ * digit of any radix the language writes numbers in.
+ */
+int DigitValue(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+
+    return -1;
+}
+
+}   /* namespace */
+
 /*
  * The whole program is scanned in one piece because a literal may hold a
  * space, which reading it a word at a time would split in two.
@@ -160,9 +183,9 @@ void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
 }
 
 /*
- * Read one character of a literal, interpret a backslash escape, and
- * leave i just after what was read. Only the simple escapes are known:
- * an octal code or a Unicode value is an error rather than a guess.
+ * Read one character of a literal, interpret a backslash escape, and leave
+ * i just after what was read. A character may be written as itself, as one
+ * of the simple escapes, or by its code in octal or in hexadecimal.
  */
 char Scanner::ScanEscape(const std::string& buf, idx_t& i)
 {
@@ -192,11 +215,70 @@ char Scanner::ScanEscape(const std::string& buf, idx_t& i)
         case '\\': return '\\';
         case '"':  return '"';
         case '\'': return '\'';
+        /*
+         * The code of a character may be written instead of the character
+         * itself: in octal, as up to three digits, or in hexadecimal after
+         * an 'x'. The first digit of an octal code has been read already as
+         * the escape character, so it is given back for the code to be read
+         * from its beginning.
+         */
+        case '0': case '1': case '2': case '3':
+        case '4': case '5': case '6': case '7':
+            i--;
+            return static_cast<char>(ScanCode(buf, i, 8));
+        case 'x':
+            return static_cast<char>(ScanCode(buf, i, 16));
         default:
             std::cerr << "lexical error: unknown escape sequence \\";
             std::cerr << escaped << "!" << std::endl;
             std::exit(1);
     }
+}
+
+/*
+ * The character code an escape names, which begins at buf[i] and is written
+ * in the radix given: an octal code is up to three digits long, while a
+ * hexadecimal one runs for as many digits as are written. i is left at the
+ * first character which is not a digit of the code, which is the one after
+ * the escape and is read again by whoever asked for it.
+ */
+int Scanner::ScanCode(const std::string& buf, idx_t& i, int radix)
+{
+    /* A radix of zero digits means as many digits as are written. */
+    const int most = radix == 16 ? 0 : 3;
+
+    int64 value = 0;
+    int digits = 0;
+
+    while (i < buf.size() && (most == 0 || digits < most))
+    {
+        const int digit = DigitValue(buf[i]);
+
+        if (digit < 0 || digit >= radix)
+            break;
+
+        value = value * radix + digit;
+        digits++;
+        i++;
+
+        /* A character is one byte, so a code which is larger than one does
+         * not name a character at all. */
+        if (value > 255)
+        {
+            std::cerr << "lexical error: the character code " << value;
+            std::cerr << " is too large for a char!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    if (digits == 0)
+    {
+        std::cerr << "lexical error: there are no digits in the character";
+        std::cerr << " code!" << std::endl;
+        std::exit(1);
+    }
+
+    return static_cast<int>(value);
 }
 
 void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
@@ -353,16 +435,12 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
 
 bool Scanner::IsIntLit(const std::string& token)
 {
-    if (token.empty())
-        return false;
-
-    for (char c : token)
-    {
-        if (!isdigit(static_cast<unsigned char>(c)))
-            return false;
-    }
-
-    return true;
+    /*
+     * A word which begins with a digit is a number: which digits it may be
+     * written with is decided by the radix it says it is written in, and
+     * ToIntLit is what reads it and reports a digit of the wrong radix.
+     */
+    return !token.empty() && isdigit(static_cast<unsigned char>(token.front()));
 }
 
 /*
@@ -372,23 +450,56 @@ bool Scanner::IsIntLit(const std::string& token)
  */
 int32 Scanner::ToIntLit(const std::string& token)
 {
-    long long value = 0;
-    bool in_range = true;
+    /*
+     * A number which begins with a zero is written in another radix: `0x`
+     * begins a hexadecimal number and a zero on its own begins an octal
+     * one.
+     */
+    int radix = 10;
+    idx_t start = 0;
 
-    try
+    if (token.front() == '0' && token.size() > 1)
     {
-        value = std::stoll(token);
-    }
-    catch (const std::out_of_range&)
-    {
-        in_range = false;
+        radix = 8;
+
+        if (token[1] == 'x' || token[1] == 'X')
+        {
+            radix = 16;
+            start = 2;
+        }
     }
 
-    if (!in_range || value > std::numeric_limits<int32>::max())
+    if (start == token.size())
     {
-        std::cerr << "lexical error: integer literal " << token;
-        std::cerr << " is too large!" << std::endl;
+        std::cerr << "lexical error: there are no digits after the 0x of ";
+        std::cerr << token << "!" << std::endl;
         std::exit(1);
+    }
+
+    int64 value = 0;
+
+    for (idx_t k = start; k < token.size(); k++)
+    {
+        const int digit = DigitValue(token[k]);
+
+        if (digit < 0 || digit >= radix)
+        {
+            std::cerr << "lexical error: the digit " << token[k] << " of ";
+            std::cerr << token << " is not one a number of radix " << radix;
+            std::cerr << " holds!" << std::endl;
+            std::exit(1);
+        }
+
+        value = value * radix + digit;
+
+        /* A number the language holds is one of four bytes, and one too
+         * large to be held is refused rather than wrapped round. */
+        if (value > std::numeric_limits<int32>::max())
+        {
+            std::cerr << "lexical error: integer literal " << token;
+            std::cerr << " is too large!" << std::endl;
+            std::exit(1);
+        }
     }
 
     return static_cast<int32>(value);
