@@ -516,3 +516,22 @@
     A digit which the radix has no room for, a `0x` with no digits after
     it, and a number too large to be held in an `int` are all refused,
     each with a message saying what is wrong with it.
+
+44. The Size of a Value (acwj Stage 47, `47_Sizeof`). `sizeof` answers with
+    the room a value takes, in bytes, and is written with the type in
+    parentheses: `sizeof(char)` is 1, `sizeof(int)` and `sizeof(char *)` are
+    4 and 8, and a struct is as large as its members make it, so a
+    `struct pair { int first; char second; };` is 8 bytes once its five
+    bytes are lined up to what they hold. The answer is a number the
+    compiler knows, so it may stand wherever a constant may: it may be the
+    size of an array, the value a global variable starts with, or part of
+    any other constant expression, as `char buffer[sizeof(int) * 4];` shows.
+
+    What stands between the parentheses may also be a value rather than a
+    type, in which case it says which type is asked about and is not worked
+    out at all: `sizeof(count= 5)` is 4 and leaves `count` as it was. An
+    array named on its own asks about the room the whole array takes rather
+    than about the address it stands for, so `sizeof(buffer)` above is 16
+    where `sizeof(&buffer[0])` would be the size of a pointer. A type which
+    cannot hold a value, such as `void`, is refused, and so is a `sizeof`
+    which is not followed by a parenthesis.

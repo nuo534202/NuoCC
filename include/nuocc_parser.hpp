@@ -147,6 +147,21 @@ private:
                                     idx_t& i);
 
     /*
+     * The room one value of a type takes, which is what sizeof answers
+     * with. A type which cannot hold a value at all, such as void or a
+     * composite whose members are not known yet, is refused rather than
+     * answered with a size of nothing.
+     */
+    int32 SizeOf(const TypeRef& type);
+
+    /*
+     * The room the value of an expression takes. An array named on its own
+     * stands for the address of its first element, so the room asked about
+     * comes from its declaration rather than from that address.
+     */
+    int32 SizeOfValue(const AstNodePtr& value);
+
+    /*
      * The number a constant is written with, which is an expression the
      * compiler works out while it is compiling the program, so an array
      * size of `2 + 3` is five and an enum value of `-1` is one below zero.

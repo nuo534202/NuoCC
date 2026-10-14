@@ -541,6 +541,30 @@ void Parser::CheckInitialisable(StorageClass storage,
  * in front of it which makes the number negative. A minus which is not
  * followed by a number is the subtraction operator and is not read here.
  */
+int32 Parser::SizeOf(const TypeRef& type)
+{
+    const int32 size = ValueSize(type.type, type.composite);
+
+    if (size == 0)
+    {
+        std::cerr << "syntax error: sizeof needs a type which holds a";
+        std::cerr << " value!" << std::endl;
+        std::exit(1);
+    }
+
+    return size;
+}
+
+int32 Parser::SizeOfValue(const AstNodePtr& value)
+{
+    if (value->GetAstNodeTag() == A_AstAddress)
+        return SymbolStorageSize(
+            static_cast<const AstAddress&>(*value).GetSymbol());
+
+    return SizeOf(TypeRef{.type = value->GetType(),
+                          .composite = value->GetComposite()});
+}
+
 int32 Parser::ParseConstantNumber(const std::vector<NodePtr>& token_list,
     idx_t& i,
     std::string_view what)
@@ -1779,6 +1803,35 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             i++;
 
             return std::make_unique<AstStrLit>(text);
+        }
+        case T_Sizeof:
+        {
+            Match(token_list, i, T_Sizeof, "sizeof");
+            Match(token_list, i, T_LParen, "(");
+
+            /*
+             * What stands between the parentheses is a type when it begins
+             * like one and a value otherwise, the same way a cast is told
+             * from a parenthesised expression.
+             */
+            if (StartsCast(token_list, i))
+            {
+                TypeRef type = ParseType(token_list, i);
+                type = ParseStars(token_list, i, type);
+                Match(token_list, i, T_RParen, ")");
+
+                return MakeIntLitLeaf(SizeOf(type), PrimitiveType::kInt);
+            }
+
+            /*
+             * The value is written there to say which type is asked about,
+             * and is not worked out at all: `sizeof(count= 5)` answers with
+             * the room an int takes and leaves count as it was.
+             */
+            AstNodePtr value = BinaryExpression(token_list, i, 0);
+            Match(token_list, i, T_RParen, ")");
+
+            return MakeIntLitLeaf(SizeOfValue(value), PrimitiveType::kInt);
         }
         case T_LParen:
         {

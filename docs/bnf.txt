@@ -447,7 +447,19 @@ primary: number
     | string_literal
     | identifier
     | function_call
+    | sizeof_expression
     | '(' expression ')'
+    ;
+
+/*
+ * sizeof answers with the room a value takes, in bytes. What stands between
+ * the parentheses is a type when it begins like one and a value otherwise,
+ * the same way a cast is told from a parenthesised expression. A value
+ * written there says which type is asked about and is not worked out, and
+ * an array named on its own asks about the room the whole array takes.
+ */
+sizeof_expression: 'sizeof' '(' type opt_pointer ')'
+    | 'sizeof' '(' expression ')'
     ;
 
 /*
