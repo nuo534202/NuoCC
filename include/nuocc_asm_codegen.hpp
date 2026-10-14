@@ -68,6 +68,16 @@ protected:
     virtual reg_idx Widen(reg_idx reg,
                           PrimitiveType old_type,
                           PrimitiveType new_type) = 0;
+
+    /*
+     * Give a value the width of the type it was cast to. A value is kept in
+     * a register as the whole of it, so a cast to a narrower type has to
+     * leave the bits which that type holds while a cast to a wider one has
+     * nothing to do. The old type is what the value had before.
+     */
+    virtual reg_idx Cast(reg_idx reg,
+                         PrimitiveType old_type,
+                         PrimitiveType new_type) = 0;
     virtual reg_idx Scale(reg_idx reg, int32 scale) = 0;
 
     /* The unary operations, each of them on the value in one register. */

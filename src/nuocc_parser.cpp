@@ -411,6 +411,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
         case T_Int:
         case T_Char:
         case T_Long:
+        case T_Void:
         case T_Struct:
         case T_Union:
         case T_Enum:
@@ -571,10 +572,39 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
     const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
-    if (IsPointerType(type.type))
+    /*
+     * A cast may stand in front of the value, which is what lets a value the
+     * variable could not hold on its own be given to it: `char a= (char)
+     * 65536;` or `char *str= (void *)0;`. The type it names has to agree
+     * with the type of the variable, and a pointer to void agrees with any
+     * pointer.
+     */
+    bool has_cast = false;
+
+    if (TokenTag(token_list[i]) == T_LParen &&
+        StartsCast(token_list, i + 1))
     {
-        if (type.type != PointerTo(PrimitiveType::kChar) ||
-            TokenTag(token_list[i]) != T_StrLit)
+        i++;    /* step over '(' */
+
+        TypeRef cast = ParseCast(token_list, i);
+        Match(token_list, i, T_RParen, ")");
+        has_cast = true;
+
+        if (cast != type &&
+            !(IsPointerType(type.type) &&
+              cast.type == PointerTo(PrimitiveType::kVoid)))
+        {
+            std::cerr << "syntax error: the cast does not fit the variable";
+            std::cerr << " it is given to!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    /* The characters of a string are what a pointer to a char is given, and
+     * the value is the address they are stored at. */
+    if (TokenTag(token_list[i]) == T_StrLit)
+    {
+        if (type.type != PointerTo(PrimitiveType::kChar))
         {
             std::cerr << "syntax error: only a pointer to a char may be";
             std::cerr << " given a string as its value!" << std::endl;
@@ -590,13 +620,6 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
         return text;
     }
 
-    if (!IsIntType(type.type))
-    {
-        std::cerr << "syntax error: this type cannot be given a value where";
-        std::cerr << " it is declared!" << std::endl;
-        std::exit(1);
-    }
-
     if (TokenTag(token_list[i]) != T_IntLit)
     {
         std::cerr << "syntax error: expect an integer value!" << std::endl;
@@ -608,8 +631,26 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
     const int32 value = lit->GetValue();
     i++;
 
-    /* A char holds 0 to 255, so a larger value does not fit it. */
-    if (type.type == PrimitiveType::kChar && value > 255)
+    /* A number is what a variable which holds numbers is given, and a
+     * pointer is only given one behind a cast, which is how a pointer which
+     * points at nothing is written. */
+    if (!IsIntType(type.type) && !IsPointerType(type.type))
+    {
+        std::cerr << "syntax error: this type cannot be given a value where";
+        std::cerr << " it is declared!" << std::endl;
+        std::exit(1);
+    }
+
+    if (IsPointerType(type.type) && !has_cast)
+    {
+        std::cerr << "syntax error: a number may only be given to a pointer";
+        std::cerr << " behind a cast!" << std::endl;
+        std::exit(1);
+    }
+
+    /* A char holds 0 to 255, so a larger value is only taken behind a cast,
+     * which cuts it down to the bits a char holds when it is stored. */
+    if (type.type == PrimitiveType::kChar && value > 255 && !has_cast)
     {
         std::cerr << "syntax error: the value " << value;
         std::cerr << " is too big for a char!" << std::endl;
@@ -1665,6 +1706,27 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
         }
         case T_LParen:
         {
+            /*
+             * A '(' may begin a cast, which names a type straight after it,
+             * or a parenthesised expression, which does not.
+             */
+            if (StartsCast(token_list, i + 1))
+            {
+                i++;    /* step over '(' */
+
+                TypeRef type = ParseCast(token_list, i);
+                Match(token_list, i, T_RParen, ")");
+
+                /*
+                 * A cast holds on to the one expression which follows it, the
+                 * way a unary operator does, so `(char)x + 1` adds one to the
+                 * cast value rather than casting the sum.
+                 */
+                AstNodePtr expression = PrefixExpression(token_list, i);
+
+                return std::make_unique<AstCast>(expression, type);
+            }
+
             i++;
 
             AstNodePtr expression = BinaryExpression(token_list, i, 0);
@@ -1889,6 +1951,52 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
         default:
             std::cerr << "syntax error: expect a type!" << std::endl;
             std::exit(1);
+    }
+
+    return type;
+}
+
+/*
+ * Whether a '(' begins a cast, which is a type written straight after it: a
+ * type keyword, or a name made with typedef. Anything else begins a
+ * parenthesised expression.
+ */
+bool Parser::StartsCast(const std::vector<NodePtr>& token_list, idx_t i) const
+{
+    switch (TokenTag(token_list[i]))
+    {
+        case T_Void:
+        case T_Char:
+        case T_Int:
+        case T_Long:
+        case T_Struct:
+        case T_Union:
+        case T_Enum:
+            return true;
+        case T_Identifier:
+            return IsTypedefName(token_list[i]);
+        default:
+            return false;
+    }
+}
+
+/*
+ * Parse the type a cast names, which stands between the '(' and its ')', and
+ * step over it. A cast may name any type which can hold a value, so a
+ * struct, a union and a plain void are refused: a pointer to void is a value
+ * which stands for any other pointer, and is allowed.
+ */
+TypeRef Parser::ParseCast(const std::vector<NodePtr>& token_list, idx_t& i)
+{
+    TypeRef type = ParseType(token_list, i);
+    type = ParseStars(token_list, i, type);
+
+    if (type.type == PrimitiveType::kComposite ||
+        type.type == PrimitiveType::kVoid)
+    {
+        std::cerr << "syntax error: a cast cannot name a struct, a union or";
+        std::cerr << " void!" << std::endl;
+        std::exit(1);
     }
 
     return type;

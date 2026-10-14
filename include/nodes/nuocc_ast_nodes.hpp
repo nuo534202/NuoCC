@@ -420,6 +420,18 @@ public:
 };
 
 /*
+ * The value of the left child, taken as another type. Nothing has to happen
+ * to the value itself: the type says how it is read, stored and worked with
+ * from this point on, and how much of it the new type keeps.
+ */
+class AstCast : public AstNode
+{
+public:
+    AstCast(AstNodePtr& expression, const TypeRef& type);
+    ~AstCast() = default;
+};
+
+/*
  * A unary operation on the value of the left child. The tag of the node
  * says which one: A_AstNegate flips the sign of an integer, A_AstInvert
  * flips every one of its bits, A_AstLogNot answers whether it is zero, and

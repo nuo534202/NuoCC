@@ -325,6 +325,9 @@ std::string DescribeNode(const AstNode& node)
             return "continue";
         case A_AstSwitch:
             return "switch";
+        case A_AstCast:
+            return "cast to " +
+                   TypeName(type, node.GetComposite());
         case A_AstCase:
         {
             const AstCase *ast_case = static_cast<const AstCase*>(&node);

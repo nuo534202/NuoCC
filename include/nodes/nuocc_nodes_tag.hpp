@@ -112,7 +112,8 @@ typedef enum AstNodeTag
     A_AstBreak,
     A_AstContinue,
     A_AstSwitch,
-    A_AstCase
+    A_AstCase,
+    A_AstCast
 } AstNodeTag;
 
 }   /* namespace nuocc */

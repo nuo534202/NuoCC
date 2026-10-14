@@ -11,4 +11,12 @@
 void printint(int value);
 void printchar(int value);
 
+/*
+ * A pointer which points at nothing. It is a void pointer so that it may be
+ * given to any pointer, and a cast is what turns the zero into one.
+ */
+#ifndef NULL
+#define NULL (void *)0
+#endif
+
 #endif  /* NUOCC_STDIO_H */

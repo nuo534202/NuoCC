@@ -328,6 +328,13 @@ AstAddressExpr::AstAddressExpr(AstNodePtr& lvalue)
     SetComposite(GetLeft()->GetComposite());
 }
 
+/* AstCast */
+AstCast::AstCast(AstNodePtr& expression, const TypeRef& type)
+    : AstNode(A_AstCast, type.type, expression)
+{
+    SetComposite(type.composite);
+}
+
 /* AstUnary */
 AstUnary::AstUnary(AstNodePtr& expression, AstNodeTag tag, PrimitiveType type)
     : AstNode(tag, type, expression) {}

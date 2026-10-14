@@ -394,3 +394,27 @@
     whatever its storage held until a value is stored in it. An array is
     given its values only when it is global, so a local array may not be
     written with a list of values yet.
+
+38. Type Casting, `void *` and NULL (acwj Stage 42, `42_Casting`). A cast
+    names a type between parentheses in front of one expression, and the
+    value is taken to be of that type from then on: `(char)wide` keeps the
+    low byte of a wider value, `(int)c` makes a `char` a value which may be
+    printed, and `(char *)&a` makes the bytes of an `int` readable one at a
+    time. A cast may name any type which holds a value, so a struct, a union
+    and a plain `void` are refused. It holds on to the one expression which
+    follows it, as a unary operator does, so `(char)x + 1` adds one to the
+    value which was cast.
+
+    `void *` is the one pointer which stands for any other: it may be stored
+    where any pointer is wanted and any pointer may be stored where one is
+    wanted, so `int *p= &a; void *v= p; int *q= (int *)v;` works in both
+    directions. A value is kept in a register as the whole of it and read at
+    the width its type says, so a cast to a narrower type keeps the low bits
+    of the value it was given, and a store keeps the bits which fit the
+    storage. A pointer is given a number only behind a cast, which is how a
+    pointer which points at nothing is written: `char *p= (void *)0;`. The
+    header files define `NULL` as `(void *)0`, so `int *p= NULL;` and `char
+    *text= NULL;` say the same thing. A cast to a struct, a union or void, a
+    cast whose type does not agree with the variable it is given to, and a
+    number given to a pointer without a cast are all refused with a message
+    saying so.

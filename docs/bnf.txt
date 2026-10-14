@@ -384,6 +384,7 @@ multiplicative_expression:
  * the name of a variable.
  */
 prefix_expression: postfix_expression
+    | cast_expression
     | '*' prefix_expression
     | '&' prefix_expression
     | '-' prefix_expression
@@ -398,6 +399,15 @@ postfix_expression: primary
     | member_access
     | identifier '++'
     | identifier '--'
+    ;
+
+/*
+ * A cast names a type between parentheses and holds on to the one
+ * expression which follows it, the way a unary operator does. The type may
+ * not be a struct, a union or a plain void, since none of them holds a
+ * value, but a pointer to void is a value like any other.
+ */
+cast_expression: '(' type opt_pointer ')' prefix_expression
     ;
 
 /*

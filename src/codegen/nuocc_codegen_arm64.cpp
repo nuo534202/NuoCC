@@ -506,6 +506,34 @@ reg_idx Arm64Codegen::Widen(reg_idx reg,
  * cheaper than a multiply; the multiply is there for the sizes which are
  * not, which the composite types later on will bring.
  */
+reg_idx Arm64Codegen::Cast(reg_idx reg,
+    PrimitiveType /*old_type*/,
+    PrimitiveType new_type)
+{
+    /*
+     * A pointer and a long are as wide as the register, so there is nothing
+     * of them to cut down. A char and an int are narrower, and the value
+     * which is cast to one of them keeps the bits it can hold: the low
+     * eight for a char and the low thirty two for an int. Writing a w
+     * register already leaves the top of the x register clear.
+     */
+    switch (new_type)
+    {
+        case PrimitiveType::kChar:
+            ofs_ << "\tand\t" << wreg_list_[reg] << ", " << wreg_list_[reg];
+            ofs_ << ", #0xff" << std::endl;
+            break;
+        case PrimitiveType::kInt:
+            ofs_ << "\tmov\t" << wreg_list_[reg] << ", " << wreg_list_[reg];
+            ofs_ << std::endl;
+            break;
+        default:
+            break;
+    }
+
+    return reg;
+}
+
 reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
 {
     uint32 size = static_cast<uint32>(scale);

@@ -429,6 +429,21 @@ private:
     Symbol Lookup(const NodePtr& token, std::string_view what);
 
     /*
+     * Whether a '(' begins a cast, which is a type written straight after
+     * it: a type keyword, or a name made with typedef. Anything else begins
+     * a parenthesised expression.
+     */
+    bool StartsCast(const std::vector<NodePtr>& token_list, idx_t i) const;
+
+    /*
+     * Parse the type a cast names, which stands between a '(' and its ')',
+     * and step over it. A cast may name any type which can hold a value, so
+     * a struct, a union and a plain void are refused: a pointer to void is a
+     * value which stands for any other pointer and is allowed.
+     */
+    TypeRef ParseCast(const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
      * The type a name made with typedef stands for. The token has to be a
      * name which is one; a name which is not is refused with a message
      * saying that the type is unknown.

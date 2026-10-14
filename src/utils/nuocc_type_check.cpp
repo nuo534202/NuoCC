@@ -180,12 +180,17 @@ bool ModifyType(AstNodePtr& tree,
         return ModifyIntType(tree, type, wanted);
 
     /*
-     * A pointer fits a pointer of the same type as long as it does not
-     * take part in an operation: pointer arithmetic is not arithmetic on
-     * the addresses themselves, it is an offset scaled by the size of what
-     * the pointer points at.
+     * A pointer fits another pointer as long as it takes part in no
+     * operation, since pointer arithmetic is not arithmetic on the addresses
+     * themselves but an offset scaled by the size of what the pointer points
+     * at. A pointer to void is the one pointer which stands for any other,
+     * so it may be stored where any pointer type is wanted and any pointer
+     * may be stored where one is.
      */
-    if (IsPointerType(type) && !op && type == wanted)
+    if (IsPointerType(type) && IsPointerType(wanted) && !op &&
+        (type == wanted ||
+         ValueAt(type) == PrimitiveType::kVoid ||
+         ValueAt(wanted) == PrimitiveType::kVoid))
         return true;
 
     if (op == T_Plus || op == T_Minus)

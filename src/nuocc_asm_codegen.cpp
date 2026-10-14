@@ -185,6 +185,7 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         case A_AstMember:
         case A_AstDeref:
         case A_AstIdentifier:
+        case A_AstCast:
         case A_AstAddressExpr:
         {
             reg_idx reg = GenExpr(root);
@@ -520,7 +521,12 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
         switch (element_size)
         {
             case 1:
-                ofs_ << "\t.byte\t" << value << std::endl;
+                /*
+                 * A value may be wider than the element holding it, as a
+                 * cast in front of it says, and then the element keeps the
+                 * low bits of it, the way a store does.
+                 */
+                ofs_ << "\t.byte\t" << (value & 0xff) << std::endl;
                 break;
             case 4:
                 ofs_ << "\t.long\t" << value << std::endl;
@@ -588,6 +594,12 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             const AstIntLit *int_lit =
                 static_cast<const AstIntLit*>(root.get());
             return LoadInt(int_lit->GetValue());
+        }
+        case A_AstCast:
+        {
+            reg_idx reg = GenExpr(root->GetLeft());
+
+            return Cast(reg, root->GetLeft()->GetType(), root->GetType());
         }
         case A_AstStrLit:
         {

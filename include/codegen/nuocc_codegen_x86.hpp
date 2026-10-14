@@ -44,6 +44,9 @@ protected:
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
+    reg_idx Cast(reg_idx reg,
+                 PrimitiveType old_type,
+                 PrimitiveType new_type) override;
     reg_idx Scale(reg_idx reg, int32 scale) override;
 
     reg_idx Negate(reg_idx reg) override;
