@@ -58,15 +58,18 @@ declarator_list: declarator
     ;
 
 /*
- * A name may be given the value or the values it starts with. A value of a
- * global name has to be what the compiler can store in its storage, which is
- * a number or a string literal; a local one is given an expression, which
- * the compiler turns into an assignment running where the declaration
- * stands. An array is only given values when it is global, and one written
- * without a size takes the number of values it is given as its size.
+ * A name may be given the value or the values it starts with, and an array
+ * the size it holds, and each of them is an expression. A value written
+ * where a global variable is declared has to be one the compiler can work
+ * out while it is compiling the program, since the compiler is what stores
+ * it: `int x= 10 + 6;` is the value 16, and a string is the address of its
+ * characters. A value written where a local variable is declared is an
+ * expression which runs where it stands. An array is only given values when
+ * it is global, and one written without a size takes the number of values it
+ * is given as its size.
  */
 declarator: opt_pointer identifier opt_value
-    | opt_pointer identifier '[' opt_number ']' opt_values
+    | opt_pointer identifier '[' opt_size ']' opt_values
     ;
 
 opt_value: <empty>
@@ -77,17 +80,7 @@ opt_values: <empty>
     | '=' '{' value_list '}'
     ;
 
-/*
- * A value of a global name is what the compiler stores in it, so a number
- * may be written with a minus in front of it; a local name is given an
- * expression instead, which is read rather than stored.
- */
-value: signed_number
-    | string_literal
-    ;
-
-signed_number: number
-    | '-' number
+value: expression
     ;
 
 value_list: <empty>
@@ -95,8 +88,8 @@ value_list: <empty>
     | value ',' value_list
     ;
 
-opt_number: <empty>
-    | number
+opt_size: <empty>
+    | expression
     ;
 
 /*
@@ -153,7 +146,7 @@ enum_value_list: enum_value
     ;
 
 enum_value: identifier
-    | identifier '=' signed_number
+    | identifier '=' expression
     ;
 
 opt_tag: <empty>
@@ -287,7 +280,11 @@ case_list: case_item
     | case_item case_list
     ;
 
-case_item: 'case' signed_number ':' case_body
+/*
+ * What a case names has to be a number the compiler can work out, so a
+ * name which stands for one, and an expression of them, are both taken.
+ */
+case_item: 'case' expression ':' case_body
     | 'default' ':' case_body
     ;
 

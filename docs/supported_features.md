@@ -104,9 +104,10 @@
     other names, since each name brings its own size: `int a[2], b;`
     declares an array and a plain variable. The address of the whole array
     is not a value which may be stored into, so `a= p;` and `a++;` are
-    refused. One dimension is known so far; a size which is zero, is not a number, or
-    does not fit in memory, and an array of a type which cannot hold a
-    value such as `void a[2];` are refused. The elements may be pointers,
+    refused. One dimension is known so far; a size which is zero, is not a
+    value the compiler can work out while it is compiling the program, or
+    does not fit in memory, and an array of a type which cannot hold a value
+    such as `void a[2];` are refused. The elements may be pointers,
     so `char *words[3]` is a row of three of them.
 21. Character Literals. `'a'` is one character between two single quotes,
     has the value of that character's code, and has the type `char`, so it
@@ -357,10 +358,13 @@
 
 36. Global Variable Initialisation (acwj Stage 40,
     `40_Var_Initialisation_pt2`). A global variable may be given the value
-    or the values it starts with where it is declared. A `char`, an `int`
-    or a `long` is given a number which has to fit it, so `int x= 2;` and
-    `long big= 100000;` are taken while `char c= 300;` is refused. A
-    variable of type `char *` is given a string: its characters are put in
+    or the values it starts with where it is declared. What stands there is
+    an expression which the compiler works out while it is compiling the
+    program, so `int x= 10 + 6;` is given the value 16 and `char letter=
+    'a' + 2;` the value 99. A `char`, an `int` or a `long` is given a number
+    which has to fit it, so `int x= 2;` and `long big= 100000;` are taken
+    while `char c= 300;` is refused. A variable of type `char *` is given
+    a string: its characters are put in
     the data section and the address of them is the value the variable
     starts with, so `char *str= "Hello";` begins at a `'H'` and `char
     *empty= "";` at a zero byte. A struct or a union cannot be given a
@@ -376,9 +380,10 @@
     strings fills a row of pointers, so `char *d[]= { "apple", "banana",
     "peach" };` is three of them. An array with a size but no values starts
     out all zero, as it always has. A list with more values than the array
-    has room for, a value which is not a literal, an `extern` name given a
-    value, a local array given a list of values, and an array written with
-    neither a size nor values are all refused with a message saying so.
+    has room for, a value the compiler cannot work out while it is compiling
+    the program, an `extern` name given a value, a local array given a list
+    of values, and an array written with neither a size nor values are all
+    refused with a message saying so.
 
 37. Local Variable Initialisation (acwj Stage 41, `41_Local_Var_Init`). A
     local variable may be given the value it starts with, and that value is
@@ -468,3 +473,29 @@
     global variable or a `case` is given still has to be a number written
     where it stands, since the folding happens once the program has been
     read rather than while it is being read.
+
+42. Constant Expressions in Declarations (acwj Stage 45,
+    `45_Globals_Again`). Every value which the compiler has to know while it
+    is compiling the program is written as an expression and worked out
+    there and then, since the folding of the last item is what reads it. So
+    a global variable may be given an expression of numbers, an array may be
+    given a size which is an expression of them, and each of an array's
+    values, an enum's value and a `case` may be one as well:
+
+        enum sizes { SMALL = 2 * 3, LARGE = 100 + 24 };
+        int text_length= 512 + 1;
+        int fred[2 + 3];
+        int table[]= { 1 + 1, 2 * 2, SMALL };
+
+        switch (total) {
+            case 10 + 6: { ... }
+        }
+
+    The value still has to be one the compiler can work out, so
+    `int doubled= count * 2;` is refused when `count` is a variable,
+    however simple it looks, and so is a size which is a variable. A cast
+    may stand in front of the value, which is what lets a value the variable
+    could not hold on its own be given to it, as `char wrapped= (char)('a' +
+    1024);` keeps the low byte of the value and `char *none= NULL;` writes a
+    pointer which points at nothing. A string is a value of its own, and one
+    given where a number is wanted is refused.

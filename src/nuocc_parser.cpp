@@ -541,58 +541,42 @@ void Parser::CheckInitialisable(StorageClass storage,
  * in front of it which makes the number negative. A minus which is not
  * followed by a number is the subtraction operator and is not read here.
  */
-int32 Parser::ParseConstantInt(const std::vector<NodePtr>& token_list,
+int32 Parser::ParseConstantNumber(const std::vector<NodePtr>& token_list,
     idx_t& i,
     std::string_view what)
 {
-    bool negative = false;
+    /*
+     * The number is written as an expression, which is worked out while the
+     * program is being compiled: `2 + 3` is five, and a minus in front of a
+     * number is part of it rather than a subtraction to wait for.
+     */
+    AstNodePtr tree = Optimise(BinaryExpression(token_list, i, 0));
 
-    if (TokenTag(token_list[i]) == T_Minus)
-    {
-        negative = true;
-        i++;
-    }
+    int32 value = 0;
 
-    if (TokenTag(token_list[i]) != T_IntLit)
+    if (!ConstantValue(*tree, value))
     {
         std::cerr << "syntax error: expect " << what << "!" << std::endl;
         std::exit(1);
     }
 
-    const Literal<int, T_IntLit> *lit =
-        static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
-    const int32 value = lit->GetValue();
-    i++;
-
-    return negative ? -value : value;
+    return value;
 }
 
 bool Parser::ConstantValue(const AstNode& node, int32& value) const
 {
     /*
-     * A small literal is a char which is widened to an int before a minus
-     * flips its sign, so the number may stand behind a widening as well as
-     * behind the minus itself.
+     * The expression has been optimised, so every number the compiler
+     * could work out is a literal by now: a larger one, or one written
+     * with a minus in front of it, is a literal of its own rather than an
+     * operation. What is left is an expression which needs the program to
+     * run, and that is not a constant.
      */
-    if (node.GetAstNodeTag() == A_AstWiden && node.GetLeft())
-        return ConstantValue(*node.GetLeft(), value);
+    if (node.GetAstNodeTag() != A_AstIntLit)
+        return false;
 
-    if (node.GetAstNodeTag() == A_AstIntLit)
-    {
-        value = static_cast<const AstIntLit&>(node).GetValue();
-        return true;
-    }
-
-    /* A minus in front of a literal is part of the number, not a
-     * subtraction which has to wait until the program runs. */
-    if (node.GetAstNodeTag() == A_AstNegate && node.GetLeft() &&
-        ConstantValue(*node.GetLeft(), value))
-    {
-        value = -value;
-        return true;
-    }
-
-    return false;
+    value = static_cast<const AstIntLit&>(node).GetValue();
+    return true;
 }
 
 /*
@@ -635,7 +619,7 @@ AstNodePtr Parser::InitialiserAssignment(const Symbol& symbol,
  * generator stores them at; every other type takes an integer literal which
  * has to fit it. The token after the value is left for the caller.
  */
-InitialValue Parser::ParseInitialValue(const TypeRef& type,
+InitialValue Parser::ParseConstantValue(const TypeRef& type,
     const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
@@ -667,9 +651,16 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
         }
     }
 
+    /*
+     * The value is an expression, which the compiler works out while it is
+     * compiling the program: `int x= 10 + 6;` is given the value 16, and
+     * nothing is left for the program to work out when it runs.
+     */
+    AstNodePtr tree = Optimise(BinaryExpression(token_list, i, 0));
+
     /* The characters of a string are what a pointer to a char is given, and
      * the value is the address they are stored at. */
-    if (TokenTag(token_list[i]) == T_StrLit)
+    if (tree->GetAstNodeTag() == A_AstStrLit)
     {
         if (type.type != PointerTo(PrimitiveType::kChar))
         {
@@ -678,13 +669,7 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
             std::exit(1);
         }
 
-        std::string text =
-            static_cast<const Literal<std::string, T_StrLit>*>(
-                token_list[i].get())
-                ->GetValue();
-        i++;
-
-        return text;
+        return static_cast<const AstStrLit&>(*tree).GetText();
     }
 
     if (!IsIntType(type.type) && !IsPointerType(type.type))
@@ -694,14 +679,22 @@ InitialValue Parser::ParseInitialValue(const TypeRef& type,
         std::exit(1);
     }
 
+    int32 value = 0;
+
+    if (!ConstantValue(*tree, value))
+    {
+        std::cerr << "syntax error: a value given where a variable is";
+        std::cerr << " declared has to be one the compiler can work out!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
     if (IsPointerType(type.type) && !has_cast)
     {
         std::cerr << "syntax error: a number may only be given to a pointer";
         std::cerr << " behind a cast!" << std::endl;
         std::exit(1);
     }
-
-    const int32 value = ParseConstantInt(token_list, i, "an integer value");
 
     /* A char holds 0 to 255, so a value outside that is only taken behind a
      * cast, which cuts it down to the bits a char holds when it is stored. */
@@ -786,7 +779,7 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
             if (storage == StorageClass::kGlobal)
             {
                 declared.symbol.initial_values.push_back(
-                    ParseInitialValue(type, token_list, i));
+                    ParseConstantValue(type, token_list, i));
             }
             else
             {
@@ -842,18 +835,10 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     int32 size = 0;
     bool has_size = false;
 
-    if (TokenTag(token_list[i]) == T_IntLit)
+    if (TokenTag(token_list[i]) != T_RBracket)
     {
-        const Literal<int, T_IntLit> *lit =
-            static_cast<const Literal<int, T_IntLit>*>(token_list[i].get());
-        size = lit->GetValue();
+        size = ParseConstantNumber(token_list, i, "an array size");
         has_size = true;
-        i++;
-    }
-    else if (TokenTag(token_list[i]) != T_RBracket)
-    {
-        std::cerr << "syntax error: expect an array size!" << std::endl;
-        std::exit(1);
     }
 
     if (has_size && size <= 0)
@@ -924,7 +909,8 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
         while (TokenTag(token_list[i]) != T_RBrace)
         {
-            values.push_back(ParseInitialValue(element_type, token_list, i));
+            values.push_back(
+                ParseConstantValue(element_type, token_list, i));
 
             /* A ',' separates two values, and the last one needs none. */
             if (TokenTag(token_list[i]) != T_Comma)
@@ -1234,7 +1220,8 @@ AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
              * minus in front of a literal is part of the number, while
              * `case 3 * y` is not.
              */
-            AstNodePtr value_tree = BinaryExpression(token_list, i, 0);
+            AstNodePtr value_tree =
+                Optimise(BinaryExpression(token_list, i, 0));
 
             if (!ConstantValue(*value_tree, value))
             {
@@ -2249,7 +2236,7 @@ TypeRef Parser::EnumType(const std::vector<NodePtr>& token_list, idx_t& i)
         if (TokenTag(token_list[i]) == T_Assign)
         {
             i++;
-            value = ParseConstantInt(token_list, i, "an enum value");
+            value = ParseConstantNumber(token_list, i, "an enum value");
         }
 
         symbol_table_.AddSymbol(Symbol{.name = value_name,

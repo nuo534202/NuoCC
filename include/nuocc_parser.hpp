@@ -136,29 +136,32 @@ private:
 
     /*
      * Parse the one value a global variable or one element of it is given
-     * where it is declared, and leave the token after it for the caller. A
+     * where it is declared, and leave the token after it for the caller.
+     * The value is an expression which the compiler works out while it is
+     * compiling the program, so `int x= 10 + 6;` is given the value 16. A
      * pointer to a char is given a string, whose address the value becomes;
-     * every other type takes an integer literal which has to fit it.
+     * every other type takes a number which has to fit it.
      */
-    InitialValue ParseInitialValue(const TypeRef& type,
-                                   const std::vector<NodePtr>& token_list,
-                                   idx_t& i);
+    InitialValue ParseConstantValue(const TypeRef& type,
+                                    const std::vector<NodePtr>& token_list,
+                                    idx_t& i);
 
     /*
-     * The number a constant is written with, which is an integer literal
-     * with a minus in front of it when the number is negative. The message
-     * names what the number was wanted for, and is used when there is no
-     * number there at all.
+     * The number a constant is written with, which is an expression the
+     * compiler works out while it is compiling the program, so an array
+     * size of `2 + 3` is five and an enum value of `-1` is one below zero.
+     * The message names what the number was wanted for, and is used when
+     * there is no such number where one was expected.
      */
-    int32 ParseConstantInt(const std::vector<NodePtr>& token_list,
-                           idx_t& i,
-                           std::string_view what);
+    int32 ParseConstantNumber(const std::vector<NodePtr>& token_list,
+                              idx_t& i,
+                              std::string_view what);
 
     /*
-     * The number a constant expression stands for, when it is only a number:
-     * a literal, or a minus in front of one. Anything the compiler cannot
-     * work out while it is compiling the program answers no, which is what
-     * a case value has to be.
+     * The number a constant expression stands for. The expression has been
+     * worked out already, so a number the compiler could work out is a
+     * literal by now and anything else is not a constant at all, which is
+     * what a case value has to be.
      */
     bool ConstantValue(const AstNode& node, int32& value) const;
 

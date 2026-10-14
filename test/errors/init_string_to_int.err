@@ -1,0 +1,1 @@
+syntax error: only a pointer to a char may be given a string as its value!
