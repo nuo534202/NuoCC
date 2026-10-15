@@ -465,14 +465,19 @@
     wanted, so `int *p= &a; void *v= p; int *q= (int *)v;` works in both
     directions. A value is kept in a register as the whole of it and read at
     the width its type says, so a cast to a narrower type keeps the low bits
-    of the value it was given, and a store keeps the bits which fit the
-    storage. A pointer is given a number only behind a cast, which is how a
-    pointer which points at nothing is written: `char *p= (void *)0;`. The
-    header files define `NULL` as `(void *)0`, so `int *p= NULL;` and `char
-    *text= NULL;` say the same thing. A cast to a struct, a union or void, a
-    cast whose type does not agree with the variable it is given to, and a
-    number given to a pointer without a cast are all refused with a message
-    saying so.
+    of the value it was given: `(char)wide` keeps the low byte and
+    `(int)wide` the low four bytes. What is kept is read back as a number of
+    the new type, so a cast to an `int` of a negative number is that negative
+    number still, while `(char)-1` is 255, since a `char` has no negative
+    ones. A store keeps the bits which fit the storage it is made into.
+
+    A pointer is given a number only behind a cast, which is how a pointer
+    which points at nothing is written: `char *p= (void *)0;`. The header
+    files define `NULL` as `(void *)0`, so `int *p= NULL;` and `char *text=
+    NULL;` say the same thing. A cast to a struct, a union or void, a cast
+    whose type does not agree with the variable it is given to, and a number
+    given to a pointer without a cast are all refused with a message saying
+    so.
 
 39. Compound Assignments (acwj Stage 43, `43_More_Operators`). `+=`, `-=`,
     `*=`, and `/=` combine the value the target holds with the value on
@@ -774,3 +779,15 @@
     tightly as `*` and `/`, so `2 + 24 % 9 * 2` is 14, and it is only taken
     of numbers: the remainder of one address by another is refused, as is a
     remainder of nothing, which the machine is left to stop the program for.
+
+56. The Shapes Which Are Easy to Get Wrong (acwj Stage 59, `59_WDIW_pt1`).
+    A dereference reaches the element before the value it reads, so
+    `*rows[1]` reads the character `rows[1]` points at and not one of
+    `rows[0]`: `*rows[1]` and `(*rows)[1]` are two different values. A name
+    whose storage is in another file is stored into, read and asked for its
+    address the same way any other global name is, so `shared = 5;`,
+    `&shared` and `values[2] = 7;` all work on names declared `extern`. A
+    value narrower than a register keeps its own value through every
+    operation it takes part in: a negative number compares as a negative
+    one, and what a cast leaves behind is read back as a number of the new
+    type rather than as its bits alone.

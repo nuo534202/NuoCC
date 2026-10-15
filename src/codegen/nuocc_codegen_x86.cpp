@@ -531,8 +531,10 @@ reg_idx X86Codegen::Cast(reg_idx reg,
      * A pointer and a long are as wide as the register, so there is nothing
      * of them to cut down. A char and an int are narrower, and the value
      * which is cast to one of them keeps the bits it can hold: the low
-     * eight for a char and the low thirty two for an int. Writing a d
-     * register already leaves the top of the r register clear.
+     * eight for a char and the low thirty two for an int. A value of the
+     * wider type is a number of its own, so the bits it keeps are read back
+     * as that number: a char has no negative ones, while an int does, and
+     * the top of the register is filled in to say so.
      */
     switch (new_type)
     {
@@ -541,8 +543,8 @@ reg_idx X86Codegen::Cast(reg_idx reg,
             ofs_ << dreg_list_[reg] << std::endl;
             break;
         case PrimitiveType::kInt:
-            ofs_ << "\tmovl\t" << dreg_list_[reg] << ", ";
-            ofs_ << dreg_list_[reg] << std::endl;
+            ofs_ << "\tmovslq\t" << dreg_list_[reg] << ", ";
+            ofs_ << reg_list_[reg] << std::endl;
             break;
         default:
             break;
