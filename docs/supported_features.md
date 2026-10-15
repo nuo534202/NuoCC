@@ -16,8 +16,9 @@
    holds rather than being combined with the other side, so the two sides
    need not be of one type: each has to be an integer or an address, and an
    address holds when it does not point at nothing, which is what lets
-   `if (p && count > 0)` be written. Neither `&&` nor `||` short circuits
-   yet, so both sides are always worked out.
+   `if (p && count > 0)` be written. The side which is not needed to know
+   the answer is not worked out at all, so `0 && f()` never calls `f` and
+   `1 || f()` never calls it either.
 5. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
    Less Than Or Equal To, Greater Than Or Equal To. Each of them answers
    with 0 or 1 as well.
@@ -56,7 +57,10 @@
     refused. A function which returns a value must end with a `return`
     statement, and it has to be given one; a void function leaves with a
     `return` which is given no value, as `return;` in the middle of a body
-    does, and it cannot return one.
+    does, and it cannot return one. A call may stand inside an expression,
+    with the values worked out before it kept for afterwards, since a
+    function is not allowed to disturb the registers of the function which
+    called it.
 14. Global Variables. A declaration outside every function declares a
     variable which every function can use. One declaration may name
     several variables of the same type, written `int x, y, z;`, and the
@@ -680,5 +684,19 @@
     aside in, so a loop may work out a deep expression on every pass. The
     room for this is part of each function's frame, so it costs a little
     space in every function whether it is used or not, and an expression
-    which needs more than twenty values standing at once is refused with a
-    message saying so rather than being worked out wrongly.
+    which needs more values standing at once than that room holds is refused
+    with a message saying so rather than being worked out wrongly.
+
+52. Lazy Evaluation (acwj Stage 55, `55_Lazy_Evaluation`). The right
+    side of `&&` and `||` is worked out only when the left side did not
+    already settle the answer: a left side which is zero settles `&&` as
+    zero, and one which is not zero settles `||` as one. So
+    `0 && f()` never calls `f`, `1 || f()` never calls it, and the side
+    which is skipped may be the one which would go wrong:
+
+        if (pointer && *pointer == 1) { ... }
+
+    reads through the pointer only once it is known not to point at
+    nothing. The two operations still answer with 0 or 1, and a chain such
+    as `a && b && c` is read from the left, each side being worked out only
+    when the ones before it did not settle the answer.

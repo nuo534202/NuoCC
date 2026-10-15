@@ -69,6 +69,7 @@ protected:
                      reg_idx reg2,
                      label_idx label) override;
     void JumpIfZero(reg_idx reg, label_idx label) override;
+    void JumpIfNonZero(reg_idx reg, label_idx label) override;
 
     void PushArgument(reg_idx reg) override;
     reg_idx Call(const Symbol& symbol, int32 arg_count) override;

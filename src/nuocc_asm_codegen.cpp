@@ -716,6 +716,12 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             if (IsCompoundAssign(op_type))
                 return GenAssignOp(root, CompoundAssignOperator(op_type));
 
+            /* '&&' and '||' decide which of their two sides is worked out
+             * at all, so both are not worked out before they are
+             * combined. */
+            if (op_type == T_LogAnd || op_type == T_LogOr)
+                return GenLogic(root, op_type == T_LogAnd);
+
             reg_idx left_reg = GenExpr(root->GetLeft());
             reg_idx right_reg = GenExpr(root->GetRight());
 
@@ -799,6 +805,71 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
 }
 
 // Compute an lvalue's address without loading the value stored there.
+/*
+ * Generate the code for '&&' or '||':
+ *
+ *      <the left side>, jumping to Lsettled when it settles the answer
+ *      <the right side>, jumping to Lsettled when it settles it
+ *      the answer which neither side settled
+ *      jmp Lend
+ * Lsettled:
+ *      the answer the side which jumped settled
+ * Lend:
+ *
+ * Which answer a side settles is the one which stops the question being
+ * asked any further: a side which is zero settles a '&&' as zero, and one
+ * which is not zero settles a '||' as one. The side which is not worked out
+ * is the whole point of the operation, since it may be the side which would
+ * go wrong: `if (p && *p == 1)` must not read through a pointer which points
+ * at nothing.
+ *
+ * Each side is thrown away once it has been asked, so only one of them ever
+ * holds a register; the answer is written in one register whichever way it
+ * is reached, and that register is taken before either side is worked out.
+ */
+reg_idx AsmCodegen::GenLogic(const AstNodePtr& root, bool is_and)
+{
+    const label_idx settled = NewLabel();
+    const label_idx end_label = NewLabel();
+
+    const reg_idx result = AllocRegister();
+
+    reg_idx value = GenExpr(root->GetLeft());
+
+    if (is_and)
+        JumpIfZero(value, settled);
+    else
+        JumpIfNonZero(value, settled);
+
+    FreeRegister(value);
+
+    value = GenExpr(root->GetRight());
+
+    if (is_and)
+        JumpIfZero(value, settled);
+    else
+        JumpIfNonZero(value, settled);
+
+    FreeRegister(value);
+
+    /* Neither side settled it, so the answer is the one which the other
+     * side would have settled it as. */
+    value = LoadInt(is_and ? 1 : 0);
+    Move(result, value);
+    FreeRegister(value);
+
+    EmitJump(end_label);
+    EmitLabel(settled);
+
+    value = LoadInt(is_and ? 0 : 1);
+    Move(result, value);
+    FreeRegister(value);
+
+    EmitLabel(end_label);
+
+    return result;
+}
+
 /*
  * Generate the code for a ternary expression, of which only one of the two
  * values is ever worked out:
@@ -949,15 +1020,6 @@ reg_idx AsmCodegen::GenOperator(NodeTag op_type,
             return ShiftLeft(left_reg, right_reg);
         case T_RShift:
             return ShiftRight(left_reg, right_reg);
-        /*
-         * The operands of '&&' and '||' have already been turned into the
-         * zero or one which says whether they hold, so combining them is
-         * the bitwise operation on those two values.
-         */
-        case T_LogAnd:
-            return And(left_reg, right_reg);
-        case T_LogOr:
-            return Or(left_reg, right_reg);
         case T_EQ:
         case T_NE:
         case T_LT:

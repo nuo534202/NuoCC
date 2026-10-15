@@ -668,6 +668,11 @@ void Arm64Codegen::JumpIfZero(reg_idx reg, label_idx label)
     ofs_ << "\tcbz\t" << xreg_list_[reg] << ", L" << label << std::endl;
 }
 
+void Arm64Codegen::JumpIfNonZero(reg_idx reg, label_idx label)
+{
+    ofs_ << "\tcbnz\t" << xreg_list_[reg] << ", L" << label << std::endl;
+}
+
 /*
  * Put one argument on the stack while a call is being made. Every value
  * takes sixteen bytes, so the stack stays aligned to sixteen bytes while

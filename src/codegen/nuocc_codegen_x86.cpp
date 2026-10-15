@@ -646,6 +646,13 @@ void X86Codegen::JumpIfZero(reg_idx reg, label_idx label)
     ofs_ << "\tje\tL" << label << std::endl;
 }
 
+void X86Codegen::JumpIfNonZero(reg_idx reg, label_idx label)
+{
+    ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
+    ofs_ << reg_list_[reg] << std::endl;
+    ofs_ << "\tjne\tL" << label << std::endl;
+}
+
 /*
  * Put one argument on the stack while a call is being made. Every value
  * takes sixteen bytes, so the stack stays aligned to sixteen bytes while

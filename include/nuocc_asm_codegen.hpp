@@ -146,6 +146,12 @@ protected:
     virtual void JumpIfZero(reg_idx reg, label_idx label) = 0;
 
     /*
+     * The same for a value which is not zero, which is what the right side
+     * of an '||' is asked: it settles the answer when it holds.
+     */
+    virtual void JumpIfNonZero(reg_idx reg, label_idx label) = 0;
+
+    /*
      * Put the value of one argument on the stack while a call is being
      * made, ready for Call() to hand it to the function.
      */
@@ -205,6 +211,15 @@ protected:
     void GenFor(const AstNodePtr& root);
     void GenSwitch(const AstNodePtr& root);
     reg_idx GenTernary(const AstNodePtr& root);
+
+    /*
+     * Generate the code for '&&' or '||', which answer with the zero or the
+     * one saying whether they hold. The side which is not needed to know
+     * the answer is not worked out at all, which is why the two sides are
+     * asked one after the other rather than worked out before the
+     * operation is applied to them.
+     */
+    reg_idx GenLogic(const AstNodePtr& root, bool is_and);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);

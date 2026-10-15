@@ -1706,17 +1706,18 @@ AstNodePtr Parser::BinaryExpression(
         }
 
         /*
-         * '&&' and '||' answer a question about their operands and not
-         * about their bits, so each side becomes the zero or one which
-         * says whether it holds: the bitwise operations which follow then
-         * give the right answer, as those are the only values left.
+         * '&&' and '||' answer with the zero or the one which says whether
+         * they hold, whatever the two sides are, and the side which is not
+         * needed to know the answer is not worked out when the program
+         * runs: `if (p && *p == 1)` must not read through a pointer which
+         * points at nothing. The two sides are therefore left as they are,
+         * for the code generator to ask one after the other.
          */
         if (op_type == T_LogAnd || op_type == T_LogOr)
         {
-            left = std::make_unique<AstUnary>(left, A_AstToBool,
-                                              PrimitiveType::kInt);
-            right = std::make_unique<AstUnary>(right, A_AstToBool,
-                                               PrimitiveType::kInt);
+            left = std::make_unique<AstOperator>(left, right, op_type,
+                                                 PrimitiveType::kInt);
+            continue;
         }
 
         left = MakeOperatorNode(left, right, token_list[op_idx]);
