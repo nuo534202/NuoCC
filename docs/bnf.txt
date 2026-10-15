@@ -172,10 +172,12 @@ member_list: member
 
 /*
  * A member of a struct or a union may be a pointer or an array of its own,
- * but it cannot be given a value where it is declared.
+ * but it cannot be given a value where it is declared. The size of such an
+ * array is an expression the compiler works out while it is compiling the
+ * program, as the size of any other array is.
  */
 member: type opt_pointer identifier ';'
-    | type opt_pointer identifier '[' number ']' ';'
+    | type opt_pointer identifier '[' expression ']' ';'
     ;
 
 opt_pointer: <empty>
@@ -195,6 +197,7 @@ statement: compound_statement
     | print_statement
     | declaration
     | expression_statement
+    | empty_statement
     | if_statement
     | while_statement
     | for_statement
@@ -224,6 +227,12 @@ declaration: opt_extern type declarator_list ';'
 typedef_declaration: 'typedef' type opt_pointer identifier ';'
     ;
 
+/*
+ * What is called has to be the name of a function, and it is given one
+ * expression for each of its parameters: at most six of them, which is how
+ * many the machine passes without reaching into the stack.
+ * Each expression has to fit the type of the parameter it is given to.
+ */
 function_call: identifier '(' opt_expression_list ')'
     ;
 
@@ -240,7 +249,12 @@ expression_list: expression
     | expression ',' expression_list
     ;
 
+/*
+ * A function which answers with a value has to be given one to return, and
+ * one which answers with nothing leaves with a return which is given none.
+ */
 return_statement: 'return' '(' expression ')'
+    | 'return'
     ;
 
 /*
@@ -255,6 +269,11 @@ continue_statement: 'continue' ';'
     ;
 
 expression_statement: expression ';'
+    ;
+
+/* A ';' on its own is a statement which does nothing, which is how a loop
+ * or a branch with nothing to do is written. */
+empty_statement: ';'
     ;
 
 /*
@@ -338,6 +357,7 @@ assignment_expression: conditional_expression
     | lvalue '-=' assignment_expression
     | lvalue '*=' assignment_expression
     | lvalue '/=' assignment_expression
+    | lvalue '%=' assignment_expression
     ;
 
 /*
@@ -420,6 +440,7 @@ multiplicative_expression:
       prefix_expression
     | multiplicative_expression '*' prefix_expression
     | multiplicative_expression '/' prefix_expression
+    | multiplicative_expression '%' prefix_expression
     ;
 
 /*
@@ -501,5 +522,10 @@ sizeof_expression: 'sizeof' '(' type opt_pointer ')'
 number: T_INTLIT
     ;
 
+/*
+ * Strings written one after another are one string, which is how a string
+ * too long for its line is written down over several.
+ */
 string_literal: T_STRLIT
+    | string_literal T_STRLIT
     ;

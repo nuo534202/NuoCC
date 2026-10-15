@@ -1,6 +1,6 @@
 # NuoCC
 
-NuoCC is a small compiler for a subset of the C language. Supported syntax is listed in [Supported Features](docs/supported_features.md).
+NuoCC is a small compiler for a subset of the C language. Supported syntax is listed in [Supported Features](docs/supported_features.md), and the grammar itself is written out in the [grammar](docs/bnf.txt).
 
 ## Quick Start
 
