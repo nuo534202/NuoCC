@@ -588,6 +588,14 @@ private:
     static bool IsRightAssociative(NodeTag tag);
 
     /*
+     * Stop unless the value an increment or a decrement is written on is the
+     * name of a variable, which is the only thing the new value can be put
+     * back into. An array's name and an increment are both refused, each
+     * with a message which says what it was written on.
+     */
+    void CheckIncrementable(const AstNodePtr& operand) const;
+
+    /*
      * Whether a tree is the address of an array, which is what the name of
      * an array stands for. Such a value may be read, indexed and given to a
      * function, but it cannot be stored into, changed, or asked for its own

@@ -279,8 +279,11 @@
     A header file may include another one and may guard itself against
     being read more than once, which is how a header used twice in one
     program does no harm. The lines the pre-processor writes to say which
-    file and line the text after them came from begin with `#`, and the
-    scanner steps over them.
+    file and line the text after them came from begin with `#` in the first
+    column of the line, and the scanner steps over them. A `#` anywhere else
+    is a character the language has no use for and is refused, so that a
+    stray one is reported where it stands rather than swallowing the rest of
+    its line.
 
     `extern` declares a name whose storage is given in another source
     file, so the name may be used here but no storage is emitted for it.
@@ -614,3 +617,22 @@
     compound one. An array's size is all of its elements and a pointer's is
     its own, which `sizeof` answers with, and a parameter which is given an
     array is written as a pointer.
+
+49. Chains of Selections (acwj Stage 52, `52_Pointers_pt2`). A name, an
+    element of an array or a member may be followed by any number of
+    selections, one after another, which is how a chain of linked values is
+    followed:
+
+        ptr->next->next->val
+        list[0]->val
+        (*ptr).next->val
+        box.link->val
+
+    `.` selects a member of a struct or a union value and `->` selects one
+    through a pointer to one, so the two may be written one after the other
+    as the values they reach allow. `list[0]->val` reads the value through
+    the pointer held in the first element of an array, and `box.link->val`
+    the one held in a member of a union. What an increment or a decrement is
+    written on has to be the name of a variable, so a value read through a
+    pointer or taken from a member is refused, and so is an increment of an
+    increment: `value++ ++` has no name for its new value to go back into.

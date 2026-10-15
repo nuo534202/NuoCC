@@ -1824,11 +1824,7 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
                 std::exit(1);
             }
 
-            if (operand->GetAstNodeTag() != A_AstIdentifier) {
-                std::cerr << "syntax error: increment and decrement need a"
-                          << " standalone variable!" << std::endl;
-                std::exit(1);
-            }
+            CheckIncrementable(operand);
             const Symbol& symbol =
                 static_cast<const AstIdentifier&>(*operand).GetSymbol();
             if (BaseType(symbol.type) == PrimitiveType::kComposite) {
@@ -2021,9 +2017,7 @@ AstNodePtr Parser::PostfixExpression(const std::vector<NodePtr>& token_list,
         } else if (tag == T_LBracket) {
             expression = ArrayAccess(std::move(expression), token_list, i);
         } else if (tag == T_Inc || tag == T_Dec) {
-            std::cerr << "syntax error: increment and decrement need a"
-                      << " standalone variable!" << std::endl;
-            std::exit(1);
+            CheckIncrementable(expression);
         } else {
             return expression;
         }
@@ -2892,6 +2886,38 @@ bool Parser::IsRightAssociative(NodeTag tag)
     /* Every assignment, plain or compound, takes what stands on its right
      * first, so `a= b= 3` and `a += b += 3` both start at the right. */
     return tag == T_Assign || IsCompoundAssign(tag);
+}
+
+void Parser::CheckIncrementable(const AstNodePtr& operand) const
+{
+    /* The name of a variable is what the new value goes back into, so
+     * an increment written on one is taken. */
+    if (operand->GetAstNodeTag() == A_AstIdentifier)
+        return;
+
+    /*
+     * Everything else leaves the new value nowhere to go: the name of an
+     * array stands for an address rather than a place, an increment is not
+     * a place at all, and a value read through a pointer or taken from a
+     * member is not named rather than placed.
+     */
+    if (IsArrayAddress(operand))
+    {
+        std::cerr << "syntax error: an array cannot be changed!";
+        std::cerr << std::endl;
+    }
+    else if (operand->GetAstNodeTag() == A_AstIncDec)
+    {
+        std::cerr << "syntax error: an increment or a decrement cannot be";
+        std::cerr << " changed again!" << std::endl;
+    }
+    else
+    {
+        std::cerr << "syntax error: increment and decrement need a";
+        std::cerr << " standalone variable!" << std::endl;
+    }
+
+    std::exit(1);
 }
 
 bool Parser::IsArrayAddress(const AstNodePtr& tree)

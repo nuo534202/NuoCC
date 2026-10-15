@@ -59,10 +59,13 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
             return;
 
         /*
-         * A line which begins with '#' is one the pre-processor wrote
-         * about itself and not part of the program, so it is stepped over.
+         * A line which begins with '#' is one the pre-processor wrote about
+         * itself and not part of the program, so it is stepped over. It has
+         * to be the first character of its line: a '#' anywhere else is a
+         * character the language has no use for, and saying so is better
+         * than swallowing the rest of the line and failing somewhere else.
          */
-        if (buf[i] == '#')
+        if (buf[i] == '#' && (i == 0 || buf[i - 1] == '\n'))
         {
             SkipDirective(buf, i);
             continue;
