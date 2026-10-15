@@ -116,7 +116,7 @@ private:
      *      ;
      *
      * declarator: opt_pointer identifier opt_value
-     *      |   opt_pointer identifier '[' opt_number ']' opt_values
+     *      |   opt_pointer identifier '[' opt_size ']' opt_values
      *      ;
      *
      * The type has already been parsed by the caller, but it is only the
@@ -211,17 +211,13 @@ private:
                                      idx_t& i);
 
     /*
-     * array_declaration: identifier '[' number ']'  ;
-     *      |           identifier '[' ']'
-     *      |           identifier '[' number ']' '=' '{' value_list '}'
-     *      |           identifier '[' ']' '=' '{' value_list '}'
-     *      ;
+     * array_declaration: '[' opt_size ']' opt_values  ;
      *
      * The type and the name have already been parsed by the caller. The
-     * number is how many elements the array holds, and the whole array
-     * takes room for all of them at once: one element of the declared
-     * type for each. The number may be left out when the values the array
-     * is given are its size instead, and the caller matches the semicolon.
+     * size is how many elements the array holds, and the whole array takes
+     * room for all of them at once: one element of the declared type for
+     * each. The size may be left out when the values the array is given
+     * are its size instead, and the caller matches the semicolon.
      */
     Symbol ArrayDeclaration(const std::vector<NodePtr>& token_list,
                             idx_t& i,
@@ -283,7 +279,7 @@ private:
 
     /*
      * member_list: type identifier ';'
-     *      |       type identifier '[' number ']' ';'
+     *      |       type identifier '[' expression ']' ';'
      *      |       member_list member_list
      *      ;
      *

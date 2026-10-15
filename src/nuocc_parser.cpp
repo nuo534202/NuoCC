@@ -757,7 +757,7 @@ InitialValue Parser::ParseConstantValue(const TypeRef& type,
  * declarator_list: declarator | declarator ',' declarator_list  ;
  *
  * declarator: opt_pointer identifier
- *      |   opt_pointer identifier '[' number ']'
+ *      |   opt_pointer identifier '[' expression ']'
  *      ;
  *
  * Every name adds its own stars and its own array size to the base type, so
@@ -869,12 +869,16 @@ bool Parser::IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
 }
 
 /*
- * array_declaration: identifier '[' number ']'  ;
+ * The array part of a declarator, read once the name has been read:
  *
- * Unlike a list of variables, an array declares one name only: the number
- * is how many elements of the declared type it holds, and the room for all
- * of them is reserved together so that the elements stand next to each
- * other. The size is fixed at the declaration and cannot be changed.
+ *      '[' opt_size ']' opt_values
+ *
+ * The size between the brackets is how many elements of the declared type
+ * the array holds, and the room for all of them is reserved together so
+ * that the elements stand next to each other. The size is an expression
+ * which the compiler works out while it is compiling the program, and an
+ * array written without one takes the number of values it is given. What
+ * the size works out to is fixed for the life of the array.
  */
 Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
@@ -2497,7 +2501,7 @@ void Parser::TypedefDeclaration(const std::vector<NodePtr>& token_list,
 
 /*
  * member_list: type identifier ';'
- *      |       type identifier '[' number ']' ';'
+ *      |       type identifier '[' expression ']' ';'
  *      |       member_list member_list
  *      ;
  *

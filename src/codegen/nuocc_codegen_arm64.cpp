@@ -558,10 +558,8 @@ reg_idx Arm64Codegen::Widen(reg_idx reg,
 }
 
 /*
- * Multiply the value in a register by the size of a type. Every size the
- * language has now is a power of two, so a shift left is enough and
- * cheaper than a multiply; the multiply is there for the sizes which are
- * not, which the composite types later on will bring.
+ * Cut the value in a register down to the type it is cast to, so that what
+ * the register holds is a value of the new type.
  */
 reg_idx Arm64Codegen::Cast(reg_idx reg,
     PrimitiveType /*old_type*/,
@@ -605,6 +603,13 @@ void Arm64Codegen::ReloadRegister(reg_idx reg, int32 slot)
     ofs_ << spill_base_ + 8 * slot << "]" << std::endl;
 }
 
+/*
+ * Multiply the value in a register by the size of a type, which is what
+ * turns an index into an offset from the base of what is indexed. Every
+ * size the language has now is a power of two, so a shift left is enough
+ * and cheaper than a multiply; the multiply is there for the sizes which
+ * are not, which composite types will bring.
+ */
 reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
 {
     uint32 size = static_cast<uint32>(scale);

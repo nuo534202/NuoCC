@@ -808,3 +808,18 @@
     it comes back, is what item 51 describes; this item is about the values
     which are in registers still, which nothing else in the same statement
     may take away from the expression which is holding them.
+
+58. Nested Members, Members of Composites, and Member Array Sizes (acwj
+    Stage 62, `62_Cleanup`). The thing in front of a `.` or a `->` may
+    itself be a member of a composite or a pointer to one, so the offset of
+    the inner member is added to the offset which has already been worked
+    out: `thing.member1.age_in_years`, `pointing->member1.age_in_years` and
+    `(&local)->member1.age_in_years` all name a member of the struct which
+    the outer struct holds, wherever the outer one is. The room a struct
+    takes is worked out from the members it holds, a member which is a
+    struct or a union included, each standing at the alignment of its own
+    type: a union which is a member takes as much room as its widest member
+    and shares that room with the rest of them. The size of an array which
+    is a member is an expression the compiler works out while it is
+    compiling the program, so `int table[2 * 3];` is a member which holds
+    six elements.
