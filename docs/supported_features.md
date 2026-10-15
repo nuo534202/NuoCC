@@ -12,8 +12,12 @@
    and Shift Right `>>`. A shift of a negative value fills the top bits in
    with zeroes.
 4. Logical Operations: And `&&`, Or `||` and Not `!`. Each answers with 0
-   or 1, and `!` is 1 when its value is zero. Neither `&&` nor `||` short
-   circuits yet, so both sides are always worked out.
+   or 1, and `!` is 1 when its value is zero. Each side is asked whether it
+   holds rather than being combined with the other side, so the two sides
+   need not be of one type: each has to be an integer or an address, and an
+   address holds when it does not point at nothing, which is what lets
+   `if (p && count > 0)` be written. Neither `&&` nor `||` short circuits
+   yet, so both sides are always worked out.
 5. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
    Less Than Or Equal To, Greater Than Or Equal To. Each of them answers
    with 0 or 1 as well.
@@ -50,7 +54,9 @@
     worked out from the last to the first and passed in the registers the
     machine gives to arguments, so a call with more than six arguments is
     refused. A function which returns a value must end with a `return`
-    statement, and a void function cannot return one.
+    statement, and it has to be given one; a void function leaves with a
+    `return` which is given no value, as `return;` in the middle of a body
+    does, and it cannot return one.
 14. Global Variables. A declaration outside every function declares a
     variable which every function can use. One declaration may name
     several variables of the same type, written `int x, y, z;`, and the
@@ -133,9 +139,12 @@
     pointer, indexed with `p[0]`, read through with `*p`, and walked with
     `p= p + 1` exactly like a pointer to a `char`. The same escapes as a
     character literal are known, so a string may hold a zero byte or any
-    other code of its own. A string which is not closed before the end of
-    the line or of the file, or uses an unknown escape, is refused, and a
-    string may not be given to `print` or stored into a number.
+    other code of its own. Strings written one after another are one string,
+    which is how a string too long for one line is written down over
+    several: `"hello " "there"` is `"hello there"`. A string which is not
+    closed before the end of the line or of the file, or uses an unknown
+    escape, is refused, and a string may not be given to `print` or stored
+    into a number.
 23. The `printchar()` Runtime Function. `printchar(x)` is called like any
     other function and prints the one character whose code is `x`,
     without a newline after it, so it is how the characters of a string
@@ -288,7 +297,12 @@
     `extern` declares a name whose storage is given in another source
     file, so the name may be used here but no storage is emitted for it.
     It has to come before the type, as in `extern int shared;`, at the top
-    level of the program or inside a function. A name declared `extern` is
+    level of the program or inside a function. A name declared at the top
+    level may be declared again as the one thing it is not yet, so
+    `extern int shared;` may stand before or after the declaration which
+    gives the name its storage; the two declarations have to agree about
+    the type of the name and leave one name behind, while any other name
+    declared twice at the top level is refused. A name declared `extern` is
     addressed the way a global is, so it is the definition, wherever it
     stands, which gives it room.
 
@@ -636,3 +650,17 @@
     written on has to be the name of a variable, so a value read through a
     pointer or taken from a member is refused, and so is an increment of an
     increment: `value++ ++` has no name for its new value to go back into.
+
+50. Strings Together, Empty Statements, and the Rest (acwj Stage 53,
+    `53_Mop_up_pt2`). Strings written one after another are joined into one,
+    so a string too long for its line may be written over several.
+    A `;` on its own is a statement which does nothing, which is how a loop
+    or a branch with nothing to do is written: `while (0) ;`. A name
+    declared at the top level may be declared again as the one thing it is
+    not yet, which is what a global name and an `extern` name of the same
+    one are to each other, and only that pair may stand together. The
+    operands of `&&` and `||` are asked whether they hold rather than being
+    combined, so they need not be of one type as long as each is an integer
+    or an address. A function which answers with nothing may leave with a
+    `return` which is given no value, and a function which answers with a
+    value has to be given one to return.

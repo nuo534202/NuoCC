@@ -423,6 +423,14 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
          */
         case T_LBrace:
             return {CompoundStatement(token_list, i), false};
+        /*
+         * A ';' on its own is a statement which does nothing, which is how
+         * a loop with nothing to do on a pass is written. It is stepped
+         * over here, so there is nothing left for the caller to match.
+         */
+        case T_Semicolon:
+            i++;
+            return {nullptr, false};
         case T_Print:
             return {PrintStatement(token_list, i), true};
         case T_Int:
@@ -800,8 +808,16 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
          * The name is declared before the value it starts with is read, so
          * that the value may name the variables declared before it in the
          * same declaration: `int x= 2, y= x + 3;`.
+         *
+         * A name declared at the top level may be declared again as the one
+         * thing it is not yet, and the two declarations leave one name
+         * behind; anywhere else a name is simply added, so that a name
+         * inside a function may stand in front of the one outside it.
          */
-        symbol_table_.AddSymbol(symbol);
+        if (current_function_type_.type == PrimitiveType::kNone)
+            AddGlobalSymbol(symbol);
+        else
+            symbol_table_.AddSymbol(symbol);
 
         DeclaredName declared;
         declared.symbol = symbol;
@@ -1124,6 +1140,27 @@ AstNodePtr Parser::ForStatement(const std::vector<NodePtr>& token_list,
 AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
+    Match(token_list, i, T_Return, "return");
+
+    /*
+     * A function which answers with nothing leaves with a return which is
+     * given no value, and one which answers with a value has to be given
+     * one: there is no other way for its caller to be given the answer.
+     */
+    if (TokenTag(token_list[i]) != T_LParen)
+    {
+        if (current_function_type_.type != PrimitiveType::kVoid)
+        {
+            std::cerr << "syntax error: a function which answers with a";
+            std::cerr << " value has to return one!" << std::endl;
+            std::exit(1);
+        }
+
+        AstNodePtr nothing = nullptr;
+
+        return std::make_unique<AstReturn>(nothing);
+    }
+
     if (current_function_type_.type == PrimitiveType::kVoid)
     {
         std::cerr << "syntax error: a void function cannot return a value!";
@@ -1131,7 +1168,6 @@ AstNodePtr Parser::ReturnStatement(const std::vector<NodePtr>& token_list,
         std::exit(1);
     }
 
-    Match(token_list, i, T_Return, "return");
     Match(token_list, i, T_LParen, "(");
 
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
@@ -1556,6 +1592,14 @@ AstNodePtr Parser::BinaryExpression(
         {
             i++;    /* step over '?' */
 
+            /*
+             * What stands before the '?' is a question like the condition of
+             * an if, so it is asked for its truth value the same way, and
+             * only the value it chooses is worked out when the program
+             * runs.
+             */
+            MakeCondition(left);
+
             AstNodePtr when_true = BinaryExpression(token_list, i, 0);
             Match(token_list, i, T_Colon, ":");
             AstNodePtr when_false = BinaryExpression(token_list, i, 0);
@@ -1631,13 +1675,33 @@ AstNodePtr Parser::BinaryExpression(
             PrimitiveType left_type = left->GetType();
             PrimitiveType right_type = right->GetType();
 
-            bool left_fits = ModifyType(left, right_type, op_type);
-            bool right_fits = ModifyType(right, left_type, op_type);
-
-            if (!left_fits && !right_fits)
+            /*
+             * '&&' and '||' ask a question about each of their two sides
+             * rather than combining their values, so the two sides need not
+             * be of one type: each has to be a value which can be asked
+             * whether it holds, which is an integer or an address. An
+             * address holds when it does not point at nothing.
+             */
+            if (op_type == T_LogAnd || op_type == T_LogOr)
             {
-                std::cerr << "syntax error: incompatible types!" << std::endl;
-                std::exit(1);
+                if (!IsTestable(left) || !IsTestable(right))
+                {
+                    std::cerr << "syntax error: && and || need a value which";
+                    std::cerr << " can be asked whether it holds!" << std::endl;
+                    std::exit(1);
+                }
+            }
+            else
+            {
+                bool left_fits = ModifyType(left, right_type, op_type);
+                bool right_fits = ModifyType(right, left_type, op_type);
+
+                if (!left_fits && !right_fits)
+                {
+                    std::cerr << "syntax error: incompatible types!";
+                    std::cerr << std::endl;
+                    std::exit(1);
+                }
             }
         }
 
@@ -1869,11 +1933,20 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
         }
         case T_StrLit:
         {
-            std::string text =
-                static_cast<const Literal<std::string, T_StrLit>*>(
-                    token_list[i].get())
-                    ->GetValue();
-            i++;
+            /*
+             * Strings written one after another are one string, which is how
+             * a string too long for the line it is written on is written
+             * down over several lines.
+             */
+            std::string text;
+
+            while (TokenTag(token_list[i]) == T_StrLit)
+            {
+                text += static_cast<const Literal<std::string, T_StrLit>*>(
+                            token_list[i].get())
+                            ->GetValue();
+                i++;
+            }
 
             return std::make_unique<AstStrLit>(text);
         }
@@ -2886,6 +2959,63 @@ bool Parser::IsRightAssociative(NodeTag tag)
     /* Every assignment, plain or compound, takes what stands on its right
      * first, so `a= b= 3` and `a += b += 3` both start at the right. */
     return tag == T_Assign || IsCompoundAssign(tag);
+}
+
+/*
+ * Whether two declarations of one name say the same thing about it, which
+ * is what has to hold when a global name and an extern name of the same
+ * name are written together.
+ */
+namespace
+{
+
+bool SameDeclaration(const Symbol& left, const Symbol& right)
+{
+    return left.stype == right.stype &&
+           left.type == right.type &&
+           left.composite == right.composite &&
+           left.is_static == right.is_static &&
+           left.element_count == right.element_count;
+}
+
+}   /* namespace */
+
+void Parser::AddGlobalSymbol(const Symbol& symbol)
+{
+    std::optional<Symbol> previous = symbol_table_.FindSymbol(symbol.name);
+
+    /* A name which has not been declared before is simply added. */
+    if (!previous)
+    {
+        symbol_table_.AddSymbol(symbol);
+        return;
+    }
+
+    /*
+     * Otherwise the two declarations have to be the one pair which may
+     * stand together: a global name and an extern name of the same one. One
+     * says where the storage is and the other says nothing about it, so the
+     * table keeps the declaration which came last, which is the one which
+     * knows.
+     */
+    const bool pair = (previous->storage == StorageClass::kGlobal &&
+                       symbol.storage == StorageClass::kExtern) ||
+                      (previous->storage == StorageClass::kExtern &&
+                       symbol.storage == StorageClass::kGlobal);
+
+    if (!pair || !SameDeclaration(*previous, symbol))
+    {
+        std::cerr << "syntax error: " << symbol.name;
+        std::cerr << " is already declared at the top level!" << std::endl;
+        std::exit(1);
+    }
+
+    symbol_table_.UpdateSymbol(symbol);
+}
+
+bool Parser::IsTestable(const AstNodePtr& tree)
+{
+    return IsIntType(tree->GetType()) || IsPointerType(tree->GetType());
 }
 
 void Parser::CheckIncrementable(const AstNodePtr& operand) const

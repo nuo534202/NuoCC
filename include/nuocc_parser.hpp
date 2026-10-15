@@ -588,6 +588,20 @@ private:
     static bool IsRightAssociative(NodeTag tag);
 
     /*
+     * Put the name a declaration declares in the symbol table. A name
+     * declared at the top level may be declared again as the one thing it is
+     * not yet, which is what a global name and an extern name of the same
+     * one are to each other; the two have to agree about the type they say
+     * the name has, and they leave one name behind. Anything else is a name
+     * declared twice and is refused.
+     */
+    void AddGlobalSymbol(const Symbol& symbol);
+
+    /* Whether a value is one which can be asked whether it holds, which is
+     * an integer or an address and nothing else. */
+    static bool IsTestable(const AstNodePtr& tree);
+
+    /*
      * Stop unless the value an increment or a decrement is written on is the
      * name of a variable, which is the only thing the new value can be put
      * back into. An array's name and an increment are both refused, each

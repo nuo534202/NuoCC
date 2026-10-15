@@ -173,6 +173,16 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
 
         case A_AstReturn:
         {
+            /*
+             * A return which is given no value only leaves the function:
+             * there is nothing to put where its caller looks for an answer.
+             */
+            if (!root->GetLeft())
+            {
+                EmitJump(function_end_label_);
+                return;
+            }
+
             reg_idx reg = GenExpr(root->GetLeft());
             Return(reg);
             FreeRegister(reg);
@@ -426,9 +436,11 @@ void AsmCodegen::GenSwitch(const AstNodePtr& root)
 }
 
 /*
- * Generate the code for an if or a while condition. The condition has to be
- * a comparison, so it becomes a compare followed by a jump to the false
- * label when the comparison does not hold.
+ * Generate the code for the condition of a statement or of a ternary
+ * expression. What the parser hands here is either a comparison, which
+ * becomes a compare followed by a jump to the false label when it does not
+ * hold, or a value the parser has already asked for its truth value, which
+ * becomes a jump when that value is zero.
  */
 void AsmCodegen::GenCondition(const AstNodePtr& condition,
     label_idx false_label)
