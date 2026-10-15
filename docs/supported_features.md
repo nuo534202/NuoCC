@@ -664,3 +664,21 @@
     or an address. A function which answers with nothing may leave with a
     `return` which is given no value, and a function which answers with a
     value has to be given one to return.
+
+51. Deep Expressions (acwj Stage 54, `54_Reg_Spills`). An expression may
+    stand as deep as it likes: when more values have to be held at once
+    than there are registers to hold them, the ones which are not needed
+    for the moment are put aside in the frame of the function and brought
+    back when they are needed again. So a chain such as `a + (b + (c + (d +
+    (e + (f + (g + h))))))` is worked out as it is written, and a call may
+    stand in the middle of one, with the values worked out before it kept
+    for afterwards:
+
+        x= 3 * add(2, 3) - 5 * add(4, 6);
+
+    What is put aside is done with at the end of the statement it was put
+    aside in, so a loop may work out a deep expression on every pass. The
+    room for this is part of each function's frame, so it costs a little
+    space in every function whether it is used or not, and an expression
+    which needs more than twenty values standing at once is refused with a
+    message saying so rather than being worked out wrongly.

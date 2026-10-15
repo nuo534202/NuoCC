@@ -44,6 +44,8 @@ protected:
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
+    void SpillRegister(reg_idx reg, int32 slot) override;
+    void ReloadRegister(reg_idx reg, int32 slot) override;
     reg_idx Cast(reg_idx reg,
                  PrimitiveType old_type,
                  PrimitiveType new_type) override;
@@ -83,6 +85,13 @@ protected:
                     PrimitiveType type) override;
 
 private:
+    /*
+     * How much room the locals of the function above take, which is where
+     * the places a value may be set aside begin: they sit below the locals,
+     * so that the two never overlap.
+     */
+    int32 spill_base_ = 0;
+
     /* Alter the value a variable holds in memory by one. */
     void EmitIncDecMemory(const Symbol& symbol, int32 delta);
 

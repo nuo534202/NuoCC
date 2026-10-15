@@ -15,6 +15,17 @@ namespace nuocc
 constexpr int kRegSize = 4;
 
 /*
+ * How many values each register may have set aside at once when an
+ * expression needs more registers than there are, and how many places the
+ * frame of a function keeps for them. An expression never needs more values
+ * set aside than it has values standing at once, and one which needs more
+ * than this many is refused rather than worked out wrongly.
+ */
+constexpr int kSpillDepthPerRegister = 4;
+constexpr int kSpillSlots = kRegSize * kSpillDepthPerRegister;
+constexpr int32 kSpillAreaSize = kSpillSlots * 8;
+
+/*
  * The generic code generator. It walks the syntax tree of the program and
  * asks the target to emit the instructions, so everything which is not
  * specific to a machine lives here and only the instruction selection is
@@ -68,6 +79,16 @@ protected:
     virtual reg_idx Widen(reg_idx reg,
                           PrimitiveType old_type,
                           PrimitiveType new_type) = 0;
+
+    /*
+     * Set the value of a register aside in one of the places the frame of
+     * the function keeps for it, and bring it back again. The places are
+     * room of its own and nothing else, so that setting a value aside does
+     * not move the stack pointer and a call does not disturb what is set
+     * aside. The slot is which of them to use.
+     */
+    virtual void SpillRegister(reg_idx reg, int32 slot) = 0;
+    virtual void ReloadRegister(reg_idx reg, int32 slot) = 0;
 
     /*
      * Give a value the width of the type it was cast to. A value is kept in
@@ -210,6 +231,13 @@ protected:
 
 protected:
     bool is_free_[kRegSize];
+    /*
+     * How many values each register has set aside, and which register is
+     * next in turn to have one set aside. A register with values set aside
+     * may still be in use, holding a newer value of its own.
+     */
+    int32 spill_count_[kRegSize] = {};
+    reg_idx spill_next_ = 0;
     label_idx next_label_;
     /* The function whose code is being generated. */
     label_idx function_end_label_;

@@ -51,6 +51,8 @@ protected:
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
+    void SpillRegister(reg_idx reg, int32 slot) override;
+    void ReloadRegister(reg_idx reg, int32 slot) override;
     reg_idx Cast(reg_idx reg,
                  PrimitiveType old_type,
                  PrimitiveType new_type) override;
@@ -97,6 +99,12 @@ private:
 
 private:
     int32 frame_size_ = 0;
+
+    /*
+     * How far from x29 the places a value may be set aside begin, which is
+     * past the locals of the function so that the two never overlap.
+     */
+    int32 spill_base_ = 0;
 
     std::string xreg_list_[kRegSize];
     std::string wreg_list_[kRegSize];

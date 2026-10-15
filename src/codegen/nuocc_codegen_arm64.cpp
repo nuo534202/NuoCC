@@ -102,7 +102,11 @@ void Arm64Codegen::EmitFunctionPreamble(
     ofs_ << GlobName(symbol.name) << ":" << std::endl;
 
     /* The stack has to stay a multiple of sixteen bytes at every call. */
-    frame_size_ = ((kBaseFrameSize + local_size + 15) / 16) * 16;
+    const int32 spill_size = (local_size + 7) / 8 * 8;
+
+    frame_size_ = ((kBaseFrameSize + spill_size + kSpillAreaSize + 15) / 16)
+                  * 16;
+    spill_base_ = kBaseFrameSize + spill_size;
     ofs_ << "\tsub\tsp, sp, #" << frame_size_ << std::endl;
     ofs_ << "\tstp\tx29, x30, [sp]" << std::endl;
     ofs_ << "\tmov\tx29, sp" << std::endl;
@@ -326,12 +330,15 @@ reg_idx Arm64Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
 
 reg_idx Arm64Codegen::Add(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\tadd\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
-    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+    ofs_ << "\tadd\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx Arm64Codegen::Sub(reg_idx reg1, reg_idx reg2)
@@ -346,12 +353,15 @@ reg_idx Arm64Codegen::Sub(reg_idx reg1, reg_idx reg2)
 
 reg_idx Arm64Codegen::Mul(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\tmul\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
-    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+    ofs_ << "\tmul\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2)
@@ -370,32 +380,41 @@ reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2)
  */
 reg_idx Arm64Codegen::And(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\tand\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
-    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+    ofs_ << "\tand\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx Arm64Codegen::Or(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\torr\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
-    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+    ofs_ << "\torr\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\teor\t" << xreg_list_[reg2] << ", " << xreg_list_[reg2];
-    ofs_ << ", " << xreg_list_[reg1] << std::endl;
+    ofs_ << "\teor\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 /*
@@ -404,23 +423,29 @@ reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2)
  */
 reg_idx Arm64Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\tlsl\t" << xreg_list_[reg2] << ", " << xreg_list_[reg1];
+    ofs_ << "\tlsl\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
 {
     /* 'lsr' shifts zeroes in, 'asr' would keep the sign. */
-    ofs_ << "\tlsr\t" << xreg_list_[reg2] << ", " << xreg_list_[reg1];
+    ofs_ << "\tlsr\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 void Arm64Codegen::Move(reg_idx dest, reg_idx src)
@@ -545,6 +570,18 @@ reg_idx Arm64Codegen::Cast(reg_idx reg,
     return reg;
 }
 
+void Arm64Codegen::SpillRegister(reg_idx reg, int32 slot)
+{
+    ofs_ << "\tstr\t" << xreg_list_[reg] << ", [x29, #";
+    ofs_ << spill_base_ + 8 * slot << "]" << std::endl;
+}
+
+void Arm64Codegen::ReloadRegister(reg_idx reg, int32 slot)
+{
+    ofs_ << "\tldr\t" << xreg_list_[reg] << ", [x29, #";
+    ofs_ << spill_base_ + 8 * slot << "]" << std::endl;
+}
+
 reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
 {
     uint32 size = static_cast<uint32>(scale);
@@ -576,12 +613,12 @@ reg_idx Arm64Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
     /* cmp computes reg1 - reg2, and cset leaves a clean 0 or 1 behind. */
     ofs_ << "\tcmp\t" << xreg_list_[reg1] << ", " << xreg_list_[reg2];
     ofs_ << std::endl;
-    ofs_ << "\tcset\t" << xreg_list_[reg2] << ", ";
+    ofs_ << "\tcset\t" << xreg_list_[reg1] << ", ";
     ofs_ << it->second.condition << std::endl;
 
-    FreeRegister(reg1);
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 void Arm64Codegen::CompareAndJump(NodeTag op_type,

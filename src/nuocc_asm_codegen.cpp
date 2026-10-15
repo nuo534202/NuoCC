@@ -983,7 +983,37 @@ reg_idx AsmCodegen::AllocRegister()
             return i;
         }
 
-    std::cerr << "Error: out of registers!" << std::endl;
+    /*
+     * Every register holds a value, so one of their values is set aside and
+     * the register is handed out to hold a value of its own. The value set
+     * aside comes back as soon as that register is free again, since the
+     * code which asked for the register holds its name throughout.
+     *
+     * Which register this happens to is decided in turn, so that a long
+     * expression sets aside the values of each of them about as often as
+     * the others; a register with as many values set aside as there is room
+     * for is passed over, and an expression which needs more room than the
+     * frame has is refused.
+     */
+    for (idx_t k = 0; k < kRegSize; k++)
+    {
+        const reg_idx candidate = (spill_next_ + k) % kRegSize;
+
+        if (spill_count_[candidate] == kSpillDepthPerRegister)
+            continue;
+
+        const int32 slot = candidate * kSpillDepthPerRegister +
+                           spill_count_[candidate];
+
+        SpillRegister(candidate, slot);
+        spill_count_[candidate]++;
+        spill_next_ = (candidate + 1) % kRegSize;
+
+        return candidate;
+    }
+
+    std::cerr << "Error: an expression is too complex to be worked out!";
+    std::cerr << std::endl;
     std::exit(1);
 }
 
@@ -996,13 +1026,35 @@ void AsmCodegen::FreeRegister(reg_idx reg)
         std::exit(1);
     }
 
+    /*
+     * The value the register holds is done with. If a value of this
+     * register's own was set aside to make room for it, that value comes
+     * back now and the register goes on holding it: the code which is
+     * freeing the register has been holding its name for that value all
+     * along, and will use it once the values worked out in between are
+     * done with.
+     */
+    if (spill_count_[reg] > 0)
+    {
+        spill_count_[reg]--;
+        ReloadRegister(reg, reg * kSpillDepthPerRegister + spill_count_[reg]);
+        return;
+    }
+
     is_free_[reg] = true;
 }
 
 void AsmCodegen::FreeAllRegister()
 {
     for (idx_t i = 0; i < kRegSize; i++)
+    {
         is_free_[i] = true;
+        /* Whatever was set aside at the end of a statement is a value the
+         * statement is done with, so it is not brought back. */
+        spill_count_[i] = 0;
+    }
+
+    spill_next_ = 0;
 }
 
 label_idx AsmCodegen::NewLabel()

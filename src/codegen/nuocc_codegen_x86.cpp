@@ -89,7 +89,10 @@ void X86Codegen::EmitFunctionPreamble(
     ofs_ << "\tpushq\t%rbp" << std::endl;
     ofs_ << "\tmovq\t%rsp, %rbp" << std::endl;
 
-    const int32 frame_size = (local_size + 15) / 16 * 16;
+    spill_base_ = (local_size + 7) / 8 * 8;
+
+    const int32 frame_size =
+        (spill_base_ + kSpillAreaSize + 15) / 16 * 16;
     if (frame_size != 0)
         ofs_ << "\tsubq\t$" << frame_size << ", %rsp" << std::endl;
 
@@ -269,12 +272,15 @@ reg_idx X86Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
 
 reg_idx X86Codegen::Add(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\taddq\t" << reg_list_[reg1] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\taddq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx X86Codegen::Sub(reg_idx reg1, reg_idx reg2)
@@ -289,12 +295,15 @@ reg_idx X86Codegen::Sub(reg_idx reg1, reg_idx reg2)
 
 reg_idx X86Codegen::Mul(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\timulq\t" << reg_list_[reg1] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\timulq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2)
@@ -315,32 +324,41 @@ reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2)
  */
 reg_idx X86Codegen::And(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\tandq\t" << reg_list_[reg1] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\tandq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx X86Codegen::Or(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\torq\t" << reg_list_[reg1] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\torq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 reg_idx X86Codegen::Xor(reg_idx reg1, reg_idx reg2)
 {
-    ofs_ << "\txorq\t" << reg_list_[reg1] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\txorq\t" << reg_list_[reg2] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 /*
@@ -520,6 +538,18 @@ reg_idx X86Codegen::Cast(reg_idx reg,
     return reg;
 }
 
+void X86Codegen::SpillRegister(reg_idx reg, int32 slot)
+{
+    ofs_ << "\tmovq\t" << reg_list_[reg] << ", -";
+    ofs_ << spill_base_ + 8 * (slot + 1) << "(%rbp)" << std::endl;
+}
+
+void X86Codegen::ReloadRegister(reg_idx reg, int32 slot)
+{
+    ofs_ << "\tmovq\t-" << spill_base_ + 8 * (slot + 1) << "(%rbp), ";
+    ofs_ << reg_list_[reg] << std::endl;
+}
+
 reg_idx X86Codegen::Scale(reg_idx reg, int32 scale)
 {
     uint32 size = static_cast<uint32>(scale);
@@ -555,13 +585,16 @@ reg_idx X86Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
      */
     ofs_ << "\tcmpq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
-    ofs_ << "\t" << it->second.set << "\t" << breg_list_[reg2] << std::endl;
-    ofs_ << "\tmovzbq\t" << breg_list_[reg2] << ", ";
-    ofs_ << reg_list_[reg2] << std::endl;
+    ofs_ << "\t" << it->second.set << "\t" << breg_list_[reg1] << std::endl;
+    ofs_ << "\tmovzbq\t" << breg_list_[reg1] << ", ";
+    ofs_ << reg_list_[reg1] << std::endl;
 
-    FreeRegister(reg1);
+    /* The register which was handed out last is the one whose value is
+     * done with first, so that a value set aside to make room for it comes
+     * back before anything else is worked out. */
+    FreeRegister(reg2);
 
-    return reg2;
+    return reg1;
 }
 
 void X86Codegen::CompareAndJump(NodeTag op_type,
