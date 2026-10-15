@@ -125,6 +125,18 @@ typedef enum AstNodeTag
 } AstNodeTag;
 
 /*
+ * Whether an operator asks which of two values is the greater one, or
+ * whether the two are the same. Two addresses may be asked that as well as
+ * two numbers, since the question is about the addresses themselves and not
+ * about what stands at them.
+ */
+inline bool IsComparisonOp(NodeTag tag)
+{
+    return tag == T_EQ || tag == T_NE || tag == T_LT ||
+           tag == T_GT || tag == T_LE || tag == T_GE;
+}
+
+/*
  * Whether an assignment combines the value on its right with the one the
  * target holds rather than storing it as it stands. `=` stores, while `+=`
  * and its three companions combine.

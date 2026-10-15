@@ -21,7 +21,10 @@
    `1 || f()` never calls it either.
 5. Comparison Operations: Equal To, Not Equal To, Less Than, Greater Than,
    Less Than Or Equal To, Greater Than Or Equal To. Each of them answers
-   with 0 or 1 as well.
+   with 0 or 1, whatever the two values it is given are, so the answer is an
+   `int` and may be used as one: `print (a == b);` and `x= (a < b) + 1;`
+   both read the answer. Two pointers may be compared with each other as
+   well as two numbers.
 6. Increment and Decrement: `++` and `--`, written before a variable or
    after it. `++x` yields the value the variable holds afterwards and `x++`
    the value it held before, and both leave the variable changed by one.
@@ -74,9 +77,14 @@
 15. Pointer Arithmetic. An integer may be added to or subtracted from a
     pointer, and is scaled by the size of what the pointer points at, so
     `&c + 1` is the address of the next value of `c`'s type and not the
-    address one byte along. Nothing else may be done with a pointer: it
-    cannot be multiplied, divided or compared yet, and its address cannot
-    be printed.
+    address one byte along. An integer added to a pointer through `+=` or
+    `-=` is scaled the same way, so `p += 2` moves on by two values of the
+    type `p` points at and not by two bytes. Two pointers may be compared
+    with each other whatever they point at, since the question is which
+    address is the lower one, and that is how a pointer is asked whether it
+    points at anything: `if (p != NULL) ...`. Nothing else may be done with
+    a pointer: it cannot be multiplied or divided yet, and the address it
+    holds cannot be printed.
 16. Function-local Variables. Variables declared inside a function are
     stored in that function's stack frame, are released when the function
     returns, and may have the same name as a variable in another function.
@@ -714,3 +722,29 @@
     local array must have, and `int ary[];` is refused for the same reason a
     global one would be. An array of structs or unions is not part of the
     language yet, whether it is declared here or at the top level.
+
+54. Addresses Compared, and Files of Storage (acwj Stage 57,
+    `57_Mop_up_pt3`). Two pointers may be compared with each other, and a
+    pointer may be compared with `NULL`, which is how a pointer is asked
+    whether it points at anything:
+
+        if (a == NULL || b == NULL || c == NULL) { ... }
+
+    Each `==` binds more tightly than the `||`, which it also does when a
+    cast stands on one side of it, since a cast is written inside
+    parentheses of its own: `if ((char)x == y || z == w)` reads the way it
+    looks. The answer of a comparison is an `int` whatever the two values
+    are, so it may be printed or added to; and an integer added to a pointer
+    through `+=` or `-=` is scaled by the size of what it points at, exactly
+    as it is with `+` and `-`.
+
+    A source file of a program need not declare a function of its own: it
+    may hold the storage which the other files reach into, declaring the
+    names it needs as `extern`:
+
+        /* in one file */          /* in another file */
+        extern int shared;         int shared= 7;
+        extern int values[3];      int values[3]= { 1, 2, 3 };
+
+    The files are compiled together, so a name declared `extern` in one of
+    them is found in whichever of the others defines it.

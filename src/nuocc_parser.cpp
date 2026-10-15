@@ -37,12 +37,6 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
     while (TokenTag(token_list[i]) != T_EOF)
         GlobalDeclaration(token_list, i, program);
 
-    if (program.functions.empty())
-    {
-        std::cerr << "syntax error: the program has no function!" << std::endl;
-        std::exit(1);
-    }
-
     program.types = std::move(types_);
 
     return program;
@@ -2842,7 +2836,14 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
     AstNodePtr& right,
     const NodePtr& node)
 {
-    PrimitiveType type = left->GetType();
+    /*
+     * A comparison answers with the zero or the one which says which way it
+     * went, whatever the two values it was given are; every other operator
+     * answers with the type of its left side.
+     */
+    PrimitiveType type = IsComparisonOperator(node->GetNodeTag())
+                             ? PrimitiveType::kInt
+                             : left->GetType();
 
     switch (node->GetNodeTag())
     {
@@ -2907,18 +2908,7 @@ NodeTag Parser::TokenTag(const NodePtr& token)
 
 bool Parser::IsComparisonOperator(NodeTag tag)
 {
-    switch (tag)
-    {
-        case T_EQ:
-        case T_NE:
-        case T_LT:
-        case T_GT:
-        case T_LE:
-        case T_GE:
-            return true;
-        default:
-            return false;
-    }
+    return IsComparisonOp(tag);
 }
 
 void Parser::Match(const std::vector<NodePtr>& token_list,

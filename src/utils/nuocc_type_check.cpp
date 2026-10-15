@@ -180,7 +180,16 @@ bool ModifyType(AstNodePtr& tree,
         return ModifyIntType(tree, type, wanted);
 
     /*
-     * A pointer fits another pointer as long as it takes part in no
+     * Two addresses may be compared with each other whatever they point at,
+     * since the question is which address is the lower one and that does not
+     * depend on what stands at either of them.
+     */
+    if (IsPointerType(type) && IsPointerType(wanted) && op &&
+        IsComparisonOp(*op))
+        return true;
+
+    /*
+     * A pointer fits another pointer as long as it takes part in no other
      * operation, since pointer arithmetic is not arithmetic on the addresses
      * themselves but an offset scaled by the size of what the pointer points
      * at. A pointer to void is the one pointer which stands for any other,
