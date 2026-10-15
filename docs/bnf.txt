@@ -49,6 +49,11 @@ parameter_list: parameter
     | parameter ',' parameter_list
     ;
 
+/*
+ * A parameter holds a value, so one which is given an array holds the
+ * address of its first element and is written as a pointer; a '[' after
+ * the name is refused rather than read, with a message saying so.
+ */
 parameter: type opt_pointer identifier
     ;
 

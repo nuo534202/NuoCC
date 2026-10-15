@@ -102,13 +102,19 @@
     storage it was given held until a value is stored in each of them. An
     array may stand in a declaration beside
     other names, since each name brings its own size: `int a[2], b;`
-    declares an array and a plain variable. The address of the whole array
-    is not a value which may be stored into, so `a= p;` and `a++;` are
-    refused. One dimension is known so far; a size which is zero, is not a
-    value the compiler can work out while it is compiling the program, or
-    does not fit in memory, and an array of a type which cannot hold a value
-    such as `void a[2];` are refused. The elements may be pointers,
-    so `char *words[3]` is a row of three of them.
+    declares an array and a plain variable. What an array's name stands for
+    is a value and not a place, so it cannot be stored into, changed, or
+    asked for its own address: `a= p;`, `a++;`, `++a;` and `&a` are all
+    refused with a message saying which of them was written, while an
+    element is a place of its own, so `&a[2]`, `a[2]= 7;` and `a[2] += 7;`
+    are all taken. A parameter which is given an array is written as a
+    pointer, since what the function is given is the address of the first
+    element rather than the array, so `int sum(int *values, int count)` is
+    the way to write one. One dimension is known so far; a size which is
+    zero, is not a value the compiler can work out while it is compiling the
+    program, or does not fit in memory, and an array of a type which cannot
+    hold a value such as `void a[2];` are refused. The elements may be
+    pointers, so `char *words[3]` is a row of three of them.
 21. Character Literals. `'a'` is one character between two single quotes,
     has the value of that character's code, and has the type `char`, so it
     may be assigned to a `char` and passed to a function like any other
@@ -591,3 +597,20 @@
     may be given wherever a pointer is wanted, and that includes a function
     call: `first(word)` passes the address of the first character of `word`,
     and a function may walk it with an index, as `values[i]` does.
+
+48. Arrays and Pointers Are One Value (acwj Stage 51, `51_Arrays_pt2`). An
+    array's name stands for the address of its first element, so an array
+    and a pointer to it may be used the same way: `p= a;` stores the
+    address, `p[2]` and `a[2]` read the same element, `p[2]= 30;` writes it
+    through either name, `*(a + 1)` and `(a + 1)[0]` read the element after
+    the first, and an array may be given to a function, which takes it as a
+    pointer and may walk it with an index. A pointer may itself be pointed
+    at, so `row= &ptr;` makes `row[0][1]` the value one along from where
+    `ptr` points. What an array's name stands for is a value and not a
+    place, so what cannot be done with a place is refused: it cannot be
+    stored into (`a= p;`), changed (`a++;`, `++a;`) or asked for its own
+    address (`&a`), while an element is a place like any other, so its
+    address may be taken and it may be the target of an assignment or of a
+    compound one. An array's size is all of its elements and a pointer's is
+    its own, which `sizeof` answers with, and a parameter which is given an
+    array is written as a pointer.

@@ -1429,6 +1429,19 @@ std::vector<Symbol> Parser::FunctionParameters(
 
         std::string name = MatchIdentifier(token_list, i, "a parameter name");
 
+        /*
+         * What a function is given is the address of the array rather than
+         * the array itself, so a parameter which is an array is written as
+         * a pointer, which is what its type says.
+         */
+        if (TokenTag(token_list[i]) == T_LBracket)
+        {
+            std::cerr << "syntax error: write a parameter which is given an";
+            std::cerr << " array as a pointer, as in int *" << name << "!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
         parameters.push_back(Symbol{.name = name,
                                     .type = type.type,
                                     .composite = type.composite,
@@ -1689,6 +1702,19 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
                 return std::make_unique<AstAddressExpr>(operand);
             }
 
+            /*
+             * The name of an array already stands for the address of its
+             * first element, and there is no value which is the address of
+             * the whole array, so `&ary` is refused: only an element of it
+             * has an address of its own, as `&ary[2]` does.
+             */
+            if (IsArrayAddress(operand))
+            {
+                std::cerr << "syntax error: the address of a whole array";
+                std::cerr << " is not supported yet!" << std::endl;
+                std::exit(1);
+            }
+
             if (operand->GetAstNodeTag() != A_AstIdentifier)
             {
                 std::cerr << "syntax error: & must be followed by a";
@@ -1790,6 +1816,14 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
              * decrement needs a variable and not an expression.
              */
             AstNodePtr operand = PostfixExpression(token_list, i);
+
+            if (IsArrayAddress(operand))
+            {
+                std::cerr << "syntax error: an array cannot be changed!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
+
             if (operand->GetAstNodeTag() != A_AstIdentifier) {
                 std::cerr << "syntax error: increment and decrement need a"
                           << " standalone variable!" << std::endl;
@@ -2858,6 +2892,15 @@ bool Parser::IsRightAssociative(NodeTag tag)
     /* Every assignment, plain or compound, takes what stands on its right
      * first, so `a= b= 3` and `a += b += 3` both start at the right. */
     return tag == T_Assign || IsCompoundAssign(tag);
+}
+
+bool Parser::IsArrayAddress(const AstNodePtr& tree)
+{
+    if (tree->GetAstNodeTag() != A_AstAddress)
+        return false;
+
+    return static_cast<const AstAddress&>(*tree).GetSymbol().stype ==
+           StructuralType::kArray;
 }
 
 bool Parser::IsLvalue(AstNodeTag tag)

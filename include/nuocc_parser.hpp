@@ -588,6 +588,15 @@ private:
     static bool IsRightAssociative(NodeTag tag);
 
     /*
+     * Whether a tree is the address of an array, which is what the name of
+     * an array stands for. Such a value may be read, indexed and given to a
+     * function, but it cannot be stored into, changed, or asked for its own
+     * address, since the address of all of an array at once is no value the
+     * language has.
+     */
+    static bool IsArrayAddress(const AstNodePtr& tree);
+
+    /*
      * Whether a tree names a location which can be stored into. Only a
      * variable and the location a pointer holds can, so these are the two
      * trees which may stand on the left of an assignment.
