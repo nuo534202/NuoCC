@@ -192,6 +192,7 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
         case A_AstDeref:
         case A_AstIdentifier:
         case A_AstCast:
+        case A_AstTernary:
         case A_AstAddressExpr:
         {
             reg_idx reg = GenExpr(root);
@@ -452,6 +453,7 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
     reg_idx reg = GenExpr(condition);
 
     JumpIfZero(reg, false_label);
+    FreeRegister(reg);
 }
 
 /*
@@ -607,6 +609,8 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 
             return Cast(reg, root->GetLeft()->GetType(), root->GetType());
         }
+        case A_AstTernary:
+            return GenTernary(root);
         case A_AstStrLit:
         {
             const AstStrLit *str_lit =
@@ -783,6 +787,57 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
 }
 
 // Compute an lvalue's address without loading the value stored there.
+/*
+ * Generate the code for a ternary expression, of which only one of the two
+ * values is ever worked out:
+ *
+ *      <condition>, jumping to Lfalse when it does not hold
+ *      <the value taken when it holds>, into the register taken for it
+ *      jmp Lend
+ * Lfalse:
+ *      <the value taken when it does not hold>, into that register
+ * Lend:
+ *
+ * Whichever value is taken, the expression answers with the same register,
+ * so one is taken before either side is worked out; the side which is
+ * worked out may use every other register and its value is moved into the
+ * one taken, which the caller is given.
+ */
+reg_idx AsmCodegen::GenTernary(const AstNodePtr& root)
+{
+    const label_idx false_label = NewLabel();
+    const label_idx end_label = NewLabel();
+
+    /*
+     * The condition is a value like any other: it is worked out to say
+     * which of the two values is taken and is then thrown away.
+     */
+    GenCondition(root->GetLeft(), false_label);
+
+    /*
+     * The register is taken before either value is worked out, so that the
+     * value worked out can use every other one and is then moved into it.
+     * Nothing else is thrown away here: what the expression this stands in
+     * is holding is not the ternary's to free.
+     */
+    const reg_idx result = AllocRegister();
+
+    reg_idx value = GenExpr(root->GetMid());
+    Move(result, value);
+    FreeRegister(value);
+
+    EmitJump(end_label);
+    EmitLabel(false_label);
+
+    value = GenExpr(root->GetRight());
+    Move(result, value);
+    FreeRegister(value);
+
+    EmitLabel(end_label);
+
+    return result;
+}
+
 /*
  * Generate the code for a compound assignment, whose target holds the value
  * it is combined with:

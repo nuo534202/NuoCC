@@ -327,12 +327,24 @@ expression: assignment_expression
  * to the right. `=` stores the value as it stands, while `+=`, `-=`, `*=`
  * and `/=` combine it with the value the target holds.
  */
-assignment_expression: logical_or_expression
+assignment_expression: conditional_expression
     | lvalue '=' assignment_expression
     | lvalue '+=' assignment_expression
     | lvalue '-=' assignment_expression
     | lvalue '*=' assignment_expression
     | lvalue '/=' assignment_expression
+    ;
+
+/*
+ * The condition is worked out first and only the value it chooses is worked
+ * out at all: `x= 1 ? 5 : counted();` never calls counted(). The two values
+ * have to be of one type, and an expression whose two values answer with
+ * nothing is one of those itself. The operator binds more loosely than
+ * every operator but the assignments, and to the right, so the '?' of
+ * `a ? b : c ? d : e` belongs to the value taken when a does not hold.
+ */
+conditional_expression: logical_or_expression
+    | logical_or_expression '?' expression ':' expression
     ;
 
 lvalue: identifier

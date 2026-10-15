@@ -80,6 +80,13 @@ protected:
                          PrimitiveType new_type) = 0;
     virtual reg_idx Scale(reg_idx reg, int32 scale) = 0;
 
+    /*
+     * Copy the value of one register into another, which is how a ternary
+     * expression leaves whichever of its two values it took in the one
+     * register it answers with. Both registers stay in use.
+     */
+    virtual void Move(reg_idx dest, reg_idx src) = 0;
+
     /* The unary operations, each of them on the value in one register. */
     virtual reg_idx Negate(reg_idx reg) = 0;
     virtual reg_idx Invert(reg_idx reg) = 0;
@@ -176,6 +183,7 @@ protected:
     void GenWhile(const AstNodePtr& root);
     void GenFor(const AstNodePtr& root);
     void GenSwitch(const AstNodePtr& root);
+    reg_idx GenTernary(const AstNodePtr& root);
     void GenCondition(const AstNodePtr& condition, label_idx false_label);
     reg_idx GenExpr(const AstNodePtr& root);
     reg_idx GenCall(const AstNodePtr& root);

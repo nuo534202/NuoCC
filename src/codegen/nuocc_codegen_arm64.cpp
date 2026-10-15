@@ -423,6 +423,12 @@ reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg2;
 }
 
+void Arm64Codegen::Move(reg_idx dest, reg_idx src)
+{
+    ofs_ << "\tmov\t" << xreg_list_[dest] << ", " << xreg_list_[src];
+    ofs_ << std::endl;
+}
+
 reg_idx Arm64Codegen::Negate(reg_idx reg)
 {
     ofs_ << "\tneg\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
@@ -600,7 +606,11 @@ void Arm64Codegen::CompareAndJump(NodeTag op_type,
     ofs_ << std::endl;
     ofs_ << "\tb." << it->second.inverse << "\tL" << label << std::endl;
 
-    FreeAllRegister();
+    /* The comparison is a jump and answers with nothing, so both values it
+     * was given are done with. Only those two are freed: what the rest of
+     * the expression holds is not this comparison's to throw away. */
+    FreeRegister(reg1);
+    FreeRegister(reg2);
 }
 
 /*

@@ -436,6 +436,23 @@ public:
 };
 
 /*
+ * A ternary expression, whose three parts are the condition, the value
+ * taken when the condition holds and the value taken when it does not.
+ * Only one of the two values is ever worked out, which is what sets this
+ * apart from every other expression.
+ */
+class AstTernary : public AstNode
+{
+public:
+    AstTernary(AstNodePtr& condition,
+               AstNodePtr& when_true,
+               AstNodePtr& when_false,
+               PrimitiveType type,
+               const std::shared_ptr<CompositeType>& composite);
+    ~AstTernary() = default;
+};
+
+/*
  * The value of the left child, taken as another type. Nothing has to happen
  * to the value itself: the type says how it is read, stored and worked with
  * from this point on, and how much of it the new type keeps.

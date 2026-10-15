@@ -368,6 +368,12 @@ reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+void X86Codegen::Move(reg_idx dest, reg_idx src)
+{
+    ofs_ << "\tmovq\t" << reg_list_[src] << ", " << reg_list_[dest];
+    ofs_ << std::endl;
+}
+
 reg_idx X86Codegen::Negate(reg_idx reg)
 {
     ofs_ << "\tnegq\t" << reg_list_[reg] << std::endl;
@@ -580,7 +586,11 @@ void X86Codegen::CompareAndJump(NodeTag op_type,
     ofs_ << reg_list_[reg1] << std::endl;
     ofs_ << "\t" << it->second.jump << "\tL" << label << std::endl;
 
-    FreeAllRegister();
+    /* The comparison is a jump and answers with nothing, so both values it
+     * was given are done with. Only those two are freed: what the rest of
+     * the expression holds is not this comparison's to throw away. */
+    FreeRegister(reg1);
+    FreeRegister(reg2);
 }
 
 /*

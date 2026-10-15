@@ -1520,6 +1520,25 @@ AstNodePtr Parser::BinaryExpression(
            (IsRightAssociative(TokenTag(token_list[i])) &&
             GetOpPrecedence(TokenTag(token_list[i])) == ptp))
     {
+        /*
+         * `?` is not a binary operator: what follows it is the value taken
+         * when what came before it holds, a ':' and the value taken when it
+         * does not. Both values are worked out from here, so that the one
+         * which is not taken never runs.
+         */
+        if (TokenTag(token_list[i]) == T_Question)
+        {
+            i++;    /* step over '?' */
+
+            AstNodePtr when_true = BinaryExpression(token_list, i, 0);
+            Match(token_list, i, T_Colon, ":");
+            AstNodePtr when_false = BinaryExpression(token_list, i, 0);
+
+            left = MakeTernary(left, when_true, when_false);
+
+            continue;
+        }
+
         idx_t op_idx = i;
         uint8 op_prec = GetOpPrecedence(TokenTag(token_list[op_idx]));
 
@@ -2654,6 +2673,48 @@ AstNodePtr Parser::MakeIntLitLeaf(int32 value, PrimitiveType type)
     return std::make_unique<AstIntLit>(left, right, value, type);
 }
 
+/*
+ * Build a ternary expression out of the condition and the two values it
+ * chooses between. Only one of the two is worked out when the program
+ * runs, so both have to be of the type the expression answers with: each
+ * is tried against the other the way the two sides of an operator are, and
+ * whichever can be made to fit the other says what type the expression is.
+ */
+AstNodePtr Parser::MakeTernary(AstNodePtr& condition,
+    AstNodePtr& when_true,
+    AstNodePtr& when_false)
+{
+    TypeRef type{.type = when_true->GetType(),
+                 .composite = when_true->GetComposite()};
+
+    /*
+     * An expression whose two values are calls which answer with nothing is
+     * one of those itself: there is no value for the two to agree about.
+     */
+    if (type.type == PrimitiveType::kVoid &&
+        when_false->GetType() == PrimitiveType::kVoid)
+        return std::make_unique<AstTernary>(condition, when_true, when_false,
+                                            PrimitiveType::kVoid, nullptr);
+
+    if (!ModifyType(when_false, type, std::nullopt))
+    {
+        TypeRef other{.type = when_false->GetType(),
+                      .composite = when_false->GetComposite()};
+
+        if (!ModifyType(when_true, other, std::nullopt))
+        {
+            std::cerr << "syntax error: the two values of a ternary";
+            std::cerr << " expression have to be of one type!" << std::endl;
+            std::exit(1);
+        }
+
+        type = other;
+    }
+
+    return std::make_unique<AstTernary>(condition, when_true, when_false,
+                                        type.type, type.composite);
+}
+
 AstNodePtr Parser::MakeIdentLeaf(const Symbol& symbol)
 {
     AstNodePtr left = nullptr;
@@ -2846,6 +2907,8 @@ const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
     {T_Assign, 10},
     {T_PlusAssign, 10}, {T_MinusAssign, 10},
     {T_StarAssign, 10}, {T_SlashAssign, 10},
+
+    {T_Question, 15},
 
     {T_LogOr, 20},
 

@@ -29,6 +29,7 @@ typedef enum NodeTag
     T_MinusAssign,
     T_StarAssign,
     T_SlashAssign,
+    T_Question,
 
     /* Comparison Operator */
     T_EQ,
@@ -119,7 +120,8 @@ typedef enum AstNodeTag
     A_AstContinue,
     A_AstSwitch,
     A_AstCase,
-    A_AstCast
+    A_AstCast,
+    A_AstTernary
 } AstNodeTag;
 
 /*

@@ -555,3 +555,21 @@
     a function whose value lives on between calls to it, is not part of the
     language: a name declared static has to be declared where the whole
     file can be seen.
+
+46. The Ternary Operator (acwj Stage 49, `49_Ternary`). `condition ? a : b`
+    works out the condition and then only the value it chooses, so `x= 1 ?
+    5 : counted();` stores 5 and never calls `counted()`. It is an
+    expression like any other, so it may stand inside a larger one, as
+    `print 23 * (1 ? 3 : 4) - 18;` does, and both of its values are worked
+    out from the place it stands, so a call may be written on either side
+    without parentheses.
+
+    It binds more loosely than every operator but the assignments, and to
+    the right: `a ? b : c ? d : e` reads the second `?` as part of the value
+    taken when `a` does not hold, so the two conditions choose between three
+    values. The two values have to be of one type, and the wider of the two
+    is the type of the whole expression, so `0 ? 'a' : 4000` is 4000; an
+    expression whose two values are calls which answer with nothing is one
+    of those itself, so `flag ? printint(1) : printint(2);` may be written
+    as a statement. A number where a pointer is wanted is refused, since the
+    two values cannot be made to agree.

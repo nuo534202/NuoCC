@@ -173,6 +173,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Static:
             out = "static";
             break;
+        case T_Question:
+            out = "?";
+            break;
         case T_Identifier:
             out = "Identifier";
             break;
@@ -346,6 +349,8 @@ std::string DescribeNode(const AstNode& node)
         case A_AstCast:
             return "cast to " +
                    TypeName(type, node.GetComposite());
+        case A_AstTernary:
+            return "ternary : " + TypeName(type, node.GetComposite());
         case A_AstCase:
         {
             const AstCase *ast_case = static_cast<const AstCase*>(&node);

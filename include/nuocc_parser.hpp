@@ -554,6 +554,14 @@ private:
     AstNodePtr MakeIntLitLeaf(const NodePtr& token, PrimitiveType type);
     AstNodePtr MakeIntLitLeaf(int32 value, PrimitiveType type);
     AstNodePtr MakeIdentLeaf(const Symbol& symbol);
+
+    /*
+     * Build a ternary expression out of the condition and the two values it
+     * chooses between, making the two agree on a type.
+     */
+    AstNodePtr MakeTernary(AstNodePtr& condition,
+                           AstNodePtr& when_true,
+                           AstNodePtr& when_false);
     AstNodePtr MakeOperatorNode(AstNodePtr& left,
                                 AstNodePtr& right,
                                 const NodePtr& node);

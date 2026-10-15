@@ -353,6 +353,17 @@ AstAddressExpr::AstAddressExpr(AstNodePtr& lvalue)
     SetComposite(GetLeft()->GetComposite());
 }
 
+/* AstTernary */
+AstTernary::AstTernary(AstNodePtr& condition,
+    AstNodePtr& when_true,
+    AstNodePtr& when_false,
+    PrimitiveType type,
+    const std::shared_ptr<CompositeType>& composite)
+    : AstNode(A_AstTernary, type, condition, when_true, when_false)
+{
+    SetComposite(composite);
+}
+
 /* AstCast */
 AstCast::AstCast(AstNodePtr& expression, const TypeRef& type)
     : AstNode(A_AstCast, type.type, expression)

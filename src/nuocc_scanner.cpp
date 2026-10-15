@@ -398,6 +398,7 @@ void Scanner::CommitToken(const std::string& token)
         case T_MinusAssign:
         case T_StarAssign:
         case T_SlashAssign:
+        case T_Question:
             token_node = std::make_unique<Node>(nodetag);
             break;
 
@@ -552,7 +553,7 @@ const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'(', T_LParen}, {')', T_RParen},
     {'[', T_LBracket}, {']', T_RBracket}, {'.', T_Dot},
     {'&', T_Amper}, {'|', T_Or}, {'^', T_Xor},
-    {'~', T_Invert}, {'!', T_LogNot}
+    {'~', T_Invert}, {'!', T_LogNot}, {'?', T_Question}
 };
 
 const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
@@ -566,7 +567,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
 
 const std::unordered_set<char> Scanner::kAlphabet = {
     '+', '-', '*', '/', '=', ';', ',', ':', '_', '.',
-    '<', '>', '!', '{', '}', '(', ')', '[', ']', '&', '|', '^', '~',
+    '<', '>', '!', '{', '}', '(', ')', '[', ']', '&', '|', '^', '~', '?',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 

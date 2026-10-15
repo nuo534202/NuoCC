@@ -48,6 +48,7 @@ protected:
                  PrimitiveType old_type,
                  PrimitiveType new_type) override;
     reg_idx Scale(reg_idx reg, int32 scale) override;
+    void Move(reg_idx dest, reg_idx src) override;
 
     reg_idx Negate(reg_idx reg) override;
     reg_idx Invert(reg_idx reg) override;
