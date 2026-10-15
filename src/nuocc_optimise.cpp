@@ -61,6 +61,22 @@ bool FoldBinary(NodeTag op_type, int64 left, int64 right, int64& value)
 
             value = left / right;
             return true;
+        case T_Percent:
+            /* Much as a division by nothing, a remainder of nothing has to
+             * be left for the program to fail over. */
+            if (right == 0)
+                return false;
+
+            /*
+             * The one remainder which does not fit the type it is worked out
+             * at is left alone as well, since the machine answers that one
+             * in a way of its own.
+             */
+            if (left == std::numeric_limits<int32>::min() && right == -1)
+                return false;
+
+            value = left % right;
+            return true;
         case T_Amper:
             value = left & right;
             return true;

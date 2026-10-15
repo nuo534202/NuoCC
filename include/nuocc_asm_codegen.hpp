@@ -71,6 +71,13 @@ protected:
     virtual reg_idx Sub(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Mul(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Div(reg_idx reg1, reg_idx reg2) = 0;
+
+    /*
+     * What is left of the first value once the second has been taken from
+     * it as many whole times as it holds. A division by zero is left to
+     * the machine, which is where the program is stopped for it.
+     */
+    virtual reg_idx Mod(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx And(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Or(reg_idx reg1, reg_idx reg2) = 0;
     virtual reg_idx Xor(reg_idx reg1, reg_idx reg2) = 0;

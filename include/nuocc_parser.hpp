@@ -602,6 +602,13 @@ private:
     static bool IsTestable(const AstNodePtr& tree);
 
     /*
+     * How far an increment or a decrement moves a value: one for a number,
+     * and the room one value of what it points at takes for a pointer, so
+     * that `p++` moves on to the next value rather than to the next byte.
+     */
+    int32 IncrementStep(const Symbol& symbol, bool increment) const;
+
+    /*
      * Stop unless the value an increment or a decrement is written on is the
      * name of a variable, which is the only thing the new value can be put
      * back into. An array's name and an increment are both refused, each

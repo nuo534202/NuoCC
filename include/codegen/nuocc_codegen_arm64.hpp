@@ -43,6 +43,7 @@ protected:
     reg_idx Sub(reg_idx reg1, reg_idx reg2) override;
     reg_idx Mul(reg_idx reg1, reg_idx reg2) override;
     reg_idx Div(reg_idx reg1, reg_idx reg2) override;
+    reg_idx Mod(reg_idx reg1, reg_idx reg2) override;
     reg_idx And(reg_idx reg1, reg_idx reg2) override;
     reg_idx Or(reg_idx reg1, reg_idx reg2) override;
     reg_idx Xor(reg_idx reg1, reg_idx reg2) override;

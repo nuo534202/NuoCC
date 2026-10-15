@@ -33,6 +33,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Slash:
             out = "/";
             break;
+        case T_Percent:
+            out = "%";
+            break;
         case T_Assign:
             out = "=";
             break;
@@ -80,6 +83,9 @@ std::string NodeTagToString(const NodeTag& tag)
             break;
         case T_SlashAssign:
             out = "/=";
+            break;
+        case T_PercentAssign:
+            out = "%=";
             break;
         case T_EQ:
             out = "==";

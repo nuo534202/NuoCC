@@ -448,6 +448,27 @@ reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+reg_idx Arm64Codegen::Mod(reg_idx reg1, reg_idx reg2)
+{
+    /*
+     * The remainder is what the division throws away, so the quotient is
+     * worked out in a register of its own and taken away from the first
+     * value as many times as the second holds.
+     */
+    reg_idx quotient = AllocRegister();
+
+    ofs_ << "\tsdiv\t" << xreg_list_[quotient] << ", " << xreg_list_[reg1];
+    ofs_ << ", " << xreg_list_[reg2] << std::endl;
+    ofs_ << "\tmsub\t" << xreg_list_[reg1] << ", " << xreg_list_[quotient];
+    ofs_ << ", " << xreg_list_[reg2] << ", " << xreg_list_[reg1];
+    ofs_ << std::endl;
+
+    FreeRegister(quotient);
+    FreeRegister(reg2);
+
+    return reg1;
+}
+
 void Arm64Codegen::Move(reg_idx dest, reg_idx src)
 {
     ofs_ << "\tmov\t" << xreg_list_[dest] << ", " << xreg_list_[src];

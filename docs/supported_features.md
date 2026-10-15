@@ -5,9 +5,13 @@
    0 to 255, an `int` four bytes and a `long` eight. A narrower value is
    widened where the types are mixed; a value which would have to be
    narrowed to fit its target is refused.
-2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division.
-   A `-` written before a value negates it; a `char` is widened to an `int`
-   first, as an unsigned value has no negative one.
+2. Arithmetic Operations: Addition, Subtraction, Multiplication, Division
+   and the Remainder `%`, which is what is left of the first value once the
+   second has been taken from it as many whole times as it holds, so
+   `24 % 9` is 6. The remainder of a negative value follows the value it is
+   taken from, so `-24 % 9` is -6. A `-` written before a value negates it;
+   a `char` is widened to an `int` first, as an unsigned value has no
+   negative one.
 3. Bitwise Operations: And `&`, Or `|`, Xor `^`, Not `~`, Shift Left `<<`
    and Shift Right `>>`. A shift of a negative value fills the top bits in
    with zeroes.
@@ -28,9 +32,12 @@
 6. Increment and Decrement: `++` and `--`, written before a variable or
    after it. `++x` yields the value the variable holds afterwards and `x++`
    the value it held before, and both leave the variable changed by one.
-   The value has to go back somewhere, so the operator takes the name of a
-   variable and not a location: `++b[2]` has to wait for an increment
-   which can be given a place rather than a name.
+   A pointer is changed by the room one value of what it points at takes
+   rather than by one byte, so `p++` moves on to the next value of the type
+   `p` points at, whatever size that value is. The value has to go back
+   somewhere, so the operator takes the name of a variable and not a
+   location: `++b[2]` has to wait for an increment which can be given a
+   place rather than a name.
 7. Taking the Address of a variable with `&`, and reading or writing
    through a pointer with `*`. A pointer may be the target of an
    assignment: `*y= 14;` stores into the location `y` points at, and only
@@ -82,7 +89,10 @@
     type `p` points at and not by two bytes. Two pointers may be compared
     with each other whatever they point at, since the question is which
     address is the lower one, and that is how a pointer is asked whether it
-    points at anything: `if (p != NULL) ...`. Nothing else may be done with
+    points at anything: `if (p != NULL) ...`. An increment or a decrement of
+    a pointer moves on by one value of what it points at as well, so
+    `p++`, `++p`, `p += 1` and `p= p + 1` all move an `int *` on by four
+    bytes. Nothing else may be done with
     a pointer: it cannot be multiplied or divided yet, and the address it
     holds cannot be printed.
 16. Function-local Variables. Variables declared inside a function are
@@ -748,3 +758,19 @@
 
     The files are compiled together, so a name declared `extern` in one of
     them is found in whichever of the others defines it.
+
+55. Pointer Increments, and the Remainder (acwj Stage 58,
+    `58_Ptr_Increments`). An increment or a decrement of a pointer moves on
+    to the next value of the type it points at, whether it is written before
+    or after the name and whether the value it yields is the new one or the
+    old: `p++`, `++p`, `p--` and `--p` all step by the room one value takes,
+    so `*(p++)` reads the value the pointer stood at and then moves it on,
+    and a `char *` steps by one byte where an `int *` steps by four.
+
+    The remainder `%` answers with what is left of its first value once the
+    second has been taken from it as many whole times as it holds: `24 % 9`
+    is 6 and `31 % 11` is 9. `%=` stores that answer where the first value
+    stands, as the other compound assignments do. The remainder binds as
+    tightly as `*` and `/`, so `2 + 24 % 9 * 2` is 14, and it is only taken
+    of numbers: the remainder of one address by another is refused, as is a
+    remainder of nothing, which the machine is left to stop the program for.

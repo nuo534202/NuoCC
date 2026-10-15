@@ -386,6 +386,19 @@ reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
+reg_idx X86Codegen::Mod(reg_idx reg1, reg_idx reg2)
+{
+    /* idivq leaves the quotient in %rax and what is left over in %rdx. */
+    ofs_ << "\tmovq\t" << reg_list_[reg1] << ", %rax" << std::endl;
+    ofs_ << "\tcqo" << std::endl;
+    ofs_ << "\tidivq\t" << reg_list_[reg2] << std::endl;
+    ofs_ << "\tmovq\t%rdx, " << reg_list_[reg1] << std::endl;
+
+    FreeRegister(reg2);
+
+    return reg1;
+}
+
 void X86Codegen::Move(reg_idx dest, reg_idx src)
 {
     ofs_ << "\tmovq\t" << reg_list_[src] << ", " << reg_list_[dest];

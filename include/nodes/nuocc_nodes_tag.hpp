@@ -13,6 +13,7 @@ typedef enum NodeTag
     T_Minus,
     T_Star,
     T_Slash,
+    T_Percent,
     T_Assign,
     T_Amper,
     T_LogAnd,
@@ -29,6 +30,7 @@ typedef enum NodeTag
     T_MinusAssign,
     T_StarAssign,
     T_SlashAssign,
+    T_PercentAssign,
     T_Question,
 
     /* Comparison Operator */
@@ -144,7 +146,8 @@ inline bool IsComparisonOp(NodeTag tag)
 inline bool IsCompoundAssign(NodeTag tag)
 {
     return tag == T_PlusAssign || tag == T_MinusAssign ||
-           tag == T_StarAssign || tag == T_SlashAssign;
+           tag == T_StarAssign || tag == T_SlashAssign ||
+           tag == T_PercentAssign;
 }
 
 /*
@@ -165,6 +168,8 @@ inline NodeTag CompoundAssignOperator(NodeTag tag)
             return T_Star;
         case T_SlashAssign:
             return T_Slash;
+        case T_PercentAssign:
+            return T_Percent;
         default:
             return tag;
     }

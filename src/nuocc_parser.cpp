@@ -1893,8 +1893,8 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
                 std::exit(1);
             }
 
-            return std::make_unique<AstIncDec>(symbol, increment ? 1 : -1,
-                                               false);
+            return std::make_unique<AstIncDec>(
+                symbol, IncrementStep(symbol, increment), false);
         }
         default:
             return PostfixExpression(token_list, i);
@@ -2059,9 +2059,8 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
                     std::exit(1);
                 }
 
-                return std::make_unique<AstIncDec>(symbol,
-                                                   increment ? 1 : -1,
-                                                   true);
+                return std::make_unique<AstIncDec>(
+                    symbol, IncrementStep(symbol, increment), true);
             }
 
             return MakeIdentLeaf(symbol);
@@ -2851,6 +2850,7 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_Minus:
         case T_Star:
         case T_Slash:
+        case T_Percent:
         case T_EQ:
         case T_NE:
         case T_LT:
@@ -2869,6 +2869,7 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_MinusAssign:
         case T_StarAssign:
         case T_SlashAssign:
+        case T_PercentAssign:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag(), type);
         default:
@@ -3009,6 +3010,16 @@ bool Parser::IsTestable(const AstNodePtr& tree)
     return IsIntType(tree->GetType()) || IsPointerType(tree->GetType());
 }
 
+int32 Parser::IncrementStep(const Symbol& symbol, bool increment) const
+{
+    int32 step = 1;
+
+    if (IsPointerType(symbol.type))
+        step = PrimitiveSize(ValueAt(symbol.type));
+
+    return increment ? step : -step;
+}
+
 void Parser::CheckIncrementable(const AstNodePtr& operand) const
 {
     /* The name of a variable is what the new value goes back into, so
@@ -3109,7 +3120,7 @@ int32 Parser::AllocateLocal(int32 size, int32 alignment)
 const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
     {T_Assign, 10},
     {T_PlusAssign, 10}, {T_MinusAssign, 10},
-    {T_StarAssign, 10}, {T_SlashAssign, 10},
+    {T_StarAssign, 10}, {T_SlashAssign, 10}, {T_PercentAssign, 10},
 
     {T_Question, 15},
 
@@ -3131,7 +3142,7 @@ const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
 
     {T_Plus, 100}, {T_Minus, 100},
 
-    {T_Star, 110}, {T_Slash, 110}
+    {T_Star, 110}, {T_Slash, 110}, {T_Percent, 110}
 };
 
 }   /* namespace nuocc */

@@ -368,6 +368,7 @@ void Scanner::CommitToken(const std::string& token)
         case T_Minus:
         case T_Star:
         case T_Slash:
+        case T_Percent:
         case T_Assign:
         case T_Semicolon:
         case T_EQ:
@@ -401,6 +402,7 @@ void Scanner::CommitToken(const std::string& token)
         case T_MinusAssign:
         case T_StarAssign:
         case T_SlashAssign:
+        case T_PercentAssign:
         case T_Question:
             token_node = std::make_unique<Node>(nodetag);
             break;
@@ -550,6 +552,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
  */
 const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'+', T_Plus}, {'-', T_Minus}, {'*', T_Star}, {'/', T_Slash},
+    {'%', T_Percent},
     {'=', T_Assign}, {';', T_Semicolon}, {',', T_Comma}, {':', T_Colon},
     {'<', T_LT}, {'>', T_GT},
     {'{', T_LBrace}, {'}', T_RBrace},
@@ -565,11 +568,12 @@ const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
     {"&&", T_LogAnd}, {"||", T_LogOr},
     {"++", T_Inc}, {"--", T_Dec}, {"->", T_Arrow},
     {"+=", T_PlusAssign}, {"-=", T_MinusAssign},
-    {"*=", T_StarAssign}, {"/=", T_SlashAssign}
+    {"*=", T_StarAssign}, {"/=", T_SlashAssign},
+    {"%=", T_PercentAssign}
 };
 
 const std::unordered_set<char> Scanner::kAlphabet = {
-    '+', '-', '*', '/', '=', ';', ',', ':', '_', '.',
+    '+', '-', '*', '/', '%', '=', ';', ',', ':', '_', '.',
     '<', '>', '!', '{', '}', '(', ')', '[', ']', '&', '|', '^', '~', '?',
 
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',

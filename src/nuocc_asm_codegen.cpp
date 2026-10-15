@@ -1010,6 +1010,8 @@ reg_idx AsmCodegen::GenOperator(NodeTag op_type,
             return Mul(left_reg, right_reg);
         case T_Slash:
             return Div(left_reg, right_reg);
+        case T_Percent:
+            return Mod(left_reg, right_reg);
         case T_Amper:
             return And(left_reg, right_reg);
         case T_Or:
