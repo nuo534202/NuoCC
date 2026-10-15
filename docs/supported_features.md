@@ -791,3 +791,20 @@
     operation it takes part in: a negative number compares as a negative
     one, and what a cast leaves behind is read back as a number of the new
     type rather than as its bits alone.
+
+57. Values Held Inside an Expression (acwj Stage 60, `60_TripleTest`). A
+    value which has been worked out as part of an expression keeps its
+    place until it is used, however many operations stand around it: only
+    the end of a statement throws away what the statement was holding. A
+    target and the expression on the right of a compound assignment may
+    therefore both be held at once, and that expression may itself hold a
+    comparison, a ternary expression, a call or a logical operation
+    without disturbing the values the rest of the statement is keeping:
+
+        total += (fred > 0 && jim > 0) ? add(fred, jim) : 0;
+        k += (jim > 4) ? fred : jim;
+
+    Where a value goes when there is no register left to hold it, and when
+    it comes back, is what item 51 describes; this item is about the values
+    which are in registers still, which nothing else in the same statement
+    may take away from the expression which is holding them.
