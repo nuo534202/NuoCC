@@ -20,6 +20,11 @@ void SymbolTable::AddSymbol(const Symbol& symbol)
     symbols_.push_back(symbol);
 }
 
+const std::vector<Symbol>& SymbolTable::GetSymbols() const
+{
+    return symbols_;
+}
+
 bool SymbolTable::UpdateSymbol(const Symbol& symbol)
 {
     for (auto it = symbols_.rbegin(); it != symbols_.rend(); ++it)

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "nodes/nuocc_ast_nodes.hpp"
@@ -467,7 +468,114 @@ void PrintNode(const AstNodePtr& node, int32 depth)
     PrintNode(node->GetRight(), depth + 1);
 }
 
+/*
+ * Where the storage of a name is, and who may reach it: a name declared
+ * static is put in the storage of its own file like any other global one,
+ * which is what sets the two apart.
+ */
+std::string StorageName(const Symbol& symbol)
+{
+    switch (symbol.storage)
+    {
+        case StorageClass::kLocal:
+            return "local";
+        case StorageClass::kMember:
+            return "member";
+        case StorageClass::kExtern:
+            return "extern";
+        default:
+            return symbol.is_static ? "static" : "global";
+    }
+}
+
+/* One of the values a name starts with, as it was written down. */
+std::string InitialValueText(const InitialValue& value)
+{
+    if (const std::string *text = std::get_if<std::string>(&value))
+        return "\"" + *text + "\"";
+
+    return std::to_string(std::get<int32>(value));
+}
+
+/* Every value a name starts with, which is one value for a scalar, or as
+ * many as were written between the braces for an array. */
+std::string InitialValuesText(const Symbol& symbol)
+{
+    std::string out;
+
+    for (idx_t k = 0; k < symbol.initial_values.size(); k++)
+    {
+        if (k > 0)
+            out += ", ";
+
+        out += InitialValueText(symbol.initial_values[k]);
+    }
+
+    return out;
+}
+
 }   /* namespace */
+
+void PrintSymbolTable(const SymbolTable& table, const std::string& source)
+{
+    std::cout << "Symbols of " << source << std::endl;
+    std::cout << "-----------------" << std::endl;
+
+    for (const Symbol& symbol : table.GetSymbols())
+    {
+        switch (symbol.stype)
+        {
+            case StructuralType::kFunction:
+            {
+                std::cout << "  ";
+                std::cout << TypeName(symbol.type, symbol.composite);
+                std::cout << " " << symbol.name << "(";
+
+                for (idx_t k = 0; k < symbol.parameter_types.size(); k++)
+                {
+                    if (k > 0)
+                        std::cout << ", ";
+
+                    std::cout << TypeName(symbol.parameter_types[k].type,
+                                          symbol.parameter_types[k].composite);
+                }
+
+                std::cout << "): function";
+                std::cout << (symbol.has_body ? ", defined" : ", prototype");
+                std::cout << std::endl;
+                break;
+            }
+
+            case StructuralType::kTypedef:
+                std::cout << "  " << symbol.name << ": typedef of ";
+                std::cout << TypeName(symbol.type, symbol.composite);
+                std::cout << std::endl;
+                break;
+
+            case StructuralType::kEnumValue:
+                std::cout << "  " << symbol.name << ": enum value ";
+                std::cout << symbol.enum_value << std::endl;
+                break;
+
+            default:
+                std::cout << "  ";
+                std::cout << TypeName(symbol.type, symbol.composite);
+                std::cout << " " << symbol.name;
+
+                if (symbol.stype == StructuralType::kArray)
+                    std::cout << "[" << symbol.element_count << "]";
+
+                std::cout << ": " << StorageName(symbol);
+                std::cout << ", " << SymbolStorageSize(symbol) << " bytes";
+
+                if (!symbol.initial_values.empty())
+                    std::cout << ", starts at " << InitialValuesText(symbol);
+
+                std::cout << std::endl;
+                break;
+        }
+    }
+}
 
 void PrintSyntaxTree(const Program& program)
 {

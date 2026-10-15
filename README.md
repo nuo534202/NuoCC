@@ -27,6 +27,7 @@ and which is linked in as well.
 | `-S` | stops at an assembly file for each input file, and does not link |
 | `-v` | prints each stage and the command it runs |
 | `-T` | prints the tokens and the syntax tree of each input file |
+| `-M` | prints the names each input file declared |
 
 Several source files may be named at once, and they are linked together:
 

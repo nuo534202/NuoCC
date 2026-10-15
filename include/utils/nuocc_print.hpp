@@ -6,6 +6,7 @@
 #include "nodes/nuocc_nodes_tag.hpp"
 #include "nodes/nuocc_scanner_nodes.hpp"
 #include "nuocc_scanner.hpp"
+#include "utils/nuocc_symbol_table.hpp"
 #include "utils/nuocc_types.hpp"
 
 namespace nuocc
@@ -31,5 +32,13 @@ void PrintTokenList(const Scanner& scanner);
  * each function, the same order the code generator walks them in.
  */
 void PrintSyntaxTree(const Program& program);
+
+/*
+ * Print every name the symbol table holds, which is what the -M flag asks
+ * for. The names are printed after the whole file has been read, so the
+ * table holds the globals, the functions, the typedefs and the enum values
+ * the file declared, and none of the locals of any of its functions.
+ */
+void PrintSymbolTable(const SymbolTable& table, const std::string& source);
 
 }   /* namespace nuocc */

@@ -48,6 +48,11 @@ Program Parser::Parse(const std::vector<NodePtr>& token_list)
     return program;
 }
 
+const SymbolTable& Parser::GetSymbolTable() const
+{
+    return symbol_table_;
+}
+
 /*
  * global_declaration: function_declaration | var_declaration  ;
  */
@@ -815,6 +820,14 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
             {
                 declared.symbol.initial_values.push_back(
                     ParseConstantValue(type, token_list, i));
+
+                /*
+                 * The name was declared before the value was read, so that
+                 * the value could name the variables before it; what the
+                 * name is declared with is put in the table once the value
+                 * is known, which is what the dump of the table reads.
+                 */
+                symbol_table_.UpdateSymbol(declared.symbol);
             }
             else
             {

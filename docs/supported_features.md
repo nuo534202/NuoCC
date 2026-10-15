@@ -144,17 +144,20 @@
     function which already has one is refused. The parameter names of a
     prototype are only placeholders, since it is the definition which
     gives them to the body.
-25. Compiler Command Line. `nuocc [-vcST] [-o outfile] file [file ...]`
+25. Compiler Command Line. `nuocc [-vcSTM] [-o outfile] file [file ...]`
     compiles one or more source files. Unless `-c` or `-S` says to stop
     earlier, it also assembles what it generated and links the result into
     an executable, which is `a.out` or the file `-o` names; the runtime in
     `lib` is linked in with it, since that is where `printint()` and
     `printchar()` live. `-c` stops at one object file per input file, `-S`
     stops at one assembly file, `-v` prints each stage and the command it
-    runs, and `-T` prints the tokens and the syntax tree of every input
-    file. What a compilation produces is written where the compiler is
-    run, named after the input file, and the object files made on the way
-    to an executable are removed once it has been linked.
+    runs, `-T` prints the tokens and the syntax tree of every input file,
+    and `-M` prints the names that file declared: the globals with the
+    values they start with, the functions with the types they take, the
+    typedefs and the enum values, each with the size it takes in bytes.
+    What a compilation produces is written where the compiler is run, named
+    after the input file, and the object files made on the way to an
+    executable are removed once it has been linked.
 26. Pointers at Any Depth. A type records how many levels of pointer it
     has, so a `char **` is as ordinary a type as a `char *`: it may be
     declared, assigned, passed to a function, held in an array and read
@@ -573,3 +576,18 @@
     of those itself, so `flag ? printint(1) : printint(2);` may be written
     as a statement. A number where a pointer is wanted is refused, since the
     two values cannot be made to agree.
+
+47. Consecutive Cases, and Arrays as Arguments (acwj Stage 50,
+    `50_Mop_up_pt1`). A `case` may be written with nothing after it, in
+    which case it falls into the case written below it, so several values
+    may share one body:
+
+        case 1:
+        case 2:
+            result= 10;
+            break;
+
+    The name of an array stands for the address of its first element, so it
+    may be given wherever a pointer is wanted, and that includes a function
+    call: `first(word)` passes the address of the first character of `word`,
+    and a function may walk it with an index, as `values[i]` does.

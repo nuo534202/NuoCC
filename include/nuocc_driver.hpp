@@ -29,6 +29,8 @@ private:
         bool verbose = false;
         /* -T, print the tokens and the tree of each input file. */
         bool dump = false;
+        /* -M, print the names each input file declared. */
+        bool symbols = false;
         /* -c, assemble the input files but do not link them. */
         bool assemble = false;
         /* Whether to link the object files into an executable. */

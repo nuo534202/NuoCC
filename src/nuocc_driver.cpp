@@ -101,7 +101,7 @@ std::string ReplaceSuffix(const std::string& path, const std::string& suffix)
 
 void Driver::Usage(const char* program) const
 {
-    std::cerr << "Usage: " << program << " [-vcST] [-o outfile] file ...";
+    std::cerr << "Usage: " << program << " [-vcSTM] [-o outfile] file ...";
     std::cerr << std::endl;
     std::cerr << "       -v give verbose output of the compilation stages";
     std::cerr << std::endl;
@@ -110,6 +110,8 @@ void Driver::Usage(const char* program) const
     std::cerr << "       -S generate assembly files but do not link them";
     std::cerr << std::endl;
     std::cerr << "       -T dump the tokens and the tree of each input file";
+    std::cerr << std::endl;
+    std::cerr << "       -M dump the names each input file declared";
     std::cerr << std::endl;
     std::cerr << "       -o outfile, produce the outfile executable file";
     std::cerr << std::endl;
@@ -158,6 +160,10 @@ bool Driver::ParseOptions(int argc, const char* const* argv)
 
                 case 'T':
                     options_.dump = true;
+                    break;
+
+                case 'M':
+                    options_.symbols = true;
                     break;
 
                 default:
@@ -257,6 +263,9 @@ bool Driver::CompileToAssembly(const std::string& source,
 
     if (options_.dump)
         PrintSyntaxTree(program);
+
+    if (options_.symbols)
+        PrintSymbolTable(parser.GetSymbolTable(), source);
 
     std::unique_ptr<AsmCodegen> codegen = MakeCodegen(assembly);
     codegen->GenProgram(program);

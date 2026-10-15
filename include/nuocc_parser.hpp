@@ -72,6 +72,12 @@ public:
      */
     Program Parse(const std::vector<NodePtr>& token_list);
 
+    /*
+     * The names the file declared, which is what the dump of the symbol
+     * table reads once the whole file has been parsed.
+     */
+    const SymbolTable& GetSymbolTable() const;
+
 private:
     /*
      * global_declaration: function_declaration | var_declaration  ;

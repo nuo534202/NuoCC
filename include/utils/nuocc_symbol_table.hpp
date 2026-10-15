@@ -21,6 +21,10 @@ public:
     std::optional<Symbol> FindSymbol(const std::string& name) const;
     void AddSymbol(const Symbol& symbol);
 
+    /* Every name the table holds, in the order they were declared, which is
+     * what the dump of the table walks. */
+    const std::vector<Symbol>& GetSymbols() const;
+
     /*
      * Replace the latest declaration of a name, which is how a prototype
      * becomes the place a later definition of the function is kept. It
