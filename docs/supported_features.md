@@ -823,3 +823,18 @@
     is a member is an expression the compiler works out while it is
     compiling the program, so `int table[2 * 3];` is a member which holds
     six elements.
+
+59. A Back End Which Is Not a Machine (acwj Stage 63, `63_QBE`). The
+    compiler may also be built to write the intermediate language of
+    [QBE](https://c9x.me/compile/) rather than the assembly of a machine:
+    `cmake -DNUOCC_TARGET=qbe ..` picks the QBE target, and every program is
+    then written into a file ending in `.q`, which QBE compiles into the
+    assembly of whichever machine the program is built for. Nothing of the
+    language changes with it, so every program the machine targets build is
+    built the same way by this one and prints the same thing. Every value of
+    the intermediate language has a name of its own, so where the machine
+    targets work out which register a value is given, this one names the
+    value and leaves the rest to QBE, which builds the SSA form, allocates
+    the registers, and leaves assembly that is smaller than the assembly the
+    machine targets write. QBE has to be on the path, and the assembler and
+    linker the compiler already uses do the rest.

@@ -107,8 +107,8 @@ void Driver::Usage(const char* program) const
     std::cerr << std::endl;
     std::cerr << "       -c generate object files but do not link them";
     std::cerr << std::endl;
-    std::cerr << "       -S generate assembly files but do not link them";
-    std::cerr << std::endl;
+    std::cerr << "       -S stop at the code the target writes, but do not";
+    std::cerr << " link" << std::endl;
     std::cerr << "       -T dump the tokens and the tree of each input file";
     std::cerr << std::endl;
     std::cerr << "       -M dump the names each input file declared";
@@ -239,13 +239,13 @@ std::optional<std::string> Driver::Preprocess(const std::string& source) const
 }
 
 /*
- * Compile one source file down to assembly, and print what was read and
- * what it was made into when -T was given. An error in the source is
- * reported and ends the compilation from inside the compiler, so false
- * only says that the pre-processor could not be run.
+ * Compile one source file down to the code this target writes, and print
+ * what was read and what it was made into when -T was given. An error in
+ * the source is reported and ends the compilation from inside the compiler,
+ * so false only says that the pre-processor could not be run.
  */
-bool Driver::CompileToAssembly(const std::string& source,
-    const std::string& assembly) const
+bool Driver::CompileToCode(const std::string& source,
+    const std::string& output) const
 {
     std::optional<std::string> text = Preprocess(source);
 
@@ -267,7 +267,7 @@ bool Driver::CompileToAssembly(const std::string& source,
     if (options_.symbols)
         PrintSymbolTable(parser.GetSymbolTable(), source);
 
-    std::unique_ptr<AsmCodegen> codegen = MakeCodegen(assembly);
+    std::unique_ptr<AsmCodegen> codegen = MakeCodegen(output);
     codegen->GenProgram(program);
 
     return true;
@@ -327,11 +327,18 @@ int Driver::Run(int argc, const char* const* argv)
 
     std::vector<std::string> objects;
 
+    /*
+     * What the target of this build writes, and the tool which turns it
+     * into assembly when it does not write the assembly itself.
+     */
+    const std::string code_suffix = CodeSuffix();
+    const std::string code_tool = CodeTool();
+
     for (const std::string& source : options_.inputs)
     {
-        const std::string assembly = ReplaceSuffix(source, ".s");
+        const std::string code = ReplaceSuffix(source, code_suffix);
 
-        if (assembly.empty())
+        if (code.empty())
         {
             std::cerr << "error: " << source << " has no suffix to replace";
             std::cerr << std::endl;
@@ -341,12 +348,31 @@ int Driver::Run(int argc, const char* const* argv)
         if (options_.verbose)
             std::cout << "compiling " << source << std::endl;
 
-        if (!CompileToAssembly(source, assembly))
+        if (!CompileToCode(source, code))
             return 1;
 
-        /* -S asks for the assembly itself, and stops there. */
+        /* -S asks for the code itself, and stops there. */
         if (!options_.assemble && !options_.link)
             continue;
+
+        /*
+         * A target which writes assembly itself has nothing to turn into
+         * it, and what it wrote is the assembly.
+         */
+        std::string assembly = code;
+
+        if (!code_tool.empty())
+        {
+            assembly = ReplaceSuffix(source, ".s");
+
+            if (!RunCommand(code_tool + " -o " + Quote(assembly) + " " +
+                            Quote(code)))
+            {
+                std::cerr << code_tool << " could not compile " << code;
+                std::cerr << std::endl;
+                return 1;
+            }
+        }
 
         const std::string object = ReplaceSuffix(source, ".o");
 
@@ -357,8 +383,13 @@ int Driver::Run(int argc, const char* const* argv)
             return 1;
         }
 
-        /* The assembly has done its work once it is an object file. */
-        std::remove(assembly.c_str());
+        /* The code the compiler wrote has done its work once it is an
+         * object file, and so has the assembly it was turned into. */
+        std::remove(code.c_str());
+
+        if (assembly != code)
+            std::remove(assembly.c_str());
+
         objects.push_back(object);
     }
 

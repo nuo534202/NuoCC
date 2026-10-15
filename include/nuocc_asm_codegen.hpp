@@ -199,18 +199,26 @@ protected:
     void GenGlobSymbol(const Symbol& symbol);
 
     /*
-     * Write the start of a global variable's storage: the data section, its
-     * name as a global, the room its alignment needs and the label the
-     * storage begins at. The label comes after the alignment, or it would
-     * point at the padding in front of the storage.
+     * The storage of a global variable is written in pieces, so that the
+     * walk which works out what a global holds is the same for every
+     * target: the heading the storage begins with, the room a value which
+     * takes no name of its own is given, and one element for every value
+     * the variable holds. The heading names the variable, says that other
+     * files may reach it and lines it up to its own alignment: the label
+     * the storage begins at comes after the alignment, or it would point
+     * at the padding in front of the storage.
      */
-    void EmitGlobHeading(const Symbol& symbol);
+    virtual void BeginGlobal(const Symbol& symbol, int32 alignment) = 0;
+    virtual void EmitGlobalSpace(int32 size) = 0;
+    virtual void EmitGlobalValue(int32 value, int32 size) = 0;
+    virtual void EmitGlobalLabelRef(label_idx label) = 0;
+    virtual void EndGlobal() = 0;
 
     /*
-     * Give a string literal storage in the data section, under a label
-     * of its own, so that the code can take the address of it.
+     * Give a string literal storage of its own, under a label the code can
+     * take the address of, and end it with the NUL which ends the string.
      */
-    void GenStrStorage(label_idx label, const std::string& text);
+    virtual void GenStrStorage(label_idx label, const std::string& text) = 0;
 
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);
@@ -244,7 +252,13 @@ protected:
 
     reg_idx AllocRegister();
     void FreeRegister(reg_idx reg);
-    void FreeAllRegister();
+
+    /*
+     * Throw away every value the registers are holding, which is what the
+     * end of a statement does. A target which keeps values of its own
+     * beside the registers throws away what it is keeping too.
+     */
+    virtual void FreeAllRegister();
 
     label_idx NewLabel();
 
@@ -278,9 +292,24 @@ protected:
 };
 
 /*
- * Build the code generator for the machine this compiler was built for.
- * Each target implements it, the build picks one of them.
+ * Build the code generator for the target this compiler was built for, and
+ * say how the driver is to put the code generator to work. Each target
+ * provides all three and the build picks one of them.
+ *
+ * A machine target writes the assembly of that machine itself, so the
+ * suffix it names is the one the assembly file has and it names no tool.
+ * A target which writes a language of its own, such as the intermediate
+ * language QBE reads, names that language's suffix instead, and names the
+ * tool which compiles the file it wrote into the assembly the assembler
+ * and linker are given.
  */
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file);
+
+/* The suffix of the file the code generator of this build writes. */
+std::string CodeSuffix();
+
+/* The tool which turns that file into assembly, or an empty name when the
+ * target writes the assembly itself. */
+std::string CodeTool();
 
 }   /* namespace nuocc */

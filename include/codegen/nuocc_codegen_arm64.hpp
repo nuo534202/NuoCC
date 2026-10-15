@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "codegen/nuocc_codegen_assembly.hpp"
 #include "nuocc_asm_codegen.hpp"
 
 namespace nuocc
@@ -13,7 +14,7 @@ namespace nuocc
  * around it. The names are written the way Apple's assembler wants them,
  * see the note in the documentation.
  */
-class Arm64Codegen : public AsmCodegen
+class Arm64Codegen : public AssemblyCodegen
 {
 public:
     explicit Arm64Codegen(const std::string& output_file);

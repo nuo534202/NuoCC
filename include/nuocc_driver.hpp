@@ -9,8 +9,10 @@ namespace nuocc
 
 /*
  * The command line of the compiler and the stages it puts an input file
- * through: the source is compiled to assembly, and the assembly is handed
- * to the system assembler and linker unless the flags say to stop.
+ * through: the source is compiled to the code the target writes, that code
+ * is turned into assembly when the target does not write it itself, and the
+ * assembly is handed to the system assembler and linker unless the flags
+ * say to stop.
  */
 class Driver
 {
@@ -46,8 +48,14 @@ private:
     void Usage(const char* program) const;
 
     /* The stages of the compilation. */
-    bool CompileToAssembly(const std::string& source,
-                           const std::string& assembly) const;
+
+    /*
+     * Compile one source file down to the file the target of this build
+     * writes, which is the assembly of the machine it is aimed at, or the
+     * language a tool named by the target turns into that assembly.
+     */
+    bool CompileToCode(const std::string& source,
+                       const std::string& output) const;
 
     /*
      * Feed one source file through the C pre-processor and answer with

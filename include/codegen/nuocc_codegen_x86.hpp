@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "codegen/nuocc_codegen_assembly.hpp"
 #include "nuocc_asm_codegen.hpp"
 
 namespace nuocc
@@ -12,7 +13,7 @@ namespace nuocc
  * values while an expression is evaluated; they are caller saved, so a
  * call has to have the ones still in use saved around it.
  */
-class X86Codegen : public AsmCodegen
+class X86Codegen : public AssemblyCodegen
 {
 public:
     explicit X86Codegen(const std::string& output_file);

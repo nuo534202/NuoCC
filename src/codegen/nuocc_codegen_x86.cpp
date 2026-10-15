@@ -52,7 +52,7 @@ constexpr std::string_view kParamRegs8[] = {
 }   /* namespace */
 
 X86Codegen::X86Codegen(const std::string& output_file)
-    : AsmCodegen(output_file)
+    : AssemblyCodegen(output_file)
 {
     for (idx_t i = 0; i < kRegSize; i++)
     {

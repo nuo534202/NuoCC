@@ -71,7 +71,7 @@ std::string Arm64Codegen::GlobName(const std::string& name) const
 }
 
 Arm64Codegen::Arm64Codegen(const std::string& output_file)
-    : AsmCodegen(output_file)
+    : AssemblyCodegen(output_file)
 {
     /* The last four of the callee saved registers, so that a call leaves
      * every value an expression is still holding untouched. */

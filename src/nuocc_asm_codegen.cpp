@@ -80,36 +80,6 @@ void AsmCodegen::GenProgram(const Program& program)
 }
 
 /*
- * Write the start of a global variable's storage, which everything a global
- * holds is written after.
- */
-void AsmCodegen::EmitGlobHeading(const Symbol& symbol)
-{
-    ofs_ << "\t.data" << std::endl;
-
-    /*
-     * The assembler is told which name other files may reach, and left to
-     * itself about one declared static, which only this file may.
-     */
-    if (!symbol.is_static)
-        ofs_ << "\t.globl\t" << GlobName(symbol.name) << std::endl;
-
-    /*
-     * The storage is lined up to what it holds, so that every element of it
-     * lands where its type says and so that a pointer an element holds can
-     * be written into it. The data section of some machines lines a pointer
-     * up no further than this whatever the assembler is told, which is why
-     * the alignment is asked for here rather than left to them.
-     */
-    const int32 alignment = SymbolAlignment(symbol);
-
-    if (alignment > 1)
-        ofs_ << "\t.balign\t" << alignment << std::endl;
-
-    ofs_ << GlobName(symbol.name) << ":" << std::endl;
-}
-
-/*
  * Generate the code for one statement. A statement yields no value, so
  * nothing is returned. A null node is an empty compound statement.
  */
@@ -484,9 +454,9 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
      */
     if (symbol.type == PrimitiveType::kComposite)
     {
-        EmitGlobHeading(symbol);
-        ofs_ << "\t.space\t" << SymbolStorageSize(symbol) << std::endl;
-        ofs_ << "\t.text" << std::endl;
+        BeginGlobal(symbol, SymbolAlignment(symbol));
+        EmitGlobalSpace(SymbolStorageSize(symbol));
+        EndGlobal();
         return;
     }
 
@@ -518,14 +488,14 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
         }
     }
 
-    EmitGlobHeading(symbol);
+    BeginGlobal(symbol, SymbolAlignment(symbol));
 
     for (int32 k = 0; k < element_count; k++)
     {
         /* An element given a string holds the address of that string. */
         if (string_labels[k] != 0)
         {
-            ofs_ << "\t.quad\tL" << string_labels[k] << std::endl;
+            EmitGlobalLabelRef(string_labels[k]);
             continue;
         }
 
@@ -546,13 +516,13 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
                  * cast in front of it says, and then the element keeps the
                  * low bits of it, the way a store does.
                  */
-                ofs_ << "\t.byte\t" << (value & 0xff) << std::endl;
+                EmitGlobalValue(value & 0xff, 1);
                 break;
             case 4:
-                ofs_ << "\t.long\t" << value << std::endl;
+                EmitGlobalValue(value, 4);
                 break;
             case 8:
-                ofs_ << "\t.quad\t" << value << std::endl;
+                EmitGlobalValue(value, 8);
                 break;
             default:
                 std::cerr << "Error: bad type for variable ";
@@ -561,34 +531,7 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
         }
     }
 
-    ofs_ << "\t.text" << std::endl;
-}
-
-/*
- * The storage holds one byte per character and then the NUL which ends
- * the string, all under a local label: unlike a global variable, a
- * literal has no name the rest of the program could refer to.
- */
-void AsmCodegen::GenStrStorage(label_idx label, const std::string& text)
-{
-    ofs_ << "\t.data" << std::endl;
-    EmitLabel(label);
-
-    ofs_ << "\t.byte\t";
-
-    for (std::size_t k = 0; k < text.size(); k++)
-    {
-        if (k > 0)
-            ofs_ << ", ";
-
-        ofs_ << static_cast<int>(static_cast<unsigned char>(text[k]));
-    }
-
-    if (!text.empty())
-        ofs_ << ", ";
-
-    ofs_ << "0" << std::endl;
-    ofs_ << "\t.text" << std::endl;
+    EndGlobal();
 }
 
 std::string AsmCodegen::GlobName(const std::string& name) const

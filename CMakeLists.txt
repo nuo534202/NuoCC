@@ -25,14 +25,20 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 # The code generators are picked one at a time, so remove them all first.
+# The part which writes the assembly text is shared by the two machine
+# targets, so it is added back with whichever of them is picked.
 list(FILTER SRC EXCLUDE REGEX "/codegen/")
 
 if(NUOCC_TARGET STREQUAL "x86_64")
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_assembly.cpp)
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_x86.cpp)
 elseif(NUOCC_TARGET STREQUAL "arm64")
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_assembly.cpp)
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_arm64.cpp)
+elseif(NUOCC_TARGET STREQUAL "qbe")
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_qbe.cpp)
 else()
-    message(FATAL_ERROR "NUOCC_TARGET must be x86_64 or arm64, not ${NUOCC_TARGET}")
+    message(FATAL_ERROR "NUOCC_TARGET must be x86_64, arm64 or qbe, not ${NUOCC_TARGET}")
 endif()
 
 message(STATUS "NuoCC will generate ${NUOCC_TARGET} assembly")
@@ -44,6 +50,8 @@ add_executable(nuocc ${SRC})
 # path is fixed here so that the compiler can be run from anywhere. The
 # pre-processor and the directory our own header files live in are fixed the
 # same way, so that a program may #include one of them from anywhere too.
+# The QBE target has the program put through qbe, which is looked for on the
+# path, the way the assembler and linker are.
 target_compile_definitions(nuocc PRIVATE
     NUOCC_RUNTIME="${PROJECT_SOURCE_DIR}/lib/printint.c"
     NUOCC_CPP="cpp"
