@@ -700,3 +700,17 @@
     nothing. The two operations still answer with 0 or 1, and a chain such
     as `a && b && c` is read from the left, each side being worked out only
     when the ones before it did not settle the answer.
+
+53. Local Arrays (acwj Stage 56, `56_Local_Arrays`). An array may be
+    declared inside a function, where it lives in that function's frame
+    beside the other local variables: `int ary[5];` takes twenty bytes of
+    the frame, and writing an element of it leaves the variables declared
+    around it alone, however the compiler lays them out. Its name stands
+    for the address of its first element like any other array's, so it may
+    be given to a function, indexed, and asked for the room it takes with
+    `sizeof`. What a local array cannot be given is the values it starts
+    with, so `int ary[5]= { 1, 2, 3, 4, 5 };` is refused and the values have
+    to be stored into its elements; a size is therefore the one thing a
+    local array must have, and `int ary[];` is refused for the same reason a
+    global one would be. An array of structs or unions is not part of the
+    language yet, whether it is declared here or at the top level.
