@@ -511,23 +511,57 @@ void X86Codegen::EmitIncDecMemory(const Symbol& symbol, int32 delta)
 
 reg_idx X86Codegen::IncDec(const Symbol& symbol, int32 delta, bool post)
 {
+    const int32 amount = delta > 0 ? delta : -delta;
+
     /*
      * Which value the expression yields is the only difference between the
      * two sides: written after the variable it yields the value held
      * before the change, written before it the value held afterwards.
      */
-    if (post)
+    if (amount == 1)
     {
-        reg_idx reg = LoadSymbol(symbol);
+        /*
+         * A value which changes by one is changed where it stands, which
+         * the machine does in one instruction.
+         */
+        if (post)
+        {
+            reg_idx reg = LoadSymbol(symbol);
+
+            EmitIncDecMemory(symbol, delta);
+
+            return reg;
+        }
 
         EmitIncDecMemory(symbol, delta);
 
-        return reg;
+        return LoadSymbol(symbol);
     }
 
-    EmitIncDecMemory(symbol, delta);
+    /*
+     * Every other change is a pointer being stepped along to the next value
+     * of what it points at, which is more than one for everything but a
+     * pointer to a char. The machine can only change what stands in memory
+     * by one, so the new value is worked out in a register.
+     */
+    reg_idx old_reg = LoadSymbol(symbol);
+    reg_idx new_reg = AllocRegister();
 
-    return LoadSymbol(symbol);
+    Move(new_reg, old_reg, symbol.type);
+    ofs_ << "\t" << (delta > 0 ? "addq" : "subq") << "\t$" << amount;
+    ofs_ << ", " << reg_list_[new_reg] << std::endl;
+
+    StoreSymbol(symbol, new_reg);
+
+    if (post)
+    {
+        FreeRegister(new_reg);
+        return old_reg;
+    }
+
+    FreeRegister(old_reg);
+
+    return new_reg;
 }
 
 reg_idx X86Codegen::Widen(reg_idx reg,

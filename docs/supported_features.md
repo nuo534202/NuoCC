@@ -900,3 +900,15 @@
     own, is worked out as a short as well, so `-7` may be stored in one.
     A short given a value which is too wide for it where it is declared is
     refused, the way a char is.
+
+63. A Correction to the Step of a Pointer (a fault in the x86-64 back end,
+    found by test56). Items 6 and 15 promise that an increment or a
+    decrement of a pointer moves on by the room one value of what it points
+    at takes. The x86-64 code did not: it changed the address by one byte
+    whatever the pointer pointed at, so `int *p; p++` left `p` one byte
+    further on rather than four. The fix works the new address out whole in
+    a register and stores it back, so `p++`, `p--`, `++p` and `--p` step by
+    the width of the pointed-to value on x86-64 the same way they already
+    did on arm64, qbe and the 6809. A change of one, and a pointer to a
+    char, still only touch the value where it stands, so the common case
+    costs no more than before.
