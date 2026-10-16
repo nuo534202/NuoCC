@@ -154,7 +154,7 @@ void X86Codegen::EmitJump(label_idx label)
     ofs_ << "\tjmp\tL" << label << std::endl;
 }
 
-reg_idx X86Codegen::LoadInt(int32 value)
+reg_idx X86Codegen::LoadInt(int32 value, PrimitiveType /*type*/)
 {
     reg_idx reg = AllocRegister();
 
@@ -270,7 +270,7 @@ reg_idx X86Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
     return reg;
 }
 
-reg_idx X86Codegen::Add(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Add(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\taddq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -283,7 +283,7 @@ reg_idx X86Codegen::Add(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Sub(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Sub(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tsubq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -293,7 +293,7 @@ reg_idx X86Codegen::Sub(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Mul(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Mul(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\timulq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -306,7 +306,7 @@ reg_idx X86Codegen::Mul(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tmovq\t" << reg_list_[reg1] << ", %rax" << std::endl;
     ofs_ << "\tcqo" << std::endl;
@@ -322,7 +322,7 @@ reg_idx X86Codegen::Div(reg_idx reg1, reg_idx reg2)
  * The bitwise operations. Each of them writes the result over reg2 and
  * gives reg1 back, exactly like Add() and the rest.
  */
-reg_idx X86Codegen::And(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::And(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tandq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -335,7 +335,7 @@ reg_idx X86Codegen::And(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Or(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Or(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\torq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -348,7 +348,7 @@ reg_idx X86Codegen::Or(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Xor(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Xor(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\txorq\t" << reg_list_[reg2] << ", ";
     ofs_ << reg_list_[reg1] << std::endl;
@@ -366,7 +366,7 @@ reg_idx X86Codegen::Xor(reg_idx reg1, reg_idx reg2)
  * reg2 is moved there first. The result is left in reg1, the register
  * which held the value being shifted.
  */
-reg_idx X86Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tmovb\t" << breg_list_[reg2] << ", %cl" << std::endl;
     ofs_ << "\tshlq\t%cl, " << reg_list_[reg1] << std::endl;
@@ -376,7 +376,7 @@ reg_idx X86Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tmovb\t" << breg_list_[reg2] << ", %cl" << std::endl;
     ofs_ << "\tshrq\t%cl, " << reg_list_[reg1] << std::endl;
@@ -386,7 +386,7 @@ reg_idx X86Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx X86Codegen::Mod(reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::Mod(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     /* idivq leaves the quotient in %rax and what is left over in %rdx. */
     ofs_ << "\tmovq\t" << reg_list_[reg1] << ", %rax" << std::endl;
@@ -399,20 +399,20 @@ reg_idx X86Codegen::Mod(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-void X86Codegen::Move(reg_idx dest, reg_idx src)
+void X86Codegen::Move(reg_idx dest, reg_idx src, PrimitiveType /*type*/)
 {
     ofs_ << "\tmovq\t" << reg_list_[src] << ", " << reg_list_[dest];
     ofs_ << std::endl;
 }
 
-reg_idx X86Codegen::Negate(reg_idx reg)
+reg_idx X86Codegen::Negate(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tnegq\t" << reg_list_[reg] << std::endl;
 
     return reg;
 }
 
-reg_idx X86Codegen::Invert(reg_idx reg)
+reg_idx X86Codegen::Invert(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tnotq\t" << reg_list_[reg] << std::endl;
 
@@ -424,7 +424,7 @@ reg_idx X86Codegen::Invert(reg_idx reg)
  * from the value anded with itself, and sete and setnz then write the
  * answer into the low byte, which movzbq extends to a clean 0 or 1.
  */
-reg_idx X86Codegen::LogNot(reg_idx reg)
+reg_idx X86Codegen::LogNot(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
     ofs_ << reg_list_[reg] << std::endl;
@@ -435,7 +435,7 @@ reg_idx X86Codegen::LogNot(reg_idx reg)
     return reg;
 }
 
-reg_idx X86Codegen::ToBool(reg_idx reg)
+reg_idx X86Codegen::ToBool(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\ttest\t" << reg_list_[reg] << ", ";
     ofs_ << reg_list_[reg] << std::endl;
@@ -570,7 +570,7 @@ void X86Codegen::ReloadRegister(reg_idx reg, int32 slot)
  * and cheaper than a multiply; the multiply is there for the sizes which
  * are not, which composite types will bring.
  */
-reg_idx X86Codegen::Scale(reg_idx reg, int32 scale)
+reg_idx X86Codegen::Scale(reg_idx reg, int32 scale, PrimitiveType type)
 {
     uint32 size = static_cast<uint32>(scale);
 
@@ -582,12 +582,13 @@ reg_idx X86Codegen::Scale(reg_idx reg, int32 scale)
         return reg;
     }
 
-    reg_idx size_reg = LoadInt(scale);
+    /* The size of a value is a value of the type being scaled. */
+    reg_idx size_reg = LoadInt(scale, type);
 
-    return Mul(reg, size_reg);
+    return Mul(reg, size_reg, type);
 }
 
-reg_idx X86Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
+reg_idx X86Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -620,7 +621,8 @@ reg_idx X86Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
 void X86Codegen::CompareAndJump(NodeTag op_type,
     reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -652,7 +654,8 @@ void X86Codegen::CompareAndJump(NodeTag op_type,
  */
 void X86Codegen::JumpIfEqual(reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     ofs_ << "\tcmpq\t" << reg_list_[reg2] << ", " << reg_list_[reg1];
     ofs_ << std::endl;
@@ -679,7 +682,7 @@ void X86Codegen::JumpIfNonZero(reg_idx reg, label_idx label)
  * the remaining arguments are worked out, which is what a function called
  * from one of them needs.
  */
-void X86Codegen::PushArgument(reg_idx reg)
+void X86Codegen::PushArgument(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tsubq\t$16, %rsp" << std::endl;
     ofs_ << "\tmovq\t" << reg_list_[reg] << ", (%rsp)" << std::endl;
@@ -927,6 +930,24 @@ void X86Codegen::StoreDeref(reg_idx value_reg,
     }
 
     ofs_ << "(" << reg_list_[address_reg] << ")" << std::endl;
+}
+
+/*
+ * The widths of the language's types on the x86-64 machine. An int is four bytes,
+ * a long eight and a pointer as wide as one, which is what the machine
+ * this compiler runs on has as well.
+ */
+const TypeSizes& TargetSizes()
+{
+    static const TypeSizes kSizes{1, 4, 8, 8};
+
+    return kSizes;
+}
+
+/* The target writes the assembly of on the x86-64 machine. */
+std::string TargetName()
+{
+    return "x86_64";
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

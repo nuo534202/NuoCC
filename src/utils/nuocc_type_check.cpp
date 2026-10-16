@@ -28,6 +28,31 @@ PrimitiveType WithIndirection(PrimitiveType type, uint8 levels)
 
 }   /* namespace */
 
+bool ValueFitsType(int64 value, PrimitiveType type)
+{
+    /*
+     * A char has no sign, so it holds 0 to 255 whatever the machine it is
+     * on. Everything else has a sign, and holds as far below nothing as
+     * the room its type takes allows: sixteen bits reach -32768 to 32767.
+     */
+    if (type == PrimitiveType::kChar)
+        return value >= 0 && value < 256;
+
+    const int32 size = PrimitiveSize(type);
+
+    /* A type which takes no room holds nothing at all. */
+    if (size == 0)
+        return false;
+
+    /* A value of eight bytes holds every number the compiler has. */
+    if (size >= 8)
+        return true;
+
+    const int64 limit = static_cast<int64>(1) << (size * 8 - 1);
+
+    return value >= -limit && value < limit;
+}
+
 bool IsIntType(PrimitiveType type)
 {
     if (IsPointerType(type))
@@ -61,18 +86,20 @@ PrimitiveType BaseType(PrimitiveType type)
 
 int32 PrimitiveSize(PrimitiveType type)
 {
+    const TypeSizes& sizes = TargetSizes();
+
     /* Every pointer takes the same amount of room, whatever it points at. */
     if (IsPointerType(type))
-        return 8;
+        return sizes.pointer_size;
 
     switch (type)
     {
         case PrimitiveType::kChar:
-            return 1;
+            return sizes.char_size;
         case PrimitiveType::kInt:
-            return 4;
+            return sizes.int_size;
         case PrimitiveType::kLong:
-            return 8;
+            return sizes.long_size;
         default:
             return 0;
     }
@@ -92,15 +119,17 @@ int32 ValueSize(PrimitiveType type,
 int32 ValueAlignment(PrimitiveType type,
     const std::shared_ptr<CompositeType>& composite)
 {
-    if (IsPointerType(type))
-        return 8;
-
     if (type == PrimitiveType::kComposite)
         return composite ? composite->alignment : 1;
 
     const int32 size = PrimitiveSize(type);
 
-    /* A type which takes no room at all is nothing to line up against. */
+    /*
+     * A value stands where a whole number of its own width along begins,
+     * which is what makes a value of four bytes or more stand at the
+     * widest alignment a machine of this compiler has. A type which takes
+     * no room at all is nothing to line up against.
+     */
     return size == 0 ? 1 : std::min<int32>(size, 8);
 }
 

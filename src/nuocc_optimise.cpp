@@ -2,6 +2,8 @@
 
 #include <limits>
 
+#include "utils/nuocc_type_check.hpp"
+
 namespace nuocc
 {
 
@@ -17,18 +19,6 @@ bool IsLiteral(const AstNodePtr& node)
 int32 LiteralValue(const AstNodePtr& node)
 {
     return static_cast<const AstIntLit&>(*node).GetValue();
-}
-
-/*
- * Whether a number can be kept as one the language has, which is an int of
- * four bytes. A number which does not fit is left for the program to work
- * out, so that a tree the compiler folded always gives the value the
- * machine would have given.
- */
-bool FitsInt(int64 value)
-{
-    return value >= std::numeric_limits<int32>::min() &&
-           value <= std::numeric_limits<int32>::max();
 }
 
 /*
@@ -210,7 +200,7 @@ void FoldNode(AstNodePtr& tree)
                        LiteralValue(tree->GetLeft()),
                        LiteralValue(tree->GetRight()),
                        folded) &&
-            FitsInt(folded))
+            ValueFitsType(folded, tree->GetType()))
             tree = FoldedLeaf(folded, tree->GetType());
 
         return;
@@ -220,7 +210,7 @@ void FoldNode(AstNodePtr& tree)
      * FoldUnary answers for the tags which are not such an operation. */
     if (IsLiteral(tree->GetLeft()) &&
         FoldUnary(tag, LiteralValue(tree->GetLeft()), folded) &&
-        FitsInt(folded))
+        ValueFitsType(folded, tree->GetType()))
         tree = FoldedLeaf(folded, tree->GetType());
 }
 

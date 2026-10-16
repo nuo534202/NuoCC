@@ -45,9 +45,25 @@ public:
     void GenProgram(const Program& program);
 
 protected:
-    /* What every target has to provide. */
+    /*
+     * What every target has to provide.
+     *
+     * Everything which works on values is told the type those values have,
+     * since the width of a value is what decides the sequence of
+     * instructions for a machine whose types are of different widths. A
+     * machine whose values are all held as the whole of a register has
+     * nothing to do with the type.
+     */
 
     virtual void EmitPreamble() = 0;
+
+    /*
+     * The last thing which is written, once every function of the program
+     * has been. A target whose code and storage stand in one run of bytes
+     * puts the storage it gathered while the code was written here, so
+     * that the program never runs into it.
+     */
+    virtual void EmitEndOfProgram() = 0;
     virtual void EmitFunctionPreamble(
         const Symbol& symbol,
         int32 local_size,
@@ -63,26 +79,30 @@ protected:
      */
     virtual std::string GlobName(const std::string& name) const;
 
-    virtual reg_idx LoadInt(int32 value) = 0;
+    virtual reg_idx LoadInt(int32 value, PrimitiveType type) = 0;
     virtual reg_idx LoadSymbol(const Symbol& symbol) = 0;
     virtual reg_idx StoreSymbol(const Symbol& symbol, reg_idx reg) = 0;
 
-    virtual reg_idx Add(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx Sub(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx Mul(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx Div(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx Add(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx Sub(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx Mul(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx Div(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
 
     /*
      * What is left of the first value once the second has been taken from
      * it as many whole times as it holds. A division by zero is left to
      * the machine, which is where the program is stopped for it.
      */
-    virtual reg_idx Mod(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx And(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx Or(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx Xor(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx ShiftLeft(reg_idx reg1, reg_idx reg2) = 0;
-    virtual reg_idx ShiftRight(reg_idx reg1, reg_idx reg2) = 0;
+    virtual reg_idx Mod(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx And(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx Or(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx Xor(reg_idx reg1, reg_idx reg2, PrimitiveType type) = 0;
+    virtual reg_idx ShiftLeft(reg_idx reg1,
+                              reg_idx reg2,
+                              PrimitiveType type) = 0;
+    virtual reg_idx ShiftRight(reg_idx reg1,
+                               reg_idx reg2,
+                               PrimitiveType type) = 0;
     virtual reg_idx Widen(reg_idx reg,
                           PrimitiveType old_type,
                           PrimitiveType new_type) = 0;
@@ -106,20 +126,22 @@ protected:
     virtual reg_idx Cast(reg_idx reg,
                          PrimitiveType old_type,
                          PrimitiveType new_type) = 0;
-    virtual reg_idx Scale(reg_idx reg, int32 scale) = 0;
+    virtual reg_idx Scale(reg_idx reg,
+                          int32 scale,
+                          PrimitiveType type) = 0;
 
     /*
      * Copy the value of one register into another, which is how a ternary
      * expression leaves whichever of its two values it took in the one
      * register it answers with. Both registers stay in use.
      */
-    virtual void Move(reg_idx dest, reg_idx src) = 0;
+    virtual void Move(reg_idx dest, reg_idx src, PrimitiveType type) = 0;
 
     /* The unary operations, each of them on the value in one register. */
-    virtual reg_idx Negate(reg_idx reg) = 0;
-    virtual reg_idx Invert(reg_idx reg) = 0;
-    virtual reg_idx LogNot(reg_idx reg) = 0;
-    virtual reg_idx ToBool(reg_idx reg) = 0;
+    virtual reg_idx Negate(reg_idx reg, PrimitiveType type) = 0;
+    virtual reg_idx Invert(reg_idx reg, PrimitiveType type) = 0;
+    virtual reg_idx LogNot(reg_idx reg, PrimitiveType type) = 0;
+    virtual reg_idx ToBool(reg_idx reg, PrimitiveType type) = 0;
 
     /*
      * Add delta to the value a variable holds, and leave either the value
@@ -131,11 +153,13 @@ protected:
 
     virtual reg_idx CompareAndSet(NodeTag op_type,
                                   reg_idx reg1,
-                                  reg_idx reg2) = 0;
+                                  reg_idx reg2,
+                                  PrimitiveType type) = 0;
     virtual void CompareAndJump(NodeTag op_type,
                                 reg_idx reg1,
                                 reg_idx reg2,
-                                label_idx label) = 0;
+                                label_idx label,
+                                PrimitiveType type) = 0;
 
     /*
      * Jump to the label when the two registers hold the same value, leaving
@@ -144,7 +168,8 @@ protected:
      */
     virtual void JumpIfEqual(reg_idx reg1,
                              reg_idx reg2,
-                             label_idx label) = 0;
+                             label_idx label,
+                             PrimitiveType type) = 0;
 
     /*
      * Jump when the value in a register is zero, which is the question a
@@ -162,7 +187,7 @@ protected:
      * Put the value of one argument on the stack while a call is being
      * made, ready for Call() to hand it to the function.
      */
-    virtual void PushArgument(reg_idx reg) = 0;
+    virtual void PushArgument(reg_idx reg, PrimitiveType type) = 0;
 
     /*
      * Call a function with the argument values which have been pushed,
@@ -189,6 +214,9 @@ protected:
                             PrimitiveType type) = 0;
 
     /* The parts of the walk which are the same everywhere. */
+
+    /* The file name without its directory and its suffix. */
+    static std::string UnitNameOf(const std::string& path);
 
     /*
      * Reserve the storage of a global variable. The variables are laid out
@@ -248,7 +276,16 @@ protected:
      */
     reg_idx GenAssignOp(const AstNodePtr& root, NodeTag op_type);
     reg_idx GenAddress(const AstNodePtr& root);
-    reg_idx GenOperator(NodeTag op_type, reg_idx left_reg, reg_idx right_reg);
+    /*
+     * Work out one binary operation on the two values the registers hold.
+     * The type is the type of the two of them, which for a comparison is
+     * the type they are compared as and for everything else is the type
+     * the answer has as well.
+     */
+    reg_idx GenOperator(NodeTag op_type,
+                        reg_idx left_reg,
+                        reg_idx right_reg,
+                        PrimitiveType type);
 
     reg_idx AllocRegister();
     void FreeRegister(reg_idx reg);
@@ -262,10 +299,21 @@ protected:
 
     label_idx NewLabel();
 
+    /*
+     * The name of the file of code being written, without its directory
+     * and its suffix. A target which puts the code of several source files
+     * into one program tells the static names of one of them from another
+     * by it.
+     */
+    const std::string& UnitName() const;
+
     /* The registers which are free, which a target may want to know. */
     const bool* FreeRegisters() const;
 
 protected:
+    /* The name of the file of code being written, without its directory
+     * and its suffix, set when the file is opened. */
+    std::string unit_name_;
     bool is_free_[kRegSize];
     /*
      * How many values each register has set aside, and which register is
@@ -305,11 +353,30 @@ protected:
  */
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file);
 
+/*
+ * The name of the target this compiler was built for, which names which
+ * machine the programs it builds are for and which tests apply to them.
+ */
+std::string TargetName();
+
 /* The suffix of the file the code generator of this build writes. */
 std::string CodeSuffix();
 
 /* The tool which turns that file into assembly, or an empty name when the
  * target writes the assembly itself. */
 std::string CodeTool();
+
+/* The tool which makes the program out of the file of code the compiler
+ * wrote, or an empty name when the C compiler of the machine the compiler
+ * runs on assembles the code and links it with the runtime. A target which
+ * names a tool of its own makes one program out of one source file. */
+std::string CodeBuilder();
+
+/*
+ * The command which makes the program out of the code the compiler wrote,
+ * which is one file of it for each source file.
+ */
+std::string BuildCommand(const std::vector<std::string>& code,
+                         const std::string& program);
 
 }   /* namespace nuocc */

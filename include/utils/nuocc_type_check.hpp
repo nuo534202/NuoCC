@@ -43,6 +43,13 @@ int32 ValueAlignment(PrimitiveType type,
                      const std::shared_ptr<CompositeType>& composite);
 
 /*
+ * Whether a value fits a type of the machine this compiler is built for:
+ * a char holds 0 to 255, since it has no sign, and every other type holds
+ * as far below nothing as the width the machine gives it allows.
+ */
+bool ValueFitsType(int64 value, PrimitiveType type);
+
+/*
  * The number of bytes a symbol's storage takes: one value for a variable,
  * one value for every element of an array.
  */

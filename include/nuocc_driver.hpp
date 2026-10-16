@@ -37,6 +37,8 @@ private:
         bool assemble = false;
         /* Whether to link the object files into an executable. */
         bool link = true;
+        /* --target, say which target this compiler was built for. */
+        bool target = false;
         /* -o, the file to link the program into. */
         std::string output = "a.out";
         /* The source files named on the command line. */
@@ -50,12 +52,18 @@ private:
     /* The stages of the compilation. */
 
     /*
-     * Compile one source file down to the file the target of this build
-     * writes, which is the assembly of the machine it is aimed at, or the
-     * language a tool named by the target turns into that assembly.
+     * Make the program out of the code a target which builds its own
+     * programs wrote, which is one file of code for each source file.
      */
     bool CompileToCode(const std::string& source,
                        const std::string& output) const;
+
+    /*
+     * Make the program out of the code a target which builds its own
+     * programs wrote, which is one file of code for each source file.
+     */
+    int BuildProgram(const std::string& builder,
+                     const std::string& suffix) const;
 
     /*
      * Feed one source file through the C pre-processor and answer with

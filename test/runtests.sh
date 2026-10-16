@@ -8,6 +8,14 @@
 # test: the compiler has to refuse it, and the message it is refused with is
 # compared against the recorded one beside it.
 #
+# A target which gives a value a width of its own, or which holds the bytes
+# of a value in an order of its own, prints something else for a program
+# which asks about them. Such a target records what it prints under
+# test/expected/<target>/, and that file is what its run is compared
+# against. A program which cannot be built for a target at all, because the
+# value it prints does not fit the width that target gives an int, is named
+# in test/<target>/skip.txt and is reported as not applying to it.
+#
 # Usage: test/runtests.sh [path to the nuocc binary]
 #
 # The binary to test is the one named on the command line, or the one which
@@ -53,6 +61,22 @@ case $nuocc in
     *) nuocc=$(CDPATH= cd -- "$(dirname -- "$nuocc")" && pwd)/$(basename -- "$nuocc") ;;
 esac
 
+# Which target this compiler was built for, which says which of the tests
+# apply to it, what it prints, and what runs the programs it builds.
+target=$("$nuocc" --target)
+target_expected=$script_dir/expected/$target
+skip_file=$script_dir/$target/skip.txt
+
+# A program for the machine this compiler runs on is run by the system. One
+# for another machine is run by an emulator of it, which has to be on the
+# path, the way the tool which assembles the code is.
+case $target in
+    m6809) runner=${NUOCC_RUNNER:-emu6809} ;;
+    *)     runner="" ;;
+esac
+
+skipped=0
+
 # The compiler writes its assembly next to itself, so it is run in a
 # directory of its own and nothing is left behind in the project.
 work_dir=$(mktemp -d)
@@ -71,7 +95,19 @@ programs=$(
 )
 
 for name in $programs; do
+    # A program this target cannot build is not one it fails.
+    if [ -f "$skip_file" ] &&
+       grep -q "^$name\b" "$skip_file"; then
+        skipped=$((skipped + 1))
+        continue
+    fi
+
+    # What this target prints for the program, which is what the shared
+    # output says unless the target recorded one of its own.
     expected=$script_dir/expected/$name.out
+    if [ -f "$target_expected/$name.out" ]; then
+        expected=$target_expected/$name.out
+    fi
 
     # A test is one source file, or several when it is about what more than
     # one file of a program sees: they are named testN.c, testN_2.c and so
@@ -91,7 +127,11 @@ for name in $programs; do
 
     # What the program itself returns is not checked: a test is free to
     # end without a return statement.
-    "$work_dir/out" > "$work_dir/trial.out"
+    if [ -n "$runner" ]; then
+        "$runner" "$work_dir/out" > "$work_dir/trial.out" 2>"$work_dir/emu.log"
+    else
+        "$work_dir/out" > "$work_dir/trial.out"
+    fi
 
     if cmp -s "$expected" "$work_dir/trial.out"; then
         echo "ok   $name"
@@ -134,6 +174,6 @@ for source in "$script_dir"/errors/*.c; do
 done
 
 echo
-echo "$passed passed, $failed failed"
+echo "$passed passed, $failed failed, $skipped not applying to $target"
 
 [ "$failed" -eq 0 ]

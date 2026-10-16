@@ -160,6 +160,14 @@ void QbeCodegen::StoreAt(const std::string& address,
     ofs_ << std::endl;
 }
 
+/*
+ * The storage of the string literals a function held is written once that
+ * function is over, so nothing waits for the end of the program.
+ */
+void QbeCodegen::EmitEndOfProgram()
+{
+}
+
 void QbeCodegen::EmitPreamble()
 {
     /*
@@ -286,7 +294,7 @@ void QbeCodegen::EmitJump(label_idx label)
     ofs_ << "  jmp " << Label(label) << std::endl;
 }
 
-reg_idx QbeCodegen::LoadInt(int32 value)
+reg_idx QbeCodegen::LoadInt(int32 value, PrimitiveType /*type*/)
 {
     reg_idx reg = AllocRegister();
 
@@ -333,7 +341,7 @@ reg_idx QbeCodegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
  * values the registers hold and gives it to the register the first of them
  * was in, exactly like Add() and the rest of them.
  */
-reg_idx QbeCodegen::Add(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Add(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "add", Register(reg1), Register(reg2));
 
@@ -342,7 +350,7 @@ reg_idx QbeCodegen::Add(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::Sub(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Sub(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "sub", Register(reg1), Register(reg2));
 
@@ -351,7 +359,7 @@ reg_idx QbeCodegen::Sub(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::Mul(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Mul(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "mul", Register(reg1), Register(reg2));
 
@@ -360,7 +368,7 @@ reg_idx QbeCodegen::Mul(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::Div(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Div(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "div", Register(reg1), Register(reg2));
 
@@ -371,7 +379,7 @@ reg_idx QbeCodegen::Div(reg_idx reg1, reg_idx reg2)
 
 /* What is left of the first value once the second has been taken from it as
  * many whole times as it holds. */
-reg_idx QbeCodegen::Mod(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Mod(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "rem", Register(reg1), Register(reg2));
 
@@ -380,7 +388,7 @@ reg_idx QbeCodegen::Mod(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::And(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::And(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "and", Register(reg1), Register(reg2));
 
@@ -389,7 +397,7 @@ reg_idx QbeCodegen::And(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::Or(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Or(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "or", Register(reg1), Register(reg2));
 
@@ -398,7 +406,7 @@ reg_idx QbeCodegen::Or(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::Xor(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::Xor(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "xor", Register(reg1), Register(reg2));
 
@@ -407,7 +415,8 @@ reg_idx QbeCodegen::Xor(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx QbeCodegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::ShiftLeft(reg_idx reg1, reg_idx reg2,
+    PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "shl", Register(reg1), Register(reg2));
 
@@ -418,7 +427,8 @@ reg_idx QbeCodegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
 
 /* A shift of a value to the right fills the top bits in with zeroes, which
  * is what the language asks for. */
-reg_idx QbeCodegen::ShiftRight(reg_idx reg1, reg_idx reg2)
+reg_idx QbeCodegen::ShiftRight(reg_idx reg1, reg_idx reg2,
+    PrimitiveType /*type*/)
 {
     EmitBinary(reg1, "shr", Register(reg1), Register(reg2));
 
@@ -485,7 +495,7 @@ reg_idx QbeCodegen::Cast(reg_idx reg,
     return reg;
 }
 
-reg_idx QbeCodegen::Scale(reg_idx reg, int32 scale)
+reg_idx QbeCodegen::Scale(reg_idx reg, int32 scale, PrimitiveType /*type*/)
 {
     /* A size of one scales by one, which leaves the value alone. */
     if (scale == 1)
@@ -496,19 +506,19 @@ reg_idx QbeCodegen::Scale(reg_idx reg, int32 scale)
     return reg;
 }
 
-void QbeCodegen::Move(reg_idx dest, reg_idx src)
+void QbeCodegen::Move(reg_idx dest, reg_idx src, PrimitiveType /*type*/)
 {
     ofs_ << "  " << Register(dest) << " =l copy " << Register(src) << std::endl;
 }
 
-reg_idx QbeCodegen::Negate(reg_idx reg)
+reg_idx QbeCodegen::Negate(reg_idx reg, PrimitiveType /*type*/)
 {
     EmitBinary(reg, "sub", "0", Register(reg));
 
     return reg;
 }
 
-reg_idx QbeCodegen::Invert(reg_idx reg)
+reg_idx QbeCodegen::Invert(reg_idx reg, PrimitiveType /*type*/)
 {
     EmitBinary(reg, "xor", Register(reg), "-1");
 
@@ -517,14 +527,14 @@ reg_idx QbeCodegen::Invert(reg_idx reg)
 
 /* A value is false when it is zero, so the answer is the one the comparison
  * with zero leaves behind. */
-reg_idx QbeCodegen::LogNot(reg_idx reg)
+reg_idx QbeCodegen::LogNot(reg_idx reg, PrimitiveType /*type*/)
 {
     EmitBinary(reg, "ceql", Register(reg), "0");
 
     return reg;
 }
 
-reg_idx QbeCodegen::ToBool(reg_idx reg)
+reg_idx QbeCodegen::ToBool(reg_idx reg, PrimitiveType /*type*/)
 {
     EmitBinary(reg, "cnel", Register(reg), "0");
 
@@ -559,7 +569,8 @@ reg_idx QbeCodegen::IncDec(const Symbol& symbol, int32 delta, bool post)
 
 reg_idx QbeCodegen::CompareAndSet(NodeTag op_type,
     reg_idx reg1,
-    reg_idx reg2)
+    reg_idx reg2,
+    PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -584,7 +595,8 @@ reg_idx QbeCodegen::CompareAndSet(NodeTag op_type,
 void QbeCodegen::CompareAndJump(NodeTag op_type,
     reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -618,7 +630,8 @@ void QbeCodegen::CompareAndJump(NodeTag op_type,
 
 void QbeCodegen::JumpIfEqual(reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     const std::string test = NewValue();
     const label_idx next = NewLabel();
@@ -662,7 +675,7 @@ void QbeCodegen::JumpIfNonZero(reg_idx reg, label_idx label)
  * handing its register out again while the rest of the arguments are worked
  * out leaves the value where it is.
  */
-void QbeCodegen::PushArgument(reg_idx reg)
+void QbeCodegen::PushArgument(reg_idx reg, PrimitiveType /*type*/)
 {
     const std::string argument = NewValue();
 
@@ -859,6 +872,23 @@ void QbeCodegen::FreeAllRegister()
         set_aside_[slot].clear();
 }
 
+/*
+ * The widths of the language's types on the machine QBE writes for. An int is four bytes,
+ * a long eight and a pointer as wide as one, which is what the machine
+ * this compiler runs on has as well.
+ */
+const TypeSizes& TargetSizes()
+{
+    static const TypeSizes kSizes{1, 4, 8, 8};
+
+    return kSizes;
+}
+
+std::string TargetName()
+{
+    return "qbe";
+}
+
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)
 {
     return std::make_unique<QbeCodegen>(output_file);
@@ -874,6 +904,19 @@ std::string CodeSuffix()
 std::string CodeTool()
 {
     return "qbe";
+}
+
+/* What QBE writes is assembled and linked by the C compiler of the machine
+ * the compiler runs on, as any program of that machine is. */
+std::string CodeBuilder()
+{
+    return "";
+}
+
+std::string BuildCommand(const std::vector<std::string>& /*code*/,
+    const std::string& /*program*/)
+{
+    return "";
 }
 
 }   /* namespace nuocc */

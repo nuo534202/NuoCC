@@ -1,0 +1,7 @@
+# The programs which do not apply to this target, because a value they work
+# with does not fit the two bytes this machine gives an int. One program on
+# a line, with the value which is too wide for it.
+test22  print 100000, which needs a wider int than this machine has
+test30  nested.number is given 66051, which needs a wider int
+test41  2000000000 + 2000000000, which needs a wider int
+test59  box.value.number is given 66051, which needs a wider int

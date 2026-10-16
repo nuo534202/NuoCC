@@ -1817,16 +1817,24 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
 
             AstNodePtr operand = PrefixExpression(token_list, i);
 
-            /*
-             * A char is unsigned, so there is no such thing as a negative
-             * one: the value is widened to an int before the sign flips.
-             */
-            if (!ModifyType(operand, PrimitiveType::kInt, std::nullopt))
+            /* Only a number has a negative one. */
+            if (!IsIntType(operand->GetType()))
             {
                 std::cerr << "syntax error: - needs a number!";
                 std::cerr << std::endl;
                 std::exit(1);
             }
+
+            /*
+             * A char is unsigned, so there is no such thing as a negative
+             * one: the value is widened to an int before the sign flips.
+             * A value which is already as wide as an int keeps its own
+             * width, so that a long has a negative one as well.
+             */
+            const PrimitiveType type = operand->GetType();
+
+            if (PrimitiveSize(type) < PrimitiveSize(PrimitiveType::kInt))
+                ModifyType(operand, PrimitiveType::kInt, std::nullopt);
 
             return std::make_unique<AstUnary>(operand,
                                               A_AstNegate,
@@ -1917,13 +1925,19 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             int32 value = lit->GetValue();
 
             /*
-             * A small literal is given the type char so that it can be
-             * stored in a char variable; anything else needs the wider
-             * type and will be rejected there.
+             * A literal is given the narrowest type which holds it, so
+             * that it can be stored where a value of that type is wanted:
+             * a small one is a char, one which is too big for an int of
+             * the machine the compiler is built for is a long, and a
+             * value which is too big for a long as well is rejected
+             * where it is used.
              */
-            PrimitiveType type = (value >= 0 && value < 256)
-                                 ? PrimitiveType::kChar
-                                 : PrimitiveType::kInt;
+            PrimitiveType type = PrimitiveType::kInt;
+
+            if (value >= 0 && value < 256)
+                type = PrimitiveType::kChar;
+            else if (!ValueFitsType(value, PrimitiveType::kInt))
+                type = PrimitiveType::kLong;
 
             const NodePtr& token = token_list[i];
             i++;

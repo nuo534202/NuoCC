@@ -17,6 +17,14 @@ AssemblyCodegen::AssemblyCodegen(const std::string& output_file)
  * assembler is told which name other files may reach and left to itself
  * about one declared static, which only this file may.
  */
+/*
+ * The code and the storage of a program of this target are kept apart by
+ * the assembler, so nothing waits for the end of the program.
+ */
+void AssemblyCodegen::EmitEndOfProgram()
+{
+}
+
 void AssemblyCodegen::BeginGlobal(const Symbol& symbol, int32 alignment)
 {
     ofs_ << "\t.data" << std::endl;
@@ -53,6 +61,9 @@ void AssemblyCodegen::EmitGlobalValue(int32 value, int32 size)
     {
         case 1:
             ofs_ << "\t.byte\t" << value << std::endl;
+            return;
+        case 2:
+            ofs_ << "\t.word\t" << value << std::endl;
             return;
         case 4:
             ofs_ << "\t.long\t" << value << std::endl;
@@ -122,6 +133,19 @@ std::string CodeSuffix()
 }
 
 std::string CodeTool()
+{
+    return "";
+}
+
+/* The program is made by the C compiler of the machine the compiler runs
+ * on, which assembles the code and links the runtime with it. */
+std::string CodeBuilder()
+{
+    return "";
+}
+
+std::string BuildCommand(const std::vector<std::string>& /*code*/,
+    const std::string& /*program*/)
 {
     return "";
 }

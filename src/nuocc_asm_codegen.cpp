@@ -12,7 +12,8 @@ namespace nuocc
 {
 
 AsmCodegen::AsmCodegen(const std::string& output_file)
-    : next_label_(1),
+    : unit_name_(UnitNameOf(output_file)),
+      next_label_(1),
       function_end_label_(0),
       function_return_type_(PrimitiveType::kNone),
       function_local_size_(0),
@@ -25,6 +26,28 @@ AsmCodegen::AsmCodegen(const std::string& output_file)
     }
 
     FreeAllRegister();
+}
+
+/* The file name without its directory and its suffix. */
+std::string AsmCodegen::UnitNameOf(const std::string& path)
+{
+    std::string name = path;
+    const std::size_t slash = name.find_last_of('/');
+
+    if (slash != std::string::npos)
+        name = name.substr(slash + 1);
+
+    const std::size_t dot = name.find_last_of('.');
+
+    if (dot != std::string::npos)
+        name = name.substr(0, dot);
+
+    return name;
+}
+
+const std::string& AsmCodegen::UnitName() const
+{
+    return unit_name_;
 }
 
 AsmCodegen::~AsmCodegen()
@@ -77,6 +100,10 @@ void AsmCodegen::GenProgram(const Program& program)
         function_return_type_ = PrimitiveType::kNone;
         function_local_size_ = 0;
     }
+
+    /* Whatever the target gathered while the code was written, which
+     * belongs after the last of it. */
+    EmitEndOfProgram();
 }
 
 /*
@@ -377,8 +404,10 @@ void AsmCodegen::GenSwitch(const AstNodePtr& root)
         if (ast_case->IsDefault())
             continue;
 
-        reg_idx case_reg = LoadInt(ast_case->GetValue());
-        JumpIfEqual(reg, case_reg, labels[k]);
+        const PrimitiveType type = root->GetLeft()->GetType();
+
+        reg_idx case_reg = LoadInt(ast_case->GetValue(), type);
+        JumpIfEqual(reg, case_reg, labels[k], type);
         FreeRegister(case_reg);
     }
 
@@ -428,7 +457,11 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
         reg_idx left_reg = GenExpr(condition->GetLeft());
         reg_idx right_reg = GenExpr(condition->GetRight());
 
-        CompareAndJump(ast_op->GetOpType(), left_reg, right_reg, false_label);
+        CompareAndJump(ast_op->GetOpType(),
+                       left_reg,
+                       right_reg,
+                       false_label,
+                       condition->GetLeft()->GetType());
         return;
     }
 
@@ -508,27 +541,15 @@ void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
         if (k < static_cast<int32>(symbol.initial_values.size()))
             value = std::get<int32>(symbol.initial_values[k]);
 
-        switch (element_size)
-        {
-            case 1:
-                /*
-                 * A value may be wider than the element holding it, as a
-                 * cast in front of it says, and then the element keeps the
-                 * low bits of it, the way a store does.
-                 */
-                EmitGlobalValue(value & 0xff, 1);
-                break;
-            case 4:
-                EmitGlobalValue(value, 4);
-                break;
-            case 8:
-                EmitGlobalValue(value, 8);
-                break;
-            default:
-                std::cerr << "Error: bad type for variable ";
-                std::cerr << symbol.name << "!" << std::endl;
-                std::exit(1);
-        }
+        /*
+         * A value may be wider than the element holding it, as a cast in
+         * front of it says, and then the element keeps the low bits of it,
+         * the way a store does.
+         */
+        if (element_size == 1)
+            EmitGlobalValue(value & 0xff, 1);
+        else
+            EmitGlobalValue(value, element_size);
     }
 
     EndGlobal();
@@ -556,7 +577,7 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
         {
             const AstIntLit *int_lit =
                 static_cast<const AstIntLit*>(root.get());
-            return LoadInt(int_lit->GetValue());
+            return LoadInt(int_lit->GetValue(), root->GetType());
         }
         case A_AstCast:
         {
@@ -596,7 +617,7 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
 
             reg_idx reg = GenExpr(root->GetLeft());
 
-            return Scale(reg, scale->GetSize());
+            return Scale(reg, scale->GetSize(), root->GetType());
         }
         case A_AstAddress:
         {
@@ -625,13 +646,17 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
          * register, and the tag of the node says which one it is.
          */
         case A_AstNegate:
-            return Negate(GenExpr(root->GetLeft()));
+            return Negate(GenExpr(root->GetLeft()),
+                          root->GetLeft()->GetType());
         case A_AstInvert:
-            return Invert(GenExpr(root->GetLeft()));
+            return Invert(GenExpr(root->GetLeft()),
+                          root->GetLeft()->GetType());
         case A_AstLogNot:
-            return LogNot(GenExpr(root->GetLeft()));
+            return LogNot(GenExpr(root->GetLeft()),
+                          root->GetLeft()->GetType());
         case A_AstToBool:
-            return ToBool(GenExpr(root->GetLeft()));
+            return ToBool(GenExpr(root->GetLeft()),
+                          root->GetLeft()->GetType());
         case A_AstIncDec:
         {
             const AstIncDec *inc =
@@ -665,10 +690,19 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             if (op_type == T_LogAnd || op_type == T_LogOr)
                 return GenLogic(root, op_type == T_LogAnd);
 
+            /*
+             * The two values are of one type, which the parser has put
+             * them both into; a comparison answers with an int whatever
+             * the two of them are, so it is the type they are compared as
+             * which is the width of the operation.
+             */
+            const PrimitiveType type = IsComparisonOp(op_type)
+                ? root->GetLeft()->GetType() : root->GetType();
+
             reg_idx left_reg = GenExpr(root->GetLeft());
             reg_idx right_reg = GenExpr(root->GetRight());
 
-            return GenOperator(op_type, left_reg, right_reg);
+            return GenOperator(op_type, left_reg, right_reg, type);
         }
         default:
             break;
@@ -695,7 +729,7 @@ reg_idx AsmCodegen::GenCall(const AstNodePtr& root)
     {
         reg_idx arg_reg = GenExpr(*it);
 
-        PushArgument(arg_reg);
+        PushArgument(arg_reg, (*it)->GetType());
         FreeRegister(arg_reg);
     }
 
@@ -797,15 +831,15 @@ reg_idx AsmCodegen::GenLogic(const AstNodePtr& root, bool is_and)
 
     /* Neither side settled it, so the answer is the one which the other
      * side would have settled it as. */
-    value = LoadInt(is_and ? 1 : 0);
-    Move(result, value);
+    value = LoadInt(is_and ? 1 : 0, PrimitiveType::kInt);
+    Move(result, value, PrimitiveType::kInt);
     FreeRegister(value);
 
     EmitJump(end_label);
     EmitLabel(settled);
 
-    value = LoadInt(is_and ? 0 : 1);
-    Move(result, value);
+    value = LoadInt(is_and ? 0 : 1, PrimitiveType::kInt);
+    Move(result, value, PrimitiveType::kInt);
     FreeRegister(value);
 
     EmitLabel(end_label);
@@ -849,14 +883,14 @@ reg_idx AsmCodegen::GenTernary(const AstNodePtr& root)
     const reg_idx result = AllocRegister();
 
     reg_idx value = GenExpr(root->GetMid());
-    Move(result, value);
+    Move(result, value, root->GetMid()->GetType());
     FreeRegister(value);
 
     EmitJump(end_label);
     EmitLabel(false_label);
 
     value = GenExpr(root->GetRight());
-    Move(result, value);
+    Move(result, value, root->GetRight()->GetType());
     FreeRegister(value);
 
     EmitLabel(end_label);
@@ -892,7 +926,8 @@ reg_idx AsmCodegen::GenAssignOp(const AstNodePtr& root, NodeTag op_type)
                 static_cast<const AstIdentifier*>(target.get());
 
             reg_idx current_reg = LoadSymbol(ident->GetSymbol());
-            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg);
+            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg,
+                                             target->GetType());
 
             StoreSymbol(ident->GetSymbol(), result_reg);
             return result_reg;
@@ -903,7 +938,8 @@ reg_idx AsmCodegen::GenAssignOp(const AstNodePtr& root, NodeTag op_type)
         {
             reg_idx address_reg = GenAddress(target);
             reg_idx current_reg = LoadDeref(address_reg, target->GetType());
-            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg);
+            reg_idx result_reg = GenOperator(op_type, current_reg, value_reg,
+                                             target->GetType());
 
             StoreDeref(result_reg, address_reg, target->GetType());
             FreeRegister(address_reg);
@@ -941,37 +977,38 @@ reg_idx AsmCodegen::GenAddress(const AstNodePtr& root) {
 
 reg_idx AsmCodegen::GenOperator(NodeTag op_type,
     reg_idx left_reg,
-    reg_idx right_reg)
+    reg_idx right_reg,
+    PrimitiveType type)
 {
     switch (op_type)
     {
         case T_Plus:
-            return Add(left_reg, right_reg);
+            return Add(left_reg, right_reg, type);
         case T_Minus:
-            return Sub(left_reg, right_reg);
+            return Sub(left_reg, right_reg, type);
         case T_Star:
-            return Mul(left_reg, right_reg);
+            return Mul(left_reg, right_reg, type);
         case T_Slash:
-            return Div(left_reg, right_reg);
+            return Div(left_reg, right_reg, type);
         case T_Percent:
-            return Mod(left_reg, right_reg);
+            return Mod(left_reg, right_reg, type);
         case T_Amper:
-            return And(left_reg, right_reg);
+            return And(left_reg, right_reg, type);
         case T_Or:
-            return Or(left_reg, right_reg);
+            return Or(left_reg, right_reg, type);
         case T_Xor:
-            return Xor(left_reg, right_reg);
+            return Xor(left_reg, right_reg, type);
         case T_LShift:
-            return ShiftLeft(left_reg, right_reg);
+            return ShiftLeft(left_reg, right_reg, type);
         case T_RShift:
-            return ShiftRight(left_reg, right_reg);
+            return ShiftRight(left_reg, right_reg, type);
         case T_EQ:
         case T_NE:
         case T_LT:
         case T_GT:
         case T_LE:
         case T_GE:
-            return CompareAndSet(op_type, left_reg, right_reg);
+            return CompareAndSet(op_type, left_reg, right_reg, type);
         default:
             break;
     }

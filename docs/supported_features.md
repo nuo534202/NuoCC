@@ -838,3 +838,29 @@
     the registers, and leaves assembly that is smaller than the assembly the
     machine targets write. QBE has to be on the path, and the assembler and
     linker the compiler already uses do the rest.
+
+60. A Second Machine, Which Is Not This One (acwj Stage 64,
+    `64_6809_Target`). The compiler may also be built to write the assembly
+    of the Motorola 6809, an eight bit machine of 1980:
+    `cmake -DNUOCC_TARGET=m6809 ..` picks that target, and every program of
+    the language is built for it as well. Nothing of the language changes:
+    the same programs are compiled, and they print what the other targets
+    print wherever the machine gives a type the same width and holds the
+    bytes of a value in the same order. The machine has one accumulator and
+    instructions which always work with it, so where the other targets hand
+    out registers, the four registers the walk of the tree asks for are
+    four places in the frame of the function, and a value is worked out in
+    the accumulator and left in the place its register keeps it. An `int`
+    is two bytes and a pointer two as well, since the machine reaches no
+    more than 64K of memory, and a `long` is four; the arithmetic the
+    machine has no instruction for, which is a multiplication, a division,
+    a remainder and the negative of a `long`, is worked out by the runtime
+    in [lib/6809](lib/6809) that every program of this target is built
+    with. A program of this target is put together by joining the runtime
+    and the code the compiler wrote and assembling the whole of it, so it
+    is built by one command rather than assembled and linked, `-c` is not
+    something it has, and a program of more than one source file is the
+    code of each of them joined with the runtime. Which target a compiler
+    was built for is what `nuocc --target` says, and the tests of a target
+    whose programs the system cannot run are run by an emulator of its
+    machine.

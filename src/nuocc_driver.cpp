@@ -9,6 +9,7 @@
 #include "nuocc_asm_codegen.hpp"
 #include "nuocc_parser.hpp"
 #include "nuocc_scanner.hpp"
+#include "utils/nuocc_command.hpp"
 #include "utils/nuocc_print.hpp"
 
 /*
@@ -60,15 +61,6 @@ std::string CompilerName()
     return NUOCC_CC;
 }
 
-/*
- * A file name as a shell has to see it, so that a path with a space in it
- * still reaches the assembler as one argument.
- */
-std::string Quote(const std::string& text)
-{
-    return "'" + text + "'";
-}
-
 /* The file name without the directories it is found in. */
 std::string FileName(const std::string& path)
 {
@@ -115,6 +107,8 @@ void Driver::Usage(const char* program) const
     std::cerr << std::endl;
     std::cerr << "       -o outfile, produce the outfile executable file";
     std::cerr << std::endl;
+    std::cerr << "       --target, say which target this compiler was built";
+    std::cerr << " for and stop" << std::endl;
 }
 
 bool Driver::ParseOptions(int argc, const char* const* argv)
@@ -128,6 +122,16 @@ bool Driver::ParseOptions(int argc, const char* const* argv)
 
         if (argument.size() < 2 || argument[0] != '-')
             break;
+
+        /*
+         * A question about the compiler itself, which is answered and
+         * leaves: no input file is needed and nothing is compiled.
+         */
+        if (argument == "--target")
+        {
+            std::cout << TargetName() << std::endl;
+            std::exit(0);
+        }
 
         for (size_t k = 1; k < argument.size(); k++)
         {
@@ -317,6 +321,61 @@ bool Driver::Link(const std::vector<std::string>& objects) const
     return RunCommand(command);
 }
 
+/*
+ * Make the program out of the file of code with the tool of a target which
+ * has one of its own. Such a target makes one program out of one source
+ * file, and what it makes is the program: there is nothing to assemble and
+ * nothing to link afterwards.
+ */
+int Driver::BuildProgram(const std::string& builder,
+    const std::string& suffix) const
+{
+    if (options_.assemble)
+    {
+        std::cerr << "error: -c makes an object file, which this target";
+        std::cerr << " does not" << std::endl;
+        return 1;
+    }
+
+    std::vector<std::string> written;
+
+    for (const std::string& source : options_.inputs)
+    {
+        const std::string code = ReplaceSuffix(source, suffix);
+
+        if (code.empty())
+        {
+            std::cerr << "error: " << source << " has no suffix to replace";
+            std::cerr << std::endl;
+            return 1;
+        }
+
+        if (options_.verbose)
+            std::cout << "compiling " << source << std::endl;
+
+        if (!CompileToCode(source, code))
+            return 1;
+
+        written.push_back(code);
+    }
+
+    /* -S asks for the code itself, and stops there. */
+    if (!options_.assemble && !options_.link)
+        return 0;
+
+    if (!RunCommand(BuildCommand(written, options_.output)))
+    {
+        std::cerr << builder << " could not build the program" << std::endl;
+        return 1;
+    }
+
+    /* The code has done its work once it is the program. */
+    for (const std::string& code : written)
+        std::remove(code.c_str());
+
+    return 0;
+}
+
 int Driver::Run(int argc, const char* const* argv)
 {
     if (!ParseOptions(argc, argv))
@@ -328,11 +387,22 @@ int Driver::Run(int argc, const char* const* argv)
     std::vector<std::string> objects;
 
     /*
-     * What the target of this build writes, and the tool which turns it
-     * into assembly when it does not write the assembly itself.
+     * What the target of this build writes, the tool which turns it into
+     * assembly when it does not write the assembly itself, and the tool
+     * which makes the program when the C compiler of the machine the
+     * compiler runs on does not.
      */
     const std::string code_suffix = CodeSuffix();
     const std::string code_tool = CodeTool();
+    const std::string code_builder = CodeBuilder();
+
+    /*
+     * A target which makes the program with a tool of its own makes one
+     * program out of one source file: what it writes is not assembled and
+     * linked the way the code of the other targets is.
+     */
+    if (!code_builder.empty())
+        return BuildProgram(code_builder, code_suffix);
 
     for (const std::string& source : options_.inputs)
     {

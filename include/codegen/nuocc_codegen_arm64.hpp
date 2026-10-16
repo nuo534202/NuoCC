@@ -36,20 +36,20 @@ protected:
      */
     std::string GlobName(const std::string& name) const override;
 
-    reg_idx LoadInt(int32 value) override;
+    reg_idx LoadInt(int32 value, PrimitiveType type) override;
     reg_idx LoadSymbol(const Symbol& symbol) override;
     reg_idx StoreSymbol(const Symbol& symbol, reg_idx reg) override;
 
-    reg_idx Add(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Sub(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Mul(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Div(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Mod(reg_idx reg1, reg_idx reg2) override;
-    reg_idx And(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Or(reg_idx reg1, reg_idx reg2) override;
-    reg_idx Xor(reg_idx reg1, reg_idx reg2) override;
-    reg_idx ShiftLeft(reg_idx reg1, reg_idx reg2) override;
-    reg_idx ShiftRight(reg_idx reg1, reg_idx reg2) override;
+    reg_idx Add(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Sub(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Mul(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Div(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Mod(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx And(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Or(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx Xor(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx ShiftLeft(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
+    reg_idx ShiftRight(reg_idx reg1, reg_idx reg2, PrimitiveType type) override;
     reg_idx Widen(reg_idx reg,
                   PrimitiveType old_type,
                   PrimitiveType new_type) override;
@@ -58,29 +58,32 @@ protected:
     reg_idx Cast(reg_idx reg,
                  PrimitiveType old_type,
                  PrimitiveType new_type) override;
-    reg_idx Scale(reg_idx reg, int32 scale) override;
-    void Move(reg_idx dest, reg_idx src) override;
+    reg_idx Scale(reg_idx reg, int32 scale, PrimitiveType type) override;
+    void Move(reg_idx dest, reg_idx src, PrimitiveType type) override;
 
-    reg_idx Negate(reg_idx reg) override;
-    reg_idx Invert(reg_idx reg) override;
-    reg_idx LogNot(reg_idx reg) override;
-    reg_idx ToBool(reg_idx reg) override;
+    reg_idx Negate(reg_idx reg, PrimitiveType type) override;
+    reg_idx Invert(reg_idx reg, PrimitiveType type) override;
+    reg_idx LogNot(reg_idx reg, PrimitiveType type) override;
+    reg_idx ToBool(reg_idx reg, PrimitiveType type) override;
     reg_idx IncDec(const Symbol& symbol, int32 delta, bool post) override;
 
     reg_idx CompareAndSet(NodeTag op_type,
                           reg_idx reg1,
-                          reg_idx reg2) override;
+                          reg_idx reg2,
+                          PrimitiveType type) override;
     void CompareAndJump(NodeTag op_type,
                         reg_idx reg1,
                         reg_idx reg2,
-                        label_idx label) override;
+                        label_idx label,
+                        PrimitiveType type) override;
     void JumpIfEqual(reg_idx reg1,
                      reg_idx reg2,
-                     label_idx label) override;
+                     label_idx label,
+                     PrimitiveType type) override;
     void JumpIfZero(reg_idx reg, label_idx label) override;
     void JumpIfNonZero(reg_idx reg, label_idx label) override;
 
-    void PushArgument(reg_idx reg) override;
+    void PushArgument(reg_idx reg, PrimitiveType type) override;
     reg_idx Call(const Symbol& symbol, int32 arg_count) override;
     void Return(reg_idx reg) override;
     void PrintInt(reg_idx reg) override;

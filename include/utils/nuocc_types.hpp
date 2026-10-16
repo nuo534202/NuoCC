@@ -33,6 +33,28 @@ using label_idx = uint32;
 constexpr int32 kMaxArguments = 6;
 
 /*
+ * How much room each of the language's types takes on the machine the
+ * compiler is built for. What a value takes is what its type says, so the
+ * width of an int is the width of the machine's int rather than a number
+ * of the compiler's own: an int is four bytes on the machines this
+ * compiler began with and two on the 6809, and the room a frame, a struct
+ * or a sizeof takes is worked out from these.
+ */
+struct TypeSizes
+{
+    int32 char_size;
+    int32 int_size;
+    int32 long_size;
+    int32 pointer_size;
+};
+
+/*
+ * The widths of the types on the machine the target of this build writes
+ * code for. Each target names its own, and the build picks one of them.
+ */
+const TypeSizes& TargetSizes();
+
+/*
  * The type of a value. The bottom four bits of a type are how many levels
  * of indirection it has and the rest of it is which primitive type it is
  * built from, so a char is kChar and a char ** is two levels above it.

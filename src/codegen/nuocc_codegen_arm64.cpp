@@ -211,7 +211,7 @@ void Arm64Codegen::EmitLoadImmediate(reg_idx reg, int64 value)
     }
 }
 
-reg_idx Arm64Codegen::LoadInt(int32 value)
+reg_idx Arm64Codegen::LoadInt(int32 value, PrimitiveType /*type*/)
 {
     reg_idx reg = AllocRegister();
 
@@ -328,7 +328,7 @@ reg_idx Arm64Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
     return reg;
 }
 
-reg_idx Arm64Codegen::Add(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Add(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tadd\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -341,7 +341,7 @@ reg_idx Arm64Codegen::Add(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Sub(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Sub(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tsub\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -351,7 +351,7 @@ reg_idx Arm64Codegen::Sub(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Mul(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Mul(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tmul\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -364,7 +364,7 @@ reg_idx Arm64Codegen::Mul(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tsdiv\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -378,7 +378,7 @@ reg_idx Arm64Codegen::Div(reg_idx reg1, reg_idx reg2)
  * The bitwise operations. Each of them writes the result over reg2 and
  * gives reg1 back, exactly like Add() and the rest.
  */
-reg_idx Arm64Codegen::And(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::And(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tand\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -391,7 +391,7 @@ reg_idx Arm64Codegen::And(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Or(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Or(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\torr\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -404,7 +404,7 @@ reg_idx Arm64Codegen::Or(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\teor\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -421,7 +421,7 @@ reg_idx Arm64Codegen::Xor(reg_idx reg1, reg_idx reg2)
  * A shift takes the number of bits to shift by in the low bits of a
  * register, which is where that value already is.
  */
-reg_idx Arm64Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     ofs_ << "\tlsl\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
     ofs_ << ", " << xreg_list_[reg2] << std::endl;
@@ -434,7 +434,7 @@ reg_idx Arm64Codegen::ShiftLeft(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     /* 'lsr' shifts zeroes in, 'asr' would keep the sign. */
     ofs_ << "\tlsr\t" << xreg_list_[reg1] << ", " << xreg_list_[reg1];
@@ -448,7 +448,7 @@ reg_idx Arm64Codegen::ShiftRight(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-reg_idx Arm64Codegen::Mod(reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::Mod(reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     /*
      * The remainder is what the division throws away, so the quotient is
@@ -469,13 +469,13 @@ reg_idx Arm64Codegen::Mod(reg_idx reg1, reg_idx reg2)
     return reg1;
 }
 
-void Arm64Codegen::Move(reg_idx dest, reg_idx src)
+void Arm64Codegen::Move(reg_idx dest, reg_idx src, PrimitiveType /*type*/)
 {
     ofs_ << "\tmov\t" << xreg_list_[dest] << ", " << xreg_list_[src];
     ofs_ << std::endl;
 }
 
-reg_idx Arm64Codegen::Negate(reg_idx reg)
+reg_idx Arm64Codegen::Negate(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tneg\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
     ofs_ << std::endl;
@@ -483,7 +483,7 @@ reg_idx Arm64Codegen::Negate(reg_idx reg)
     return reg;
 }
 
-reg_idx Arm64Codegen::Invert(reg_idx reg)
+reg_idx Arm64Codegen::Invert(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tmvn\t" << xreg_list_[reg] << ", " << xreg_list_[reg];
     ofs_ << std::endl;
@@ -496,7 +496,7 @@ reg_idx Arm64Codegen::Invert(reg_idx reg)
  * zero register sets the flags, and 'cset' then writes the answer, which
  * is a clean zero or one on its own.
  */
-reg_idx Arm64Codegen::LogNot(reg_idx reg)
+reg_idx Arm64Codegen::LogNot(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tcmp\t" << xreg_list_[reg] << ", xzr" << std::endl;
     ofs_ << "\tcset\t" << xreg_list_[reg] << ", eq" << std::endl;
@@ -504,7 +504,7 @@ reg_idx Arm64Codegen::LogNot(reg_idx reg)
     return reg;
 }
 
-reg_idx Arm64Codegen::ToBool(reg_idx reg)
+reg_idx Arm64Codegen::ToBool(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tcmp\t" << xreg_list_[reg] << ", xzr" << std::endl;
     ofs_ << "\tcset\t" << xreg_list_[reg] << ", ne" << std::endl;
@@ -610,7 +610,7 @@ void Arm64Codegen::ReloadRegister(reg_idx reg, int32 slot)
  * and cheaper than a multiply; the multiply is there for the sizes which
  * are not, which composite types will bring.
  */
-reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
+reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale, PrimitiveType type)
 {
     uint32 size = static_cast<uint32>(scale);
 
@@ -622,12 +622,13 @@ reg_idx Arm64Codegen::Scale(reg_idx reg, int32 scale)
         return reg;
     }
 
-    reg_idx size_reg = LoadInt(scale);
+    /* The size of a value is a value of the type being scaled. */
+    reg_idx size_reg = LoadInt(scale, type);
 
-    return Mul(reg, size_reg);
+    return Mul(reg, size_reg, type);
 }
 
-reg_idx Arm64Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
+reg_idx Arm64Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2, PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -652,7 +653,8 @@ reg_idx Arm64Codegen::CompareAndSet(NodeTag op_type, reg_idx reg1, reg_idx reg2)
 void Arm64Codegen::CompareAndJump(NodeTag op_type,
     reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     auto it = kComparisonInstr.find(op_type);
 
@@ -684,7 +686,8 @@ void Arm64Codegen::CompareAndJump(NodeTag op_type,
  */
 void Arm64Codegen::JumpIfEqual(reg_idx reg1,
     reg_idx reg2,
-    label_idx label)
+    label_idx label,
+    PrimitiveType /*type*/)
 {
     ofs_ << "\tcmp\t" << xreg_list_[reg1] << ", " << xreg_list_[reg2];
     ofs_ << std::endl;
@@ -707,7 +710,7 @@ void Arm64Codegen::JumpIfNonZero(reg_idx reg, label_idx label)
  * the remaining arguments are worked out, which is what a function called
  * from one of them needs.
  */
-void Arm64Codegen::PushArgument(reg_idx reg)
+void Arm64Codegen::PushArgument(reg_idx reg, PrimitiveType /*type*/)
 {
     ofs_ << "\tsub\tsp, sp, #16" << std::endl;
     ofs_ << "\tstr\t" << xreg_list_[reg] << ", [sp]" << std::endl;
@@ -924,6 +927,24 @@ void Arm64Codegen::StoreDeref(reg_idx value_reg,
     }
 
     ofs_ << xreg_list_[address_reg] << "]" << std::endl;
+}
+
+/*
+ * The widths of the language's types on the arm64 machine. An int is four bytes,
+ * a long eight and a pointer as wide as one, which is what the machine
+ * this compiler runs on has as well.
+ */
+const TypeSizes& TargetSizes()
+{
+    static const TypeSizes kSizes{1, 4, 8, 8};
+
+    return kSizes;
+}
+
+/* The target writes the assembly of on the arm64 machine. */
+std::string TargetName()
+{
+    return "arm64";
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

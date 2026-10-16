@@ -20,6 +20,7 @@ public:
     ~AssemblyCodegen() override = default;
 
 protected:
+    void EmitEndOfProgram() override;
     void BeginGlobal(const Symbol& symbol, int32 alignment) override;
     void EmitGlobalSpace(int32 size) override;
     void EmitGlobalValue(int32 value, int32 size) override;
