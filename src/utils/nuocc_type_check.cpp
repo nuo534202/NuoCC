@@ -61,6 +61,7 @@ bool IsIntType(PrimitiveType type)
     switch (type)
     {
         case PrimitiveType::kChar:
+        case PrimitiveType::kShort:
         case PrimitiveType::kInt:
         case PrimitiveType::kLong:
             return true;
@@ -96,6 +97,8 @@ int32 PrimitiveSize(PrimitiveType type)
     {
         case PrimitiveType::kChar:
             return sizes.char_size;
+        case PrimitiveType::kShort:
+            return sizes.short_size;
         case PrimitiveType::kInt:
             return sizes.int_size;
         case PrimitiveType::kLong:

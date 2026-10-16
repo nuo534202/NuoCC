@@ -43,6 +43,7 @@ constexpr int32 kMaxArguments = 6;
 struct TypeSizes
 {
     int32 char_size;
+    int32 short_size;
     int32 int_size;
     int32 long_size;
     int32 pointer_size;
@@ -63,21 +64,26 @@ const TypeSizes& TargetSizes();
  * indirection and take one away, and nothing else reads the levels for
  * itself. kNone marks the trees which are not expressions at all, such as
  * statements and declarations.
+ *
+ * A char has no sign, since it holds the characters of a machine; a short,
+ * an int and a long have one, so a value of one of those is read back as a
+ * number which may be below nothing.
  */
 enum class PrimitiveType : uint8
 {
     kNone = 0x00,
     kVoid = 0x10,
     kChar = 0x20,
-    kInt = 0x30,
-    kLong = 0x40,
+    kShort = 0x30,
+    kInt = 0x40,
+    kLong = 0x50,
     /*
      * A struct and a union are composite types. Which one a value is of
      * is said by the definition it carries and not by the type value, so
      * that either one and a pointer to it are put together the same way a
      * char and its pointers are.
      */
-    kComposite = 0x50
+    kComposite = 0x60
 };
 
 /* The definition of a struct or a union, which a value of the type

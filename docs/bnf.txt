@@ -119,6 +119,7 @@ type: type_keyword
     ;
 
 type_keyword: 'char'
+    | 'short'
     | 'int'
     | 'long'
     | 'void'

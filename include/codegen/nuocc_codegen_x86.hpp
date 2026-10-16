@@ -104,6 +104,8 @@ private:
     std::string reg_list_[kRegSize];
     /* The low byte of each register, required by the setX instructions. */
     std::string breg_list_[kRegSize];
+    /* The low two bytes of each register, for the short type. */
+    std::string wreg_list_[kRegSize];
     /* The low four bytes of each register, for the int type. */
     std::string dreg_list_[kRegSize];
 };

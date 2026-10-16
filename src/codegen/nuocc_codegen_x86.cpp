@@ -45,6 +45,9 @@ constexpr std::string_view kParamRegs64[] = {
 constexpr std::string_view kParamRegs32[] = {
     "%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"
 };
+constexpr std::string_view kParamRegs16[] = {
+    "%di", "%si", "%dx", "%cx", "%r8w", "%r9w"
+};
 constexpr std::string_view kParamRegs8[] = {
     "%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"
 };
@@ -58,6 +61,7 @@ X86Codegen::X86Codegen(const std::string& output_file)
     {
         reg_list_[i] = "%r" + std::to_string(i + 8);
         breg_list_[i] = reg_list_[i] + "b";
+        wreg_list_[i] = reg_list_[i] + "w";
         dreg_list_[i] = reg_list_[i] + "d";
     }
 }
@@ -111,6 +115,10 @@ void X86Codegen::EmitFunctionPreamble(
         {
             case 1:
                 ofs_ << "\tmovb\t" << kParamRegs8[k] << ", -";
+                ofs_ << offset << "(%rbp)" << std::endl;
+                break;
+            case 2:
+                ofs_ << "\tmovw\t" << kParamRegs16[k] << ", -";
                 ofs_ << offset << "(%rbp)" << std::endl;
                 break;
             case 4:
@@ -170,9 +178,9 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
     /*
      * How much is read is decided by the type's size, and every one of
      * these leaves the whole register holding the value. A char is
-     * unsigned, so it is read with the zero extending load; an int is
-     * signed, and reading it without the sign would turn a negative value
-     * into a large positive one.
+     * unsigned, so it is read with the zero extending load; a short and an
+     * int are signed, and reading one of them without the sign would turn
+     * a negative value into a large positive one.
      */
     if (symbol.storage == StorageClass::kLocal)
     {
@@ -181,6 +189,10 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
         {
             case 1:
                 ofs_ << "\tmovzbq\t-" << offset << "(%rbp), ";
+                ofs_ << reg_list_[idx] << std::endl;
+                break;
+            case 2:
+                ofs_ << "\tmovswq\t-" << offset << "(%rbp), ";
                 ofs_ << reg_list_[idx] << std::endl;
                 break;
             case 4:
@@ -204,6 +216,10 @@ reg_idx X86Codegen::LoadSymbol(const Symbol& symbol)
     {
         case 1:
             ofs_ << "\tmovzbq\t" << symbol.name << "(%rip), ";
+            ofs_ << reg_list_[idx] << std::endl;
+            break;
+        case 2:
+            ofs_ << "\tmovswq\t" << symbol.name << "(%rip), ";
             ofs_ << reg_list_[idx] << std::endl;
             break;
         case 4:
@@ -233,6 +249,9 @@ reg_idx X86Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
             case 1:
                 ofs_ << "\tmovb\t" << breg_list_[reg] << ", -";
                 break;
+            case 2:
+                ofs_ << "\tmovw\t" << wreg_list_[reg] << ", -";
+                break;
             case 4:
                 ofs_ << "\tmovl\t" << dreg_list_[reg] << ", -";
                 break;
@@ -252,6 +271,9 @@ reg_idx X86Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
     {
         case 1:
             ofs_ << "\tmovb\t" << breg_list_[reg] << ", ";
+            break;
+        case 2:
+            ofs_ << "\tmovw\t" << wreg_list_[reg] << ", ";
             break;
         case 4:
             ofs_ << "\tmovl\t" << dreg_list_[reg] << ", ";
@@ -460,6 +482,9 @@ void X86Codegen::EmitIncDecMemory(const Symbol& symbol, int32 delta)
         case 1:
             ofs_ << "b";
             break;
+        case 2:
+            ofs_ << "w";
+            break;
         case 4:
             ofs_ << "l";
             break;
@@ -539,6 +564,10 @@ reg_idx X86Codegen::Cast(reg_idx reg,
         case PrimitiveType::kChar:
             ofs_ << "\tmovzbl\t" << breg_list_[reg] << ", ";
             ofs_ << dreg_list_[reg] << std::endl;
+            break;
+        case PrimitiveType::kShort:
+            ofs_ << "\tmovswq\t" << wreg_list_[reg] << ", ";
+            ofs_ << reg_list_[reg] << std::endl;
             break;
         case PrimitiveType::kInt:
             ofs_ << "\tmovslq\t" << dreg_list_[reg] << ", ";
@@ -751,6 +780,8 @@ reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
 
     if (symbol.type == PrimitiveType::kInt) {
         ofs_ << "\tmovslq\t%eax, " << reg_list_[out_reg] << '\n';
+    } else if (symbol.type == PrimitiveType::kShort) {
+        ofs_ << "\tmovswq\t%ax, " << reg_list_[out_reg] << '\n';
     } else if (symbol.type == PrimitiveType::kChar) {
         ofs_ << "\tmovzbq\t%al, " << reg_list_[out_reg] << '\n';
     } else {
@@ -775,6 +806,9 @@ void X86Codegen::Return(reg_idx reg)
     {
         case PrimitiveType::kChar:
             ofs_ << "\tmovzbl\t" << breg_list_[reg] << ", %eax" << std::endl;
+            break;
+        case PrimitiveType::kShort:
+            ofs_ << "\tmovw\t" << wreg_list_[reg] << ", %ax" << std::endl;
             break;
         case PrimitiveType::kInt:
             ofs_ << "\tmovl\t" << dreg_list_[reg] << ", %eax" << std::endl;
@@ -861,6 +895,10 @@ reg_idx X86Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
             ofs_ << "\tmovzbq\t(" << reg_list_[reg] << "), ";
             ofs_ << reg_list_[reg] << std::endl;
             break;
+        case 2:
+            ofs_ << "\tmovswq\t(" << reg_list_[reg] << "), ";
+            ofs_ << reg_list_[reg] << std::endl;
+            break;
         case 4:
             ofs_ << "\tmovslq\t(" << reg_list_[reg] << "), ";
             ofs_ << reg_list_[reg] << std::endl;
@@ -892,6 +930,10 @@ reg_idx X86Codegen::LoadDeref(reg_idx address_reg, PrimitiveType type)
             ofs_ << "\tmovzbq\t(" << reg_list_[address_reg] << "), ";
             ofs_ << reg_list_[value_reg] << std::endl;
             break;
+        case 2:
+            ofs_ << "\tmovswq\t(" << reg_list_[address_reg] << "), ";
+            ofs_ << reg_list_[value_reg] << std::endl;
+            break;
         case 4:
             ofs_ << "\tmovslq\t(" << reg_list_[address_reg] << "), ";
             ofs_ << reg_list_[value_reg] << std::endl;
@@ -917,6 +959,9 @@ void X86Codegen::StoreDeref(reg_idx value_reg,
         case 1:
             ofs_ << "\tmovb\t" << breg_list_[value_reg] << ", ";
             break;
+        case 2:
+            ofs_ << "\tmovw\t" << wreg_list_[value_reg] << ", ";
+            break;
         case 4:
             ofs_ << "\tmovl\t" << dreg_list_[value_reg] << ", ";
             break;
@@ -933,13 +978,13 @@ void X86Codegen::StoreDeref(reg_idx value_reg,
 }
 
 /*
- * The widths of the language's types on the x86-64 machine. An int is four bytes,
- * a long eight and a pointer as wide as one, which is what the machine
- * this compiler runs on has as well.
+ * The widths of the language's types on the x86-64 machine: a char is one
+ * byte, a short two, an int four, a long eight and a pointer as wide as
+ * one, which is what the machine this compiler runs on has as well.
  */
 const TypeSizes& TargetSizes()
 {
-    static const TypeSizes kSizes{1, 4, 8, 8};
+    static const TypeSizes kSizes{1, 2, 4, 8, 8};
 
     return kSizes;
 }

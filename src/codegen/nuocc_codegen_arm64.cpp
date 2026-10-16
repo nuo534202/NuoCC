@@ -132,6 +132,10 @@ void Arm64Codegen::EmitFunctionPreamble(
                 ofs_ << "\tstrb\t" << reg32 << ", [x29, #" << offset;
                 ofs_ << "]" << std::endl;
                 break;
+            case 2:
+                ofs_ << "\tstrh\t" << reg32 << ", [x29, #" << offset;
+                ofs_ << "]" << std::endl;
+                break;
             case 4:
                 ofs_ << "\tstr\t" << reg32 << ", [x29, #" << offset;
                 ofs_ << "]" << std::endl;
@@ -232,6 +236,9 @@ reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
             case 1:
                 ofs_ << "\tldrb\t" << wreg_list_[idx] << ", [x29, #";
                 break;
+            case 2:
+                ofs_ << "\tldrsh\t" << xreg_list_[idx] << ", [x29, #";
+                break;
             case 4:
                 ofs_ << "\tldrsw\t" << xreg_list_[idx] << ", [x29, #";
                 break;
@@ -252,15 +259,19 @@ reg_idx Arm64Codegen::LoadSymbol(const Symbol& symbol)
     /*
      * How much is read is decided by the type's size, and the whole
      * register ends up holding the value. A char is unsigned, so it is
-     * read with the zero extending load; an int is signed, and reading it
-     * without the sign would turn a negative value into a large positive
-     * one.
+     * read with the zero extending load; a short and an int are signed, and
+     * reading one of them without the sign would turn a negative value into
+     * a large positive one.
      */
     switch (PrimitiveSize(symbol.type))
     {
         case 1:
             ofs_ << "\tldrb\t" << wreg_list_[idx] << ", [" << kScratchReg;
             ofs_ << "]" << std::endl;
+            break;
+        case 2:
+            ofs_ << "\tldrsh\t" << xreg_list_[idx] << ", [";
+            ofs_ << kScratchReg << "]" << std::endl;
             break;
         case 4:
             ofs_ << "\tldrsw\t" << xreg_list_[idx] << ", [";
@@ -289,6 +300,9 @@ reg_idx Arm64Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
             case 1:
                 ofs_ << "\tstrb\t" << wreg_list_[reg] << ", [x29, #";
                 break;
+            case 2:
+                ofs_ << "\tstrh\t" << wreg_list_[reg] << ", [x29, #";
+                break;
             case 4:
                 ofs_ << "\tstr\t" << wreg_list_[reg] << ", [x29, #";
                 break;
@@ -310,6 +324,9 @@ reg_idx Arm64Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
     {
         case 1:
             ofs_ << "\tstrb\t" << wreg_list_[reg] << ", [";
+            break;
+        case 2:
+            ofs_ << "\tstrh\t" << wreg_list_[reg] << ", [";
             break;
         case 4:
             ofs_ << "\tstr\t" << wreg_list_[reg] << ", [";
@@ -567,18 +584,23 @@ reg_idx Arm64Codegen::Cast(reg_idx reg,
 {
     /*
      * A pointer and a long are as wide as the register, so there is nothing
-     * of them to cut down. A char and an int are narrower, and the value
-     * which is cast to one of them keeps the bits it can hold: the low
-     * eight for a char and the low thirty two for an int. A value of the
-     * wider type is a number of its own, so the bits it keeps are read back
-     * as that number: a char has no negative ones, while an int does, and
-     * the top of the register is filled in to say so.
+     * of them to cut down. A char, a short and an int are narrower, and the
+     * value which is cast to one of them keeps the bits it can hold: the
+     * low eight for a char, the low sixteen for a short and the low thirty
+     * two for an int. A value of the wider type is a number of its own, so
+     * the bits it keeps are read back as that number: a char has no
+     * negative ones, while a short and an int do, and the top of the
+     * register is filled in to say so.
      */
     switch (new_type)
     {
         case PrimitiveType::kChar:
             ofs_ << "\tand\t" << wreg_list_[reg] << ", " << wreg_list_[reg];
             ofs_ << ", #0xff" << std::endl;
+            break;
+        case PrimitiveType::kShort:
+            ofs_ << "\tsxth\t" << xreg_list_[reg] << ", " << wreg_list_[reg];
+            ofs_ << std::endl;
             break;
         case PrimitiveType::kInt:
             ofs_ << "\tsxtw\t" << xreg_list_[reg] << ", " << wreg_list_[reg];
@@ -741,6 +763,8 @@ reg_idx Arm64Codegen::Call(const Symbol& symbol, int32 arg_count)
 
     if (symbol.type == PrimitiveType::kInt) {
         ofs_ << "\tsxtw\t" << xreg_list_[out_reg] << ", w0\n";
+    } else if (symbol.type == PrimitiveType::kShort) {
+        ofs_ << "\tsxth\t" << xreg_list_[out_reg] << ", w0\n";
     } else if (symbol.type == PrimitiveType::kChar) {
         ofs_ << "\tuxtb\t" << wreg_list_[out_reg] << ", w0\n";
     } else {
@@ -765,6 +789,9 @@ void Arm64Codegen::Return(reg_idx reg)
     {
         case PrimitiveType::kChar:
             ofs_ << "\tuxtb\tw0, " << wreg_list_[reg] << std::endl;
+            break;
+        case PrimitiveType::kShort:
+            ofs_ << "\tmov\tw0, " << wreg_list_[reg] << std::endl;
             break;
         case PrimitiveType::kInt:
             ofs_ << "\tmov\tw0, " << wreg_list_[reg] << std::endl;
@@ -859,6 +886,10 @@ reg_idx Arm64Codegen::Deref(reg_idx reg, PrimitiveType pointer_type)
             ofs_ << "\tldrb\t" << wreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
             break;
+        case 2:
+            ofs_ << "\tldrsh\t" << xreg_list_[reg] << ", [";
+            ofs_ << xreg_list_[reg] << "]" << std::endl;
+            break;
         case 4:
             ofs_ << "\tldrsw\t" << xreg_list_[reg] << ", [";
             ofs_ << xreg_list_[reg] << "]" << std::endl;
@@ -889,6 +920,9 @@ reg_idx Arm64Codegen::LoadDeref(reg_idx address_reg, PrimitiveType type)
         case 1:
             ofs_ << "\tldrb\t" << wreg_list_[value_reg] << ", [";
             break;
+        case 2:
+            ofs_ << "\tldrsh\t" << xreg_list_[value_reg] << ", [";
+            break;
         case 4:
             ofs_ << "\tldrsw\t" << xreg_list_[value_reg] << ", [";
             break;
@@ -914,6 +948,9 @@ void Arm64Codegen::StoreDeref(reg_idx value_reg,
         case 1:
             ofs_ << "\tstrb\t" << wreg_list_[value_reg] << ", [";
             break;
+        case 2:
+            ofs_ << "\tstrh\t" << wreg_list_[value_reg] << ", [";
+            break;
         case 4:
             ofs_ << "\tstr\t" << wreg_list_[value_reg] << ", [";
             break;
@@ -930,13 +967,13 @@ void Arm64Codegen::StoreDeref(reg_idx value_reg,
 }
 
 /*
- * The widths of the language's types on the arm64 machine. An int is four bytes,
- * a long eight and a pointer as wide as one, which is what the machine
- * this compiler runs on has as well.
+ * The widths of the language's types on the arm64 machine: a char is one
+ * byte, a short two, an int four, a long eight and a pointer as wide as
+ * one, which is what the machine this compiler runs on has as well.
  */
 const TypeSizes& TargetSizes()
 {
-    static const TypeSizes kSizes{1, 4, 8, 8};
+    static const TypeSizes kSizes{1, 2, 4, 8, 8};
 
     return kSizes;
 }

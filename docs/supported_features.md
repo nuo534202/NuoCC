@@ -882,3 +882,21 @@
     what it takes away is what did nothing; what is changed is the code,
     which is smaller. Only the 6809 has the pass, because the rules are the
     instructions of that machine.
+
+62. A Value of Two Bytes, Which Has a Sign (acwj Part 61, `61_What_Next`,
+    the idea of adding `short`s). An integer of two bytes is written
+    `short`, and a value of one is -32768 to 32767. Every machine this
+    compiler builds for gives a short two bytes, whatever it gives an int,
+    so it is the one type whose width is the same wherever a program is
+    built. Reading a short gives the sign of the value back, and a value
+    which is wider than a short is only stored in one behind a cast, which
+    keeps the two bytes such a value can hold, so
+    `short s= (short)70000;` is given 4464. A short widens to an int or to
+    a long where the types are mixed, and it may stand wherever any other
+    integer may: a variable, a parameter, a member of a struct, an element
+    of an array, or what a pointer points at. A literal of 256 to 32767 is
+    a short, so that such a value may be stored where a short is wanted
+    without a cast, and the negative of a char, which has no sign of its
+    own, is worked out as a short as well, so `-7` may be stored in one.
+    A short given a value which is too wide for it where it is declared is
+    refused, the way a char is.

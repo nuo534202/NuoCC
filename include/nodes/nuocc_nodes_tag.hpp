@@ -52,6 +52,7 @@ typedef enum NodeTag
     T_KeyWord,
     T_Int,
     T_Char,
+    T_Short,
     T_Long,
     T_Struct,
     T_Union,

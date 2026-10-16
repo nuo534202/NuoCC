@@ -429,6 +429,7 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {PrintStatement(token_list, i), true};
         case T_Int:
         case T_Char:
+        case T_Short:
         case T_Long:
         case T_Void:
         case T_Struct:
@@ -731,23 +732,22 @@ InitialValue Parser::ParseConstantValue(const TypeRef& type,
         std::exit(1);
     }
 
-    /* A char holds 0 to 255, so a value outside that is only taken behind a
-     * cast, which cuts it down to the bits a char holds when it is stored. */
-    if (type.type == PrimitiveType::kChar && !has_cast)
+    /*
+     * A char holds 0 to 255 and a short -32768 to 32767, so a value
+     * outside one of those is only taken behind a cast, which cuts it down
+     * to the bits the type holds when it is stored.
+     */
+    if (!has_cast &&
+        (type.type == PrimitiveType::kChar ||
+         type.type == PrimitiveType::kShort) &&
+        !ValueFitsType(value, type.type))
     {
-        if (value > 255)
-        {
-            std::cerr << "syntax error: the value " << value;
-            std::cerr << " is too big for a char!" << std::endl;
-            std::exit(1);
-        }
-
-        if (value < 0)
-        {
-            std::cerr << "syntax error: the value " << value;
-            std::cerr << " is too small for a char!" << std::endl;
-            std::exit(1);
-        }
+        std::cerr << "syntax error: the value " << value;
+        std::cerr << (value > 0 ? " is too big for a "
+                                : " is too small for a ");
+        std::cerr << (type.type == PrimitiveType::kChar ? "char" : "short");
+        std::cerr << "!" << std::endl;
+        std::exit(1);
     }
 
     return value;
@@ -1827,14 +1827,15 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
 
             /*
              * A char is unsigned, so there is no such thing as a negative
-             * one: the value is widened to an int before the sign flips.
-             * A value which is already as wide as an int keeps its own
-             * width, so that a long has a negative one as well.
+             * one: it is widened to a short, which holds the negative of
+             * every char, before the sign flips. A value which is already
+             * as wide as a short keeps its own width, so that a short has
+             * a negative one of its own, and so have an int and a long.
              */
             const PrimitiveType type = operand->GetType();
 
-            if (PrimitiveSize(type) < PrimitiveSize(PrimitiveType::kInt))
-                ModifyType(operand, PrimitiveType::kInt, std::nullopt);
+            if (PrimitiveSize(type) < PrimitiveSize(PrimitiveType::kShort))
+                ModifyType(operand, PrimitiveType::kShort, std::nullopt);
 
             return std::make_unique<AstUnary>(operand,
                                               A_AstNegate,
@@ -1927,8 +1928,9 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             /*
              * A literal is given the narrowest type which holds it, so
              * that it can be stored where a value of that type is wanted:
-             * a small one is a char, one which is too big for an int of
-             * the machine the compiler is built for is a long, and a
+             * a small one which has no sign is a char, one which is too
+             * big for a char is a short, one which is too big for an int
+             * of the machine the compiler is built for is a long, and a
              * value which is too big for a long as well is rejected
              * where it is used.
              */
@@ -1936,6 +1938,8 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
 
             if (value >= 0 && value < 256)
                 type = PrimitiveType::kChar;
+            else if (ValueFitsType(value, PrimitiveType::kShort))
+                type = PrimitiveType::kShort;
             else if (!ValueFitsType(value, PrimitiveType::kInt))
                 type = PrimitiveType::kLong;
 
@@ -2213,6 +2217,10 @@ TypeRef Parser::ParseType(const std::vector<NodePtr>& token_list, idx_t& i)
             type.type = PrimitiveType::kChar;
             i++;
             break;
+        case T_Short:
+            type.type = PrimitiveType::kShort;
+            i++;
+            break;
         case T_Int:
             type.type = PrimitiveType::kInt;
             i++;
@@ -2252,6 +2260,7 @@ bool Parser::StartsCast(const std::vector<NodePtr>& token_list, idx_t i) const
     {
         case T_Void:
         case T_Char:
+        case T_Short:
         case T_Int:
         case T_Long:
         case T_Struct:

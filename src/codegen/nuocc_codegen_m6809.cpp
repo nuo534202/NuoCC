@@ -1335,13 +1335,14 @@ std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)
 }
 
 /*
- * The widths of the language's types on the 6809: a char is one byte, an
- * int and a pointer two, since the machine reaches no more than 64K of
- * memory, and a long four.
+ * The widths of the language's types on the 6809: a char is one byte, a
+ * short, an int and a pointer two, since the machine reaches no more than
+ * 64K of memory, and a long four. A short is as wide as an int here,
+ * because the machine has no narrower number of its own.
  */
 const TypeSizes& TargetSizes()
 {
-    static const TypeSizes kSizes{1, 2, 4, 2};
+    static const TypeSizes kSizes{1, 2, 2, 4, 2};
 
     return kSizes;
 }

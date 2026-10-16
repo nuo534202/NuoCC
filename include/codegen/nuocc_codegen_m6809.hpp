@@ -21,11 +21,12 @@ namespace nuocc
  * program of this target is built with (lib/6809/runtime.s).
  *
  * The types of the language are the widths the machine gives them: a char
- * is one byte, an int and a pointer two and a long four. A value is held
- * in the low bytes of its register's place, big endian, with the bytes
- * above it saying what the value is: a char has zeroes above it, since it
- * has no sign, and an int has the byte which says which half of the number
- * it is.
+ * is one byte, a short, an int and a pointer two, and a long four. A short
+ * is as wide as an int here, since the machine has no narrower number of
+ * its own. A value is held in the low bytes of its register's place, big
+ * endian, with the bytes above it saying what the value is: a char has
+ * zeroes above it, since it has no sign, and a short has the byte which
+ * says which half of the number it is.
  */
 class M6809Codegen : public AsmCodegen
 {

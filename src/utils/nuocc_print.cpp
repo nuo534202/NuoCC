@@ -120,6 +120,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Char:
             out = "char";
             break;
+        case T_Short:
+            out = "short";
+            break;
         case T_Long:
             out = "long";
             break;
@@ -283,6 +286,9 @@ std::string TypeName(PrimitiveType type,
             break;
         case PrimitiveType::kChar:
             name = "char";
+            break;
+        case PrimitiveType::kShort:
+            name = "short";
             break;
         case PrimitiveType::kInt:
             name = "int";

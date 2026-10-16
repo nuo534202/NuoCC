@@ -37,8 +37,9 @@ const std::unordered_map<NodeTag, ComparisonInstr> kComparisonInstr = {
     {T_GE, {"csgel", "csltl"}}
 };
 
-/* The number of bytes a char, an int and a long take. */
+/* The number of bytes a char, a short, an int and a long take. */
 constexpr int32 kCharSize = 1;
+constexpr int32 kShortSize = 2;
 constexpr int32 kIntSize = 4;
 constexpr int32 kLongSize = 8;
 
@@ -55,6 +56,8 @@ char QbeCodegen::SizeLetter(int32 size)
     {
         case kCharSize:
             return 'b';
+        case kShortSize:
+            return 'h';
         case kIntSize:
             return 'w';
         case kLongSize:
@@ -80,6 +83,8 @@ const char* QbeCodegen::LoadLetter(int32 size)
     {
         case kCharSize:
             return "ub";
+        case kShortSize:
+            return "sh";
         case kIntSize:
             return "sw";
         case kLongSize:
@@ -471,10 +476,11 @@ void QbeCodegen::ReloadRegister(reg_idx reg, int32 slot)
 
 /*
  * Give a value the type it was cast to. A char holds the low eight bits of
- * what it is given and an int the low thirty two, each of them read back
- * as a number of that type: a char has no sign, so the bits which are not
- * kept are zeroes, and an int has one, which is what the sign extension
- * fills in. A wider type takes what it is given as it stands.
+ * what it is given, a short the low sixteen and an int the low thirty two,
+ * each of them read back as a number of that type: a char has no sign, so
+ * the bits which are not kept are zeroes, and a short and an int have one,
+ * which is what the sign extension fills in. A wider type takes what it is
+ * given as it stands.
  */
 reg_idx QbeCodegen::Cast(reg_idx reg,
     PrimitiveType /*old_type*/,
@@ -484,6 +490,9 @@ reg_idx QbeCodegen::Cast(reg_idx reg,
     {
         case PrimitiveType::kChar:
             EmitBinary(reg, "and", Register(reg), "255");
+            break;
+        case PrimitiveType::kShort:
+            EmitUnary(reg, "extsh");
             break;
         case PrimitiveType::kInt:
             EmitUnary(reg, "extsw");
@@ -873,13 +882,13 @@ void QbeCodegen::FreeAllRegister()
 }
 
 /*
- * The widths of the language's types on the machine QBE writes for. An int is four bytes,
- * a long eight and a pointer as wide as one, which is what the machine
- * this compiler runs on has as well.
+ * The widths of the language's types on the machine QBE writes for: a char
+ * is one byte, a short two, an int four, a long eight and a pointer as wide
+ * as one, which is what the machine this compiler runs on has as well.
  */
 const TypeSizes& TargetSizes()
 {
-    static const TypeSizes kSizes{1, 4, 8, 8};
+    static const TypeSizes kSizes{1, 2, 4, 8, 8};
 
     return kSizes;
 }
