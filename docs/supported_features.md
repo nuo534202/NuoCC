@@ -973,3 +973,32 @@
     has room for, and a member of a struct may not be given values at all,
     since the room a member takes is part of a value of the struct it
     stands in and there is nothing to put a value in until one exists.
+
+67. The Peephole Optimiser Reaching a Second Machine (acwj Part 61,
+    `61_What_Next`, the rest of the idea of optimising the code the
+    generator wrote). Item 61 gave the pass to the 6809 alone, since a
+    rule of it is a sequence of the instructions of one machine and is only
+    right about the code that machine's generator writes. The pass is now a
+    pass of the compiler which a target names its own rules for, and the
+    arm64 and the x86-64 have them. A branch to the label standing next to
+    it is taken away, since the machine comes to the same instruction by
+    carrying on to it; what a return statement leaves is this, and it is
+    much the commonest thing the pass takes away. A value of eight bytes, a
+    long or an address, which is held in the place of a register and read
+    straight back is left in the register, since a store from a register
+    leaves the value there and the read of a value that wide brings back
+    exactly what the register holds; what the code generator writes when an
+    expression worked out and held for the next one has been put in its
+    place is this. The arm64 takes away the read of a char as well, since a
+    char has no sign of its own and a register holding one holds the whole
+    of it; the x86-64 leaves that read alone, because a store of one byte
+    names the register one way and a read of it names it another, and a
+    rule can only say that the same text stands on two lines. A read of a
+    narrower value which has a sign is left alone on both machines: such a
+    read gives the value the width of its type back, and the register may
+    hold the wider value the program worked out, so taking the read away
+    would print something else for a program whose arithmetic ran past the
+    width of its type. What the pass leaves is recorded beside the programs
+    under test/arm64 and test/x86_64, and the suite compares what the
+    compiler writes with it; every program of the suite still prints what
+    it printed before, since what the pass takes away is what did nothing.

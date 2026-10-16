@@ -145,10 +145,10 @@ for name in $programs; do
 done
 
 # The code a target writes may be recorded as well, and what the compiler
-# writes is compared with it. This is how the pass a target has over the code
-# it wrote is tested: the pass of the 6809 is the peephole optimiser, which
-# is not allowed to change what a program does, so a program of that target
-# says nothing about it, and the code it leaves does.
+# writes is compared with it. This is how the pass a machine target has over
+# the code it wrote is tested: the peephole optimiser is not allowed to
+# change what a program does, so a program of that target says nothing about
+# it, and the code it leaves does.
 for expected in "$script_dir/$target"/*.s; do
     [ -f "$expected" ] || continue
     name=$(basename -- "$expected" .s)

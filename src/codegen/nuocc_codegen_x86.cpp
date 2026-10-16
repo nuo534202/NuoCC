@@ -7,6 +7,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "codegen/nuocc_peephole.hpp"
 #include "utils/nuocc_runtime.hpp"
 #include "utils/nuocc_type_check.hpp"
 
@@ -1035,6 +1036,18 @@ const TypeSizes& TargetSizes()
 std::string TargetName()
 {
     return "x86_64";
+}
+
+/*
+ * The code of a program of this target is put through the peephole
+ * optimiser once the whole of it has been written: what the optimiser
+ * leaves is smaller code which does what the code the backend wrote does.
+ */
+bool OptimiseCode(const std::string& code)
+{
+    Peephole peephole(X86PeepholeRules());
+
+    return peephole.OptimiseFile(code);
 }
 
 std::unique_ptr<AsmCodegen> MakeCodegen(const std::string& output_file)

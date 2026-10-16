@@ -67,6 +67,12 @@ runtime of its own beyond `printint`.
 | `qbe` | QBE, then the same assembler and linker as the machine it targets | Writes the intermediate language of [QBE](https://c9x.me/compile/) into a file ending in `.q`, has QBE compile that into assembly, and carries on as any other target. QBE has to be on the path (`qbe`), and it is QBE which decides which machine the assembly is for. |
 | `m6809` | `lwasm`, from [lwtools](http://www.lwtools.ca/) | Writes the assembly of the 6809, which is built by joining it with the runtime in [lib/6809](lib/6809) and assembling the two of them together, so a program of this target is built by one command rather than assembled and linked. `lwasm` has to be on the path, `-c` is not something it has, and a program of more than one source file is the code of each of them joined with the runtime. |
 
+Every machine target puts the code it wrote through the peephole
+optimiser once the whole of it has been written, which takes away the
+instructions the machine has no need of. A rule of the pass is written in
+the instructions of one machine, so each of those targets has its own; the
+QBE target leaves this to QBE, which works the code over itself.
+
 The QBE target writes a language in which every value has a name, so a
 program is compiled without the compiler working out which register a value
 goes in: QBE builds the SSA form and allocates the registers itself, and the

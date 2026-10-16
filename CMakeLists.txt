@@ -29,18 +29,23 @@ file(GLOB_RECURSE SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.cpp)
 # targets, so it is added back with whichever of them is picked.
 list(FILTER SRC EXCLUDE REGEX "/codegen/")
 
+# The peephole optimiser is the pass a target has over the whole of the code
+# it wrote, and every machine target has one: a rule is the instructions of
+# one machine, so each of those targets brings its own rules and the pass is
+# built with it. The QBE target writes QBE's intermediate language rather
+# than the code of a machine, and has no rules of its own.
 if(NUOCC_TARGET STREQUAL "x86_64")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_assembly.cpp)
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_x86.cpp)
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_peephole.cpp)
 elseif(NUOCC_TARGET STREQUAL "arm64")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_assembly.cpp)
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_arm64.cpp)
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_peephole.cpp)
 elseif(NUOCC_TARGET STREQUAL "qbe")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_qbe.cpp)
 elseif(NUOCC_TARGET STREQUAL "m6809")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_m6809.cpp)
-    # The peephole optimiser is the pass this target has over the code it
-    # wrote, so only this target is built with it.
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_peephole.cpp)
 else()
     message(FATAL_ERROR

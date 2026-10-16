@@ -381,11 +381,12 @@ std::string BuildCommand(const std::vector<std::string>& code,
                          const std::string& program);
 
 /*
- * Put the code the compiler wrote through the pass over the whole of it which
- * the target has, and answer with whether it could be done. The 6809 has
- * one: the peephole optimiser, which takes away the instructions the code
- * generator writes and the machine has no need of. A target which has no
- * such pass leaves the code as it was written.
+ * Put the code the compiler wrote through the pass over the whole of it
+ * which the target has, and answer with whether it could be done. The
+ * machine targets have one: the peephole optimiser, which takes away the
+ * instructions the code generator writes and the machine has no need of,
+ * with the rules of that machine. A target which has no such pass leaves
+ * the code as it was written.
  */
 bool OptimiseCode(const std::string& code);
 

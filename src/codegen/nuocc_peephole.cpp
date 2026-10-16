@@ -3,6 +3,8 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <fstream>
+#include <iostream>
 #include <utility>
 
 namespace nuocc
@@ -163,45 +165,13 @@ bool Matches(const CodeLine& wanted, const CodeLine& line, Parts& parts)
 }
 
 /*
- * One rule of the pass: the lines it looks for, standing one after another,
- * and the lines which are left in the place of them. Every one of them
- * leaves fewer lines than it matched, so the code of a program only gets
- * shorter while the pass is being made.
- */
-struct Rule
-{
-    std::vector<CodeLine> matched;
-    std::vector<CodeLine> kept;
-};
-
-/* A line of a rule which is an instruction, and what it works on. */
-CodeLine Instruction(std::string name, std::string operand = "")
-{
-    CodeLine line;
-    line.name = std::move(name);
-    line.operand = std::move(operand);
-
-    return line;
-}
-
-/* A line of a rule which is a label, written as the whole of the label. */
-CodeLine Label(std::string shape)
-{
-    CodeLine line;
-    line.is_label = true;
-    line.name = std::move(shape);
-
-    return line;
-}
-
-/*
- * The rules of the pass.
+ * The rules of the 6809.
  *
  * Each of them takes away an instruction which the machine does not need,
  * and each of them is about one place twice where it has to be, so that
  * what is taken away cannot be about two different places.
  */
-const std::vector<Rule> kRules = {
+const std::vector<PeepholeRule> kM6809Rules = {
     /*
      * A value which is stored and then read straight back is the value the
      * machine holds in D still: a store from D leaves the value there, so
@@ -210,19 +180,103 @@ const std::vector<Rule> kRules = {
      * out into has been put in its place and the next expression begins by
      * asking for it.
      */
-    {{Instruction("std", "%1"), Instruction("ldd", "%1")},
-     {Instruction("std", "%1")}},
+    {{"std %1", "ldd %1"}, {"std %1"}},
     /* The same for the address the machine holds in X, which a store from
      * X leaves there. */
-    {{Instruction("stx", "%1"), Instruction("ldx", "%1")},
-     {Instruction("stx", "%1")}},
+    {{"stx %1", "ldx %1"}, {"stx %1"}},
     /*
      * A jump to the label standing next to it is taken away: the machine
      * comes to the same instruction by carrying on to it.
      */
-    {{Instruction("jmp", "%1"), Label("%1:")},
-     {Label("%1:")}},
+    {{"jmp %1", "%1:"}, {"%1:"}},
 };
+
+/*
+ * The rules of the arm64.
+ *
+ * A read may be taken away after a store of the same width to the same
+ * place, because a register keeps the value a store from it leaves and the
+ * read of a value that wide brings back exactly what the register holds.
+ * A read of a narrower value is left alone, since it sign extends or zero
+ * extends what it reads and the register may hold the wide value the
+ * program worked out rather than the narrow one which is stored.
+ */
+const std::vector<PeepholeRule> kArm64Rules = {
+    /*
+     * A value of eight bytes, a long or an address, which is stored and
+     * then read straight back is the value the register holds still, so
+     * the read is left out. The code generator writes this pair where the
+     * value one expression was worked out into has been put in its place
+     * and the next expression begins by asking for it.
+     */
+    {{"str %1, %2", "ldr %1, %2"}, {"str %1, %2"}},
+    /*
+     * The same for a char, which is a value of one byte and has no sign of
+     * its own: a register holding one holds the whole of it, so the read
+     * of it brings back what the register holds already.
+     */
+    {{"strb %1, %2", "ldrb %1, %2"}, {"strb %1, %2"}},
+    /*
+     * A branch to the label standing next to it is taken away: the machine
+     * comes to the same instruction by carrying on to it. What a return
+     * statement leaves is this.
+     */
+    {{"b %1", "%1:"}, {"%1:"}},
+};
+
+/*
+ * The rules of the x86-64, which are the instructions of this machine
+ * rather than of the arm64 and are about the same values for the same
+ * reasons: what is left of a value of eight bytes travels whole, so a long
+ * or an address which is stored and then read straight back is still in
+ * the register the store came from, and a jump to the label standing next
+ * to it is taken away.
+ *
+ * A read of a narrower value is left alone, as it is on the arm64: the
+ * read of a value of four bytes sign extends it, and the register holds
+ * the value the program worked out, which may be wider than the four bytes
+ * the machine stores. The read of a char is left alone as well, though a
+ * char has no sign of its own, because the two instructions name the
+ * register differently -- a store of one byte writes %r8b where a read of
+ * it writes %r8 -- and a rule can only say that the same text stands on
+ * two lines.
+ */
+const std::vector<PeepholeRule> kX86Rules = {
+    {{"movq %1, %2", "movq %2, %1"}, {"movq %1, %2"}},
+    {{"jmp %1", "%1:"}, {"%1:"}},
+};
+
+/*
+ * One rule of the pass, with the lines of it read as what they hold. The
+ * text a machine writes its rules in is read once, and what the pass
+ * matches the code against is this.
+ */
+struct Rule
+{
+    std::vector<CodeLine> matched;
+    std::vector<CodeLine> kept;
+};
+
+/* Read the rules of a machine, so that the pass may match the code. */
+std::vector<Rule> ReadRules(const std::vector<PeepholeRule>& rules)
+{
+    std::vector<Rule> read;
+
+    for (const PeepholeRule& rule : rules)
+    {
+        Rule one;
+
+        for (const std::string& line : rule.matched)
+            one.matched.push_back(ParseLine(line));
+
+        for (const std::string& line : rule.kept)
+            one.kept.push_back(ParseLine(line));
+
+        read.push_back(std::move(one));
+    }
+
+    return read;
+}
 
 /*
  * Whether the lines of the code standing at a place are what a rule looks
@@ -284,8 +338,12 @@ std::string Written(const CodeLine& line, const Parts& parts)
 
 }   /* namespace */
 
+Peephole::Peephole(const std::vector<PeepholeRule>& rules) : rules_(rules) {}
+
 Peephole::Lines Peephole::Optimise(const Lines& code) const
 {
+    const std::vector<Rule> rules = ReadRules(rules_);
+
     Lines left = code;
     bool fired = true;
 
@@ -312,7 +370,7 @@ Peephole::Lines Peephole::Optimise(const Lines& code) const
             const Rule *rule = nullptr;
             Parts parts;
 
-            for (const Rule& candidate : kRules)
+            for (const Rule& candidate : rules)
             {
                 Parts held;
 
@@ -343,6 +401,60 @@ Peephole::Lines Peephole::Optimise(const Lines& code) const
     }
 
     return left;
+}
+
+bool Peephole::OptimiseFile(const std::string& file) const
+{
+    std::ifstream source(file);
+
+    if (!source.is_open())
+    {
+        std::cerr << "error: cannot read the code in " << file << std::endl;
+        return false;
+    }
+
+    Lines lines;
+
+    for (std::string line; std::getline(source, line);)
+        lines.push_back(line);
+
+    source.close();
+
+    const Lines left = Optimise(lines);
+
+    std::ofstream written(file, std::ios::out | std::ios::trunc);
+
+    if (!written.is_open())
+    {
+        std::cerr << "error: cannot write the code to " << file << std::endl;
+        return false;
+    }
+
+    for (const std::string& line : left)
+        written << line << '\n';
+
+    if (!written)
+    {
+        std::cerr << "error: cannot write the code to " << file << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+const std::vector<PeepholeRule>& Arm64PeepholeRules()
+{
+    return kArm64Rules;
+}
+
+const std::vector<PeepholeRule>& M6809PeepholeRules()
+{
+    return kM6809Rules;
+}
+
+const std::vector<PeepholeRule>& X86PeepholeRules()
+{
+    return kX86Rules;
 }
 
 }   /* namespace nuocc */
