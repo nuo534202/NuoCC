@@ -566,7 +566,7 @@ const std::unordered_map<std::string, NodeTag> Scanner::kKeyWords = {
     {"print", T_Print},
     {"struct", T_Struct}, {"union", T_Union},
     {"if", T_If}, {"else", T_Else},
-    {"while", T_While}, {"for", T_For},
+    {"while", T_While}, {"do", T_Do}, {"for", T_For},
     {"void", T_Void}, {"return", T_Return},
     {"enum", T_Enum}, {"typedef", T_Typedef},
     {"extern", T_Extern},

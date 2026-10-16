@@ -180,6 +180,10 @@ bool AstIf::HasElse() const
 AstWhile::AstWhile(AstNodePtr& condition, AstNodePtr& body)
     : AstNode(A_AstWhile, PrimitiveType::kNone, condition, body) {}
 
+/* AstDoWhile */
+AstDoWhile::AstDoWhile(AstNodePtr& condition, AstNodePtr& body)
+    : AstNode(A_AstDoWhile, PrimitiveType::kNone, condition, body) {}
+
 /* AstFor */
 AstFor::AstFor(AstNodePtr& condition, AstNodePtr& body, AstNodePtr& post)
     : AstNode(A_AstFor,

@@ -206,6 +206,20 @@ public:
 };
 
 /*
+ * A do loop, which is a while loop with the condition at the end: the
+ * body runs once before the condition is asked at all, and every pass
+ * after that begins only where it held. The left child holds the
+ * condition and the right child the body, in the same places a while loop
+ * keeps them, so that everything which walks a tree reaches both.
+ */
+class AstDoWhile : public AstNode
+{
+public:
+    AstDoWhile(AstNodePtr& condition, AstNodePtr& body);
+    ~AstDoWhile() = default;
+};
+
+/*
  * A for loop, which is a while loop with a step taken at the end of every
  * pass: the left child holds the condition, the middle child the body and
  * the right child the statement which runs at the end of the pass. The

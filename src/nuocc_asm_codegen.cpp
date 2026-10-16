@@ -150,6 +150,10 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             GenWhile(root);
             return;
 
+        case A_AstDoWhile:
+            GenDoWhile(root);
+            return;
+
         case A_AstFor:
             GenFor(root);
             return;
@@ -286,6 +290,50 @@ void AsmCodegen::GenWhile(const AstNodePtr& root)
     FreeAllRegister();
 
     GenStatement(root->GetRight());
+    FreeAllRegister();
+
+    EmitJump(start_label);
+    EmitLabel(end_label);
+
+    loop_break_label_ = saved_break;
+    loop_continue_label_ = saved_continue;
+}
+
+/*
+ * Generate the code for a do loop, which is a while loop with the
+ * condition at the end:
+ *
+ * Lstart:
+ *      <body>
+ * Lnext:
+ *      <condition>, jumping to Lend when it does not hold
+ *      jmp Lstart
+ * Lend:
+ *
+ * The body is the first thing the loop runs, so the loop always goes round
+ * at least once, however the condition reads. A continue of this loop goes
+ * to the condition rather than back to the body, since what it begins is
+ * the next pass and the condition is what decides whether there is one.
+ */
+void AsmCodegen::GenDoWhile(const AstNodePtr& root)
+{
+    label_idx start_label = NewLabel();
+    label_idx end_label = NewLabel();
+    label_idx next_label = NewLabel();
+
+    const label_idx saved_break = loop_break_label_;
+    const label_idx saved_continue = loop_continue_label_;
+    loop_break_label_ = end_label;
+    loop_continue_label_ = next_label;
+
+    EmitLabel(start_label);
+
+    GenStatement(root->GetRight());
+    FreeAllRegister();
+
+    EmitLabel(next_label);
+
+    GenCondition(root->GetLeft(), end_label);
     FreeAllRegister();
 
     EmitJump(start_label);

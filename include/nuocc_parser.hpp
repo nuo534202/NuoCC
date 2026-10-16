@@ -339,6 +339,8 @@ private:
         idx_t& i);
     AstNodePtr WhileStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
+    AstNodePtr DoStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
     AstNodePtr ForStatement(const std::vector<NodePtr>& token_list,
         idx_t& i);
     AstNodePtr ReturnStatement(const std::vector<NodePtr>& token_list,

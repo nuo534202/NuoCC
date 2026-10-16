@@ -415,6 +415,7 @@ AstNodePtr Parser::ExpressionList(const std::vector<NodePtr>& token_list,
  *      |     expression_statement
  *      |     if_statement
  *      |     while_statement
+ *      |     do_statement
  *      |     for_statement
  *      |     return_statement
  *      ;
@@ -460,6 +461,8 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {IfStatement(token_list, i), false};
         case T_While:
             return {WhileStatement(token_list, i), false};
+        case T_Do:
+            return {DoStatement(token_list, i), false};
         case T_For:
             return {ForStatement(token_list, i), false};
         case T_Return:
@@ -1098,6 +1101,37 @@ AstNodePtr Parser::WhileStatement(const std::vector<NodePtr>& token_list,
     loop_level_--;
 
     return std::make_unique<AstWhile>(condition, body);
+}
+
+/*
+ * do_statement: 'do' statement 'while' '(' true_false_expression ')' ';'  ;
+ *
+ * The body of a do loop runs once before the condition is asked at all, so
+ * the condition stands after it and the loop goes round again only where
+ * it held. The semicolon which closes the statement is part of the loop
+ * rather than of the body, since a body which is one of the statements
+ * ending in one would otherwise take it.
+ */
+AstNodePtr Parser::DoStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Do, "do");
+
+    /*
+     * The body stands one loop deeper, so that a break or a continue
+     * written in it finds this loop.
+     */
+    loop_level_++;
+    AstNodePtr body = BodyStatement(token_list, i);
+    loop_level_--;
+
+    Match(token_list, i, T_While, "while");
+
+    AstNodePtr condition = Condition(token_list, i);
+
+    Match(token_list, i, T_Semicolon, ";");
+
+    return std::make_unique<AstDoWhile>(condition, body);
 }
 
 /*

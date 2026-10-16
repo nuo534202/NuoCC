@@ -210,6 +210,7 @@ statement: compound_statement
     | empty_statement
     | if_statement
     | while_statement
+    | do_statement
     | for_statement
     | switch_statement
     | return_statement
@@ -302,6 +303,15 @@ if_head: 'if' '(' true_false_expression ')' statement
     ;
 
 while_statement: 'while' '(' true_false_expression ')' statement
+    ;
+
+/*
+ * The body of a do loop runs once before the condition is asked at all, so
+ * the condition stands after it and the loop goes round again only where
+ * it held. A continue in the body goes on to the condition, since the
+ * condition is what decides whether there is another pass.
+ */
+do_statement: 'do' statement 'while' '(' true_false_expression ')' ';'
     ;
 
 /*

@@ -144,6 +144,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_While:
             out = "while";
             break;
+        case T_Do:
+            out = "do";
+            break;
         case T_For:
             out = "for";
             break;
@@ -357,6 +360,8 @@ std::string DescribeNode(const AstNode& node)
                                                               : "if";
         case A_AstWhile:
             return "while";
+        case A_AstDoWhile:
+            return "do while";
         case A_AstFor:
             return "for";
         case A_AstBreak:

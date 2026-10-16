@@ -939,3 +939,19 @@
     what the machine asks for only where the two agree, so the test of a
     call to such a function does not apply to it, and the 6809 has no
     library function of this kind at all.
+
+65. The Loop Which Asks Last (acwj Part 61, `61_What_Next`, the idea of
+    extending the recognised grammar). A loop may be written with the
+    condition at the end rather than at the beginning, as
+    `do statement while (condition);` is, and its body then runs once
+    before the condition is asked at all: a loop whose condition is false
+    from the first still runs its body one time, which is what tells it
+    apart from a while loop. Every pass after the first begins only where
+    the condition held. The body is one statement, so more than one of them
+    is written between braces, and the semicolon which closes the loop
+    belongs to the loop rather than to the body, since a body which is a
+    statement ending in one would otherwise take it. A break written in
+    the body leaves the loop at once, and a continue goes on to the
+    condition rather than back to the body, since the condition is what
+    says whether there is another pass to begin; a loop written within a
+    loop is left by a break one loop at a time, as it is anywhere else.

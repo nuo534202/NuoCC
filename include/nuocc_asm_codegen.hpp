@@ -251,6 +251,7 @@ protected:
     void GenStatement(const AstNodePtr& root);
     void GenIf(const AstNodePtr& root);
     void GenWhile(const AstNodePtr& root);
+    void GenDoWhile(const AstNodePtr& root);
     void GenFor(const AstNodePtr& root);
     void GenSwitch(const AstNodePtr& root);
     reg_idx GenTernary(const AstNodePtr& root);
