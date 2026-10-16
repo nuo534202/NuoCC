@@ -559,13 +559,26 @@ AstNodePtr Parser::DeclareStatement(const std::vector<NodePtr>& token_list,
 void Parser::CheckInitialisable(StorageClass storage,
     const std::string& name) const
 {
-    if (storage != StorageClass::kExtern)
-        return;
+    if (storage == StorageClass::kExtern)
+    {
+        std::cerr << "syntax error: " << name;
+        std::cerr << " cannot be given a value where it is declared!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
 
-    std::cerr << "syntax error: " << name;
-    std::cerr << " cannot be given a value where it is declared!";
-    std::cerr << std::endl;
-    std::exit(1);
+    /*
+     * A member is not a place of its own: the room it takes is part of a
+     * value of the composite it stands in, and there is nothing to put a
+     * value in until a value of that composite is made.
+     */
+    if (storage == StorageClass::kMember)
+    {
+        std::cerr << "syntax error: " << name << " is a member, so it";
+        std::cerr << " cannot be given a value where it is declared!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
 }
 
 /*
@@ -807,10 +820,12 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
                       .storage = prefix.storage,
                       .is_static = prefix.is_static};
 
+        AstNodePtr array_initialiser = nullptr;
+
         if (is_array)
         {
             symbol = ArrayDeclaration(token_list, i, type, name,
-                                      prefix.storage);
+                                      prefix.storage, array_initialiser);
             symbol.is_static = prefix.is_static;
         }
         else if (prefix.storage == StorageClass::kLocal)
@@ -835,6 +850,7 @@ std::vector<Parser::DeclaredName> Parser::VariableList(
 
         DeclaredName declared;
         declared.symbol = symbol;
+        declared.initialiser = std::move(array_initialiser);
 
         /*
          * A name may be given the value it starts with. A global one has it
@@ -899,13 +915,21 @@ bool Parser::IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
  * which the compiler works out while it is compiling the program, and an
  * array written without one takes the number of values it is given. What
  * the size works out to is fixed for the life of the array.
+ *
+ * The values the array is given are read here as well. A global array has
+ * them put in its storage by the compiler, so they travel back in the
+ * symbol; a local array is given them by the program, so what comes back
+ * is the `initialiser` which stores them where the declaration stands.
  */
 Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
     const TypeRef& element_type,
     const std::string& name,
-    StorageClass storage)
+    StorageClass storage,
+    AstNodePtr& initialiser)
 {
+    initialiser = nullptr;
+
     Match(token_list, i, T_LBracket, "[");
 
     /*
@@ -962,26 +986,18 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
                   .element_count = size};
 
     /*
-     * The values the array is given where it is declared. Only a global
-     * array may have them yet, and they may give it the size it was not
-     * written with.
+     * The values the array is given where it is declared, which may also
+     * give it the size it was not written with. A global array is given
+     * values the compiler can work out, since it is the compiler which
+     * puts them in the storage; a local array is given values the program
+     * works out, since they are stored into it once the program runs.
      */
+    const bool is_global = storage == StorageClass::kGlobal;
+    std::vector<AstNodePtr> elements;
+
     if (TokenTag(token_list[i]) == T_Assign)
     {
         CheckInitialisable(storage, name);
-
-        /*
-         * The values of an array are put in the array itself by the
-         * compiler, which can only be done for an array declared in this
-         * file: a local one would have to have them put there at run time.
-         */
-        if (storage != StorageClass::kGlobal)
-        {
-            std::cerr << "syntax error: initialising an array where it is";
-            std::cerr << " declared is only supported for a global array!";
-            std::cerr << std::endl;
-            std::exit(1);
-        }
 
         i++;    /* step over '=' */
 
@@ -991,8 +1007,10 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
         while (TokenTag(token_list[i]) != T_RBrace)
         {
-            values.push_back(
-                ParseConstantValue(element_type, token_list, i));
+            if (is_global)
+                values.push_back(ParseConstantValue(element_type, token_list, i));
+            else
+                elements.push_back(BinaryExpression(token_list, i, 0));
 
             /* A ',' separates two values, and the last one needs none. */
             if (TokenTag(token_list[i]) != T_Comma)
@@ -1003,7 +1021,9 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
         Match(token_list, i, T_RBrace, "}");
 
-        if (has_size && static_cast<int32>(values.size()) > size)
+        const idx_t given = is_global ? values.size() : elements.size();
+
+        if (has_size && static_cast<int32>(given) > size)
         {
             std::cerr << "syntax error: too many values for the array ";
             std::cerr << name << "!" << std::endl;
@@ -1016,7 +1036,7 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
          * and the elements left over start out zero.
          */
         if (!has_size)
-            symbol.element_count = static_cast<int32>(values.size());
+            symbol.element_count = static_cast<int32>(given);
 
         symbol.initial_values = std::move(values);
     }
@@ -1042,9 +1062,83 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
         symbol.stack_offset = AllocateLocal(
             element_size * symbol.element_count,
             ValueAlignment(element_type.type, element_type.composite));
+
+        /*
+         * The elements of a local array are given their values one after
+         * another where the declaration stands, each value being worked
+         * out and stored as the ones before it were.
+         */
+        std::vector<AstNodePtr> stores;
+        const int32 given = static_cast<int32>(elements.size());
+
+        for (int32 k = 0; k < given; k++)
+        {
+            AstNodePtr value = std::move(elements[k]);
+
+            if (!ModifyType(value, element_type, std::nullopt))
+            {
+                std::cerr << "syntax error: value " << (k + 1) << " of the";
+                std::cerr << " array " << name << " does not fit the type of";
+                std::cerr << " an element!" << std::endl;
+                std::exit(1);
+            }
+
+            stores.push_back(ElementAssignment(symbol, k, value));
+        }
+
+        /*
+         * An element left over is given nothing, the way an element of a
+         * global array which was not given a value starts out holding
+         * nothing: a number of zero, and an address which points at
+         * nothing.
+         */
+        for (int32 k = given; k < symbol.element_count; k++)
+        {
+            AstNodePtr nothing = MakeIntLitLeaf(0, element_type.type);
+
+            stores.push_back(ElementAssignment(symbol, k, nothing));
+        }
+
+        initialiser = GlueStatements(stores);
     }
 
     return symbol;
+}
+
+/*
+ * The assignment which stores one value into one element of an array: the
+ * element is reached the way `name[index]` reaches it, and the value stands
+ * on the left of the assignment the way it does in every other one.
+ */
+AstNodePtr Parser::ElementAssignment(const Symbol& symbol,
+    int32 index,
+    AstNodePtr& value)
+{
+    AstNodePtr base = std::make_unique<AstAddress>(symbol);
+    AstNodePtr offset = MakeIntLitLeaf(index, PrimitiveType::kInt);
+
+    /*
+     * An index counts elements and not bytes, so it reaches the element it
+     * names only once it has been scaled by the room one element takes,
+     * which is what giving it to the operator does. An array of composite
+     * values is not part of the language, so there is no element whose size
+     * would not be known and this always works.
+     */
+    if (!ModifyType(offset, base->GetType(), T_Plus))
+    {
+        std::cerr << "syntax error: this element of the array " << symbol.name;
+        std::cerr << " cannot be reached!" << std::endl;
+        std::exit(1);
+    }
+
+    const PrimitiveType pointer_type = base->GetType();
+    AstNodePtr address = std::make_unique<AstOperator>(base, offset, T_Plus,
+                                                       pointer_type);
+    AstNodePtr element = std::make_unique<AstDeref>(address,
+                                                    ValueAt(pointer_type));
+
+    return std::make_unique<AstOperator>(value, element, T_Assign,
+                                         value->GetType());
 }
 
 /*
@@ -2722,8 +2816,17 @@ void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
         }
 
         if (TokenTag(token_list[i]) == T_LBracket)
+        {
+            /*
+             * A member is given no value where it is declared: the room a
+             * value of the struct takes is what the members are for, and
+             * the value is put in when the program runs.
+             */
+            AstNodePtr no_initialiser = nullptr;
+
             member = ArrayDeclaration(token_list, i, member_type, name,
-                                      StorageClass::kMember);
+                                      StorageClass::kMember, no_initialiser);
+        }
 
         Match(token_list, i, T_Semicolon, ";");
 

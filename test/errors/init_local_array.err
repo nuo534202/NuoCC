@@ -1,1 +1,0 @@
-syntax error: initialising an array where it is declared is only supported for a global array!

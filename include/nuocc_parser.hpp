@@ -218,12 +218,27 @@ private:
      * room for all of them at once: one element of the declared type for
      * each. The size may be left out when the values the array is given
      * are its size instead, and the caller matches the semicolon.
+     *
+     * The values a global array is given travel back in the symbol, since
+     * it is the compiler which puts them in its storage. A local array is
+     * given its values by the program instead, so what is left in
+     * `initialiser` is the statement which stores each of them into its
+     * element, and it is null when the array is given none.
      */
     Symbol ArrayDeclaration(const std::vector<NodePtr>& token_list,
                             idx_t& i,
                             const TypeRef& element_type,
                             const std::string& name,
-                            StorageClass storage);
+                            StorageClass storage,
+                            AstNodePtr& initialiser);
+
+    /*
+     * The assignment which stores a value into one element of an array,
+     * where the element is counted from the first one.
+     */
+    AstNodePtr ElementAssignment(const Symbol& symbol,
+                                 int32 index,
+                                 AstNodePtr& value);
 
     /*
      * composite_type: struct_type | union_type

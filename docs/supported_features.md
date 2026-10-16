@@ -955,3 +955,21 @@
     condition rather than back to the body, since the condition is what
     says whether there is another pass to begin; a loop written within a
     loop is left by a break one loop at a time, as it is anywhere else.
+
+66. An Array Given Its Values Where It Is Declared (acwj Part 61,
+    `61_What_Next`, the idea of extending the recognised grammar). An
+    array declared inside a function may now be given the values it starts
+    with, which items 37 and 53 said could only be done for a global one:
+    `int list[5]= { 1, 2, 3, 4, 5 };`. The values are stored into the
+    elements one after another where the declaration stands, so each is
+    worked out while the program runs and may be anything the program can
+    work out there, `int counted[]= { size, size * 2 };` among them, and
+    the size may be left out as it may for a global array. An element the
+    array was not given a value for is given nothing rather than whatever
+    its storage happened to hold, which is what the elements left over in
+    a global array start out holding as well: a number of zero, and an
+    address which points at nothing. A value which does not fit the type
+    of an element is refused, as is a list with more values than the array
+    has room for, and a member of a struct may not be given values at all,
+    since the room a member takes is part of a value of the struct it
+    stands in and there is nothing to put a value in until one exists.

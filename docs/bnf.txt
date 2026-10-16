@@ -85,10 +85,12 @@ declarator_list: declarator
  * where a global variable is declared has to be one the compiler can work
  * out while it is compiling the program, since the compiler is what stores
  * it: `int x= 10 + 6;` is the value 16, and a string is the address of its
- * characters. A value written where a local variable is declared is an
- * expression which runs where it stands. An array is only given values when
- * it is global, and one written without a size takes the number of values it
- * is given as its size.
+ * characters. A value written where a local variable is declared, array or
+ * not, is an expression which runs where it stands, and the values of an
+ * array are stored into its elements there one after another. An array
+ * written without a size takes the number of values it is given as its
+ * size. A member of a struct is not a place of its own, so it may not be
+ * given values at all.
  */
 declarator: opt_pointer identifier opt_value
     | opt_pointer identifier '[' opt_size ']' opt_values

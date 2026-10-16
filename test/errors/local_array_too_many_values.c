@@ -1,4 +1,4 @@
 int main() {
-    int a[2]= { 1, 2 };
+    int list[2]= { 1, 2, 3 };
     return(0);
 }
