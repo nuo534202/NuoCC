@@ -1,0 +1,1 @@
+syntax error: defining the body of a function which takes a variable number of arguments is not supported yet!

@@ -309,17 +309,42 @@ void Scanner::SkipDirective(const std::string& buf, idx_t& i)
         i++;
 }
 
+bool Scanner::BeginsOperator(const std::string& text)
+{
+    if (text.empty())
+        return false;
+
+    for (const std::pair<const std::string, NodeTag>& op : kDoubleOp)
+    {
+        if (op.first.size() >= text.size() &&
+            op.first.compare(0, text.size(), text) == 0)
+            return true;
+    }
+
+    for (const std::pair<const std::string, NodeTag>& op : kTripleOp)
+    {
+        if (op.first.size() >= text.size() &&
+            op.first.compare(0, text.size(), text) == 0)
+            return true;
+    }
+
+    return false;
+}
+
 bool Scanner::IsNewToken(const std::string& token, char ch)
 {
     /*
-     * The next character may still be part of the token when the two of
-     * them together start a two character operator such as == or <=.
+     * The next character is taken into the token when the two of them
+     * together could still grow into an operator, as '=' and '=' grow into
+     * '=='. One '.' and two of them can grow into the '...' of a parameter
+     * list and are not operators on their own, which is what this catches.
      */
-    if (kDoubleOp.find(token + ch) != kDoubleOp.end())
+    if (BeginsOperator(token + ch))
         return false;
 
-    /* An operator is at most two characters long, so it ends here. */
-    if (kDoubleOp.find(token) != kDoubleOp.end())
+    /* An operator is at most three characters long, so it ends here. */
+    if (kDoubleOp.find(token) != kDoubleOp.end() ||
+        kTripleOp.find(token) != kTripleOp.end())
         return true;
 
     /* ch is a single op, or token is a single op*/
@@ -404,6 +429,7 @@ void Scanner::CommitToken(const std::string& token)
         case T_SlashAssign:
         case T_PercentAssign:
         case T_Question:
+        case T_Ellipsis:
             token_node = std::make_unique<Node>(nodetag);
             break;
 
@@ -426,6 +452,9 @@ NodeTag Scanner::GetTokenNodeTag(const std::string& token)
 
     if (token.size() == 2 && kDoubleOp.find(token) != kDoubleOp.end())
         return kDoubleOp.at(token);
+
+    if (token.size() == 3 && kTripleOp.find(token) != kTripleOp.end())
+        return kTripleOp.at(token);
 
     if (kKeyWords.find(token) != kKeyWords.end())
         return T_KeyWord;
@@ -561,6 +590,15 @@ const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
     {'[', T_LBracket}, {']', T_RBracket}, {'.', T_Dot},
     {'&', T_Amper}, {'|', T_Or}, {'^', T_Xor},
     {'~', T_Invert}, {'!', T_LogNot}, {'?', T_Question}
+};
+
+/*
+ * The operators written with three characters. There is one of them, and
+ * it is asked about before the two character operators, since the first
+ * two of the three dots are not an operator on their own.
+ */
+const std::unordered_map<std::string, NodeTag> Scanner::kTripleOp = {
+    {"...", T_Ellipsis}
 };
 
 const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {

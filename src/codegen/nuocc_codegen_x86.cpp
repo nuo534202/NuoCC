@@ -762,6 +762,11 @@ void X86Codegen::PushArgument(reg_idx reg, PrimitiveType /*type*/)
  * registers would leave the stack misaligned for the call, so it is padded
  * back to a multiple of sixteen bytes; the argument slots are already
  * sixteen bytes each and need no padding.
+ *
+ * A function which takes a variable number of arguments is told how many
+ * of the arguments came in the registers the ABI sets aside for a value
+ * with a fraction: %al holds that number, and no argument of the language
+ * has a fraction, so it is always zero.
  */
 reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
 {
@@ -795,6 +800,9 @@ reg_idx X86Codegen::Call(const Symbol& symbol, int32 arg_count)
         ofs_ << "\tmovq\t" << offset << "(%rsp), ";
         ofs_ << kParamRegs64[arg] << std::endl;
     }
+
+    if (symbol.is_variadic)
+        ofs_ << "\tmovl\t$0, %eax" << std::endl;
 
     ofs_ << "\tcall\t" << symbol.name << std::endl;
 

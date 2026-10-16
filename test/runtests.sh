@@ -12,9 +12,10 @@
 # of a value in an order of its own, prints something else for a program
 # which asks about them. Such a target records what it prints under
 # test/expected/<target>/, and that file is what its run is compared
-# against. A program which cannot be built for a target at all, because the
-# value it prints does not fit the width that target gives an int, is named
-# in test/<target>/skip.txt and is reported as not applying to it.
+# against. A program which does not apply to a target, because the value it
+# prints does not fit the width that target gives an int or because it calls
+# something the target has not got, is named in test/<target>/skip.txt with
+# the reason, and a run of the suite reports it as not applying.
 #
 # Usage: test/runtests.sh [path to the nuocc binary]
 #

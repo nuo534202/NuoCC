@@ -743,21 +743,57 @@ void Arm64Codegen::PushArgument(reg_idx reg, PrimitiveType /*type*/)
  * first of them nearest to the stack pointer. Up to six of them travel in
  * x0 to x5, and the ones beyond that would have to travel on the stack.
  *
+ * A function which takes a variable number of arguments is one written
+ * elsewhere, and the library functions of the machine are given the
+ * arguments it does not name on the stack rather than in registers: the
+ * ones it names travel in the registers as any argument does, and every
+ * argument after them is packed into eight byte places with the first of
+ * them nearest to the stack pointer, which is where the function looks for
+ * them. The room they were pushed in is given back once the call is over.
+ *
  * The value registers are callee saved, so whatever an expression is still
  * holding survives the call on its own.
  */
 reg_idx Arm64Codegen::Call(const Symbol& symbol, int32 arg_count)
 {
-    for (int32 arg = 0; arg < arg_count; arg++)
+    const int32 named = static_cast<int32>(symbol.parameter_types.size());
+    const int32 extra = arg_count - named;
+    const bool on_stack = symbol.is_variadic && extra > 0;
+
+    /* The named arguments are read out of their slots before the extra
+     * ones are packed over the places they stand in. */
+    const int32 in_registers = on_stack ? named : arg_count;
+
+    for (int32 arg = 0; arg < in_registers; arg++)
     {
         ofs_ << "\tldr\tx" << arg << ", [sp, #" << 16 * arg << "]";
         ofs_ << std::endl;
     }
 
-    if (arg_count > 0)
+    if (on_stack)
+    {
+        /*
+         * The extra arguments were pushed in sixteen byte slots and are
+         * packed into eight byte ones here. A slot always stands above the
+         * place the value is moved down to, so taking them in the order
+         * they were written never steps on one which is still to be read.
+         */
+        for (int32 arg = 0; arg < extra; arg++)
+        {
+            ofs_ << "\tldr\t" << kScratchReg << ", [sp, #";
+            ofs_ << 16 * (named + arg) << "]" << std::endl;
+            ofs_ << "\tstr\t" << kScratchReg << ", [sp, #";
+            ofs_ << 8 * arg << "]" << std::endl;
+        }
+    }
+
+    if (arg_count > 0 && !on_stack)
         ofs_ << "\tadd\tsp, sp, #" << 16 * arg_count << std::endl;
 
     ofs_ << "\tbl\t" << GlobName(symbol.name) << std::endl;
+
+    if (on_stack)
+        ofs_ << "\tadd\tsp, sp, #" << 16 * arg_count << std::endl;
 
     reg_idx out_reg = AllocRegister();
 

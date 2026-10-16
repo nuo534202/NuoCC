@@ -912,3 +912,30 @@
     did on arm64, qbe and the 6809. A change of one, and a pointer to a
     char, still only touch the value where it stands, so the common case
     costs no more than before.
+
+64. Functions of a Variable Number of Arguments (acwj Part 61,
+    `61_What_Next`, the idea of supporting variadic functions). A
+    declaration whose parameter list ends in `...` names the first few
+    arguments of a function which takes more of them than that, as
+    `int printf(char *format, ...);` does. A call to such a function may
+    give more arguments than the function names, and each of the extra
+    ones takes the type an argument is given when nothing says otherwise:
+    a value narrower than an int is widened to one, and everything else,
+    a long and a pointer among them, travels as it is. A call still gives
+    at most six arguments, since every one of them travels the same way as
+    a parameter of a function of the language. The `...` needs at least
+    one parameter before it, a later declaration of the function has to
+    agree about whether it takes a variable number of arguments, and a
+    body may not be given to such a function, since the language has no
+    way of reaching the arguments it does not name; a function of a
+    variable number of arguments is therefore always one written
+    elsewhere, and the machine's own rules for calling one are what the
+    compiler follows. On x86-64 the values travel in the registers the ABI
+    gives them, and the number of registers carrying a value with a
+    fraction, which is none, is put in `%al`; on arm64 the arguments the
+    function names travel in registers and the rest are put on the stack,
+    which is where the library functions of that machine look for them.
+    The QBE back end hands every argument over in a register, which is
+    what the machine asks for only where the two agree, so the test of a
+    call to such a function does not apply to it, and the 6809 has no
+    library function of this kind at all.

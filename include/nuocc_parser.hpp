@@ -386,14 +386,18 @@ private:
 
     /*
      * Parse the parameter list of a function, which is empty or one or
-     * more `type identifier` pairs separated by commas. The parameters
-     * come back in the order they are written, and nothing is added to the
-     * symbol table here: a prototype keeps only their types, while a
-     * definition binds them once its body is known to follow.
+     * more `type identifier` pairs separated by commas, followed when it
+     * ends in `...` by the mark of a function which takes more arguments
+     * than it names parameters. The parameters come back in the order they
+     * are written, and nothing is added to the symbol table here: a
+     * prototype keeps only their types, while a definition binds them once
+     * its body is known to follow. `is_variadic` is left saying whether the
+     * list ended in `...`.
      */
     std::vector<Symbol> FunctionParameters(
         const std::vector<NodePtr>& token_list,
-        idx_t& i);
+        idx_t& i,
+        bool& is_variadic);
 
     /*
      * Compare a declaration of a function with the one which is already

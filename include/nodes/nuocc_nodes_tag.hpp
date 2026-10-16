@@ -84,6 +84,7 @@ typedef enum NodeTag
     T_RBracket,
     T_Dot,
     T_Arrow,
+    T_Ellipsis,
     T_Semicolon,
     T_Comma,
     T_Colon,

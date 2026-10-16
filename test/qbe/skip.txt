@@ -1,0 +1,8 @@
+# The programs which do not apply to this target. A function which takes a
+# variable number of arguments is one written elsewhere, and the machine it
+# was written for tells the caller where the extra arguments go. QBE hands
+# every argument over in a register whatever the machine, which is only
+# what the machine asks for where the two agree, so a call to such a
+# function is not one this target can make. One program on a line, with the
+# reason it does not apply.
+test62  the extra arguments go where QBE puts them, not where the machine asks

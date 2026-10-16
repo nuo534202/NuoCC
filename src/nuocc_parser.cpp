@@ -156,14 +156,17 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     }
 
     Match(token_list, i, T_LParen, "(");
-    std::vector<Symbol> parameters = FunctionParameters(token_list, i);
+    bool is_variadic = false;
+    std::vector<Symbol> parameters =
+        FunctionParameters(token_list, i, is_variadic);
     Match(token_list, i, T_RParen, ")");
 
     Symbol symbol{.name = name,
                   .type = type.type,
                   .composite = type.composite,
                   .stype = StructuralType::kFunction,
-                  .is_static = is_static};
+                  .is_static = is_static,
+                  .is_variadic = is_variadic};
 
     for (const Symbol& parameter : parameters)
         symbol.parameter_types.push_back(
@@ -174,6 +177,20 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
 
     /* The token after the parameter list says whether a body follows. */
     const bool has_body = TokenTag(token_list[i]) == T_LBrace;
+
+    /*
+     * The extra arguments of a variadic function are read by the function
+     * itself rather than by the compiler, and the language has no way of
+     * naming them yet, so a function whose body is written here may not
+     * take a variable number of them.
+     */
+    if (is_variadic && has_body)
+    {
+        std::cerr << "syntax error: defining the body of a function which";
+        std::cerr << " takes a variable number of arguments is not";
+        std::cerr << " supported yet!" << std::endl;
+        std::exit(1);
+    }
 
     if (previous && previous->has_body && has_body)
     {
@@ -1344,6 +1361,26 @@ AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
     return std::make_unique<AstSwitch>(expression, cases);
 }
 
+namespace
+{
+
+/*
+ * The type an argument takes when nothing says otherwise, which is the
+ * type it is given on its way into a function of a variable number of
+ * arguments: a value narrower than an int is widened to one, and every
+ * other value, a long and a pointer among them, travels as it is.
+ */
+PrimitiveType PromotedType(PrimitiveType type)
+{
+    if (!IsIntType(type) ||
+        PrimitiveSize(type) >= PrimitiveSize(PrimitiveType::kInt))
+        return type;
+
+    return PrimitiveType::kInt;
+}
+
+}   /* namespace */
+
 /*
  * function_call: identifier '(' opt_expression_list ')'  ;
  *
@@ -1351,6 +1388,12 @@ AstNodePtr Parser::SwitchStatement(const std::vector<NodePtr>& token_list,
  * is all it takes to tell a call apart from a variable. Every argument is
  * an expression of its own, and each one has to fit the type of the
  * parameter it is given to.
+ *
+ * A function of a variable number of arguments names only the first few of
+ * them, so a call to one may give more arguments than that; the ones beyond
+ * the named ones are given whatever type an argument is given when nothing
+ * says otherwise. Every call, whatever the function is, may give at most as
+ * many arguments as a function may take parameters.
  */
 AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
 {
@@ -1375,16 +1418,44 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
         }
     }
 
-    if (arguments.size() != function.parameter_types.size())
+    const idx_t named = function.parameter_types.size();
+
+    /*
+     * A function which names every argument it takes wants exactly that
+     * many; one which ends in '...' wants at least that many, the rest of
+     * its arguments being the ones it reads for itself.
+     */
+    const bool wanted_count = function.is_variadic
+        ? arguments.size() >= named
+        : arguments.size() == named;
+
+    if (!wanted_count)
     {
         std::cerr << "syntax error: wrong number of arguments for function ";
         std::cerr << function.name << ": " << arguments.size();
-        std::cerr << " given, " << function.parameter_types.size();
-        std::cerr << " wanted!" << std::endl;
+        std::cerr << " given, ";
+
+        /*
+         * The number a variadic function wants is a number it takes at
+         * least, so the message counts up to it rather than naming one.
+         */
+        if (function.is_variadic)
+            std::cerr << "at least ";
+
+        std::cerr << named << " wanted!" << std::endl;
         std::exit(1);
     }
 
-    for (idx_t k = 0; k < arguments.size(); k++)
+    /* Every argument travels the same way, so a call may give no more of
+     * them than there are places for one to travel in. */
+    if (arguments.size() > kMaxArguments)
+    {
+        std::cerr << "syntax error: a call may give at most ";
+        std::cerr << kMaxArguments << " arguments!" << std::endl;
+        std::exit(1);
+    }
+
+    for (idx_t k = 0; k < named; k++)
     {
         if (!ModifyType(arguments[k], function.parameter_types[k],
                         std::nullopt))
@@ -1396,6 +1467,14 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
         }
     }
 
+    for (idx_t k = named; k < arguments.size(); k++)
+    {
+        PrimitiveType wanted = PromotedType(arguments[k]->GetType());
+
+        if (wanted != arguments[k]->GetType())
+            arguments[k] = std::make_unique<AstWiden>(arguments[k], wanted);
+    }
+
     Match(token_list, i, T_RParen, ")");
 
     return std::make_unique<AstFuncCall>(arguments, function);
@@ -1404,25 +1483,45 @@ AstNodePtr Parser::FuncCall(const std::vector<NodePtr>& token_list, idx_t& i)
 /*
  * opt_parameter_list: <empty>
  *      |              parameter_list
+ *      |              parameter_list ',' '...'
  *      ;
  *
  * parameter_list: type identifier
  *      |        type identifier ',' parameter_list
  *      ;
  *
- * The type and the name of every parameter are read here. Nothing is added
- * to the symbol table yet, because a declaration which turns out to be a
- * prototype keeps only the types of its parameters; a definition binds
- * them once its body is known to follow.
+ * The type and the name of every parameter are read here, and the `...`
+ * which may close the list says that the function takes more arguments
+ * than it names parameters. Nothing is added to the symbol table yet,
+ * because a declaration which turns out to be a prototype keeps only the
+ * types of its parameters; a definition binds them once its body is known
+ * to follow.
  */
 std::vector<Symbol> Parser::FunctionParameters(
     const std::vector<NodePtr>& token_list,
-    idx_t& i)
+    idx_t& i,
+    bool& is_variadic)
 {
     std::vector<Symbol> parameters;
 
+    is_variadic = false;
+
     if (TokenTag(token_list[i]) == T_RParen)
         return parameters;
+
+    /*
+     * The extra arguments of a variadic function are the ones left over
+     * once the named parameters have taken theirs, so there has to be a
+     * parameter for the '...' to stand after. `int printf(...);` names no
+     * parameter at all and is refused rather than read as a function which
+     * takes any number of arguments.
+     */
+    if (TokenTag(token_list[i]) == T_Ellipsis)
+    {
+        std::cerr << "syntax error: the '...' of a function needs a";
+        std::cerr << " parameter before it!" << std::endl;
+        std::exit(1);
+    }
 
     /*
      * A `void` which is the whole parameter list says that the function
@@ -1486,6 +1585,18 @@ std::vector<Symbol> Parser::FunctionParameters(
             break;
 
         i++;
+
+        /*
+         * The list may close with the '...' of a function which takes more
+         * arguments than it names parameters, which stands where the next
+         * parameter would have been.
+         */
+        if (TokenTag(token_list[i]) == T_Ellipsis)
+        {
+            i++;    /* step over the dots */
+            is_variadic = true;
+            break;
+        }
     }
 
     return parameters;
@@ -1495,7 +1606,9 @@ std::vector<Symbol> Parser::FunctionParameters(
  * Every declaration of a function has to agree with the one which came
  * before it: the same return type, the same number of parameters and the
  * same type for each of them in turn, since a caller which was checked
- * against one of them has to keep working with the other.
+ * against one of them has to keep working with the other. Whether the
+ * function takes more arguments than it names parameters has to agree as
+ * well, because that is what says whether a call may give it more.
  */
 void Parser::CheckPrototype(const Symbol& previous, const Symbol& symbol)
 {
@@ -1504,6 +1617,14 @@ void Parser::CheckPrototype(const Symbol& previous, const Symbol& symbol)
         std::cerr << "syntax error: return type of function ";
         std::cerr << symbol.name << " does not match its prototype!";
         std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    if (previous.is_variadic != symbol.is_variadic)
+    {
+        std::cerr << "syntax error: function " << symbol.name;
+        std::cerr << " does not take the same number of arguments as its";
+        std::cerr << " prototype!" << std::endl;
         std::exit(1);
     }
 

@@ -19,7 +19,15 @@ private:
     static const std::unordered_map<std::string, NodeTag> kKeyWords;
     static const std::unordered_map<char, NodeTag> kSingleOp;
     static const std::unordered_map<std::string, NodeTag> kDoubleOp;
+    static const std::unordered_map<std::string, NodeTag> kTripleOp;
     static const std::unordered_set<char> kAlphabet;
+
+    /*
+     * Whether some operator written with more than one character begins
+     * with the text given, which is what says whether a token could still
+     * grow into one.
+     */
+    static bool BeginsOperator(const std::string& text);
 
 public:
     Scanner() = default;

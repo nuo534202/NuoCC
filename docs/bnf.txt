@@ -43,11 +43,20 @@ function_declaration:
 opt_parameter_list: <empty>
     | 'void'
     | parameter_list
+    | parameter_list ',' '...'
     ;
 
 parameter_list: parameter
     | parameter ',' parameter_list
     ;
+
+/*
+ * A list which ends in '...' names the first few arguments of a function
+ * which takes more of them than it names, as `printf()` does. It has to
+ * name at least one parameter for the '...' to stand after, and a function
+ * so declared is one written elsewhere: a body may not be given to it,
+ * since the language has no way of reaching the arguments it does not name.
+ */
 
 /*
  * A parameter holds a value, so one which is given an array holds the
@@ -233,6 +242,10 @@ typedef_declaration: 'typedef' type opt_pointer identifier ';'
  * expression for each of its parameters: at most six of them, which is how
  * many the machine passes without reaching into the stack.
  * Each expression has to fit the type of the parameter it is given to.
+ * A function declared with '...' names only the first few of the arguments
+ * it is given, so a call to one may give more arguments than that, and
+ * every argument beyond the named ones takes the type an argument is given
+ * when nothing says otherwise.
  */
 function_call: identifier '(' opt_expression_list ')'
     ;

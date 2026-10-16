@@ -40,7 +40,9 @@ the high one first. Two kinds of test therefore say something else:
 * A program which works with a value that does not fit the two bytes this
   machine gives an int cannot be built for it at all. Those programs are
   named in `skip.txt`, with the value which is too wide, and a run of the
-  suite reports them as not applying to this target.
+  suite reports them as not applying to this target. A program which calls
+  a function the runtime here has not got, `printf()` among them, is named
+  there for the same reason and with that as its reason instead.
 
 Everything else is the same for every target, so a test which is not in
 either of those places has to print exactly what the other targets print.

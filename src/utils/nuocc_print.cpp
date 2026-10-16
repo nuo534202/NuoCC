@@ -213,6 +213,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Arrow:
             out = "->";
             break;
+        case T_Ellipsis:
+            out = "...";
+            break;
         case T_Semicolon:
             out = ";";
             break;
@@ -331,7 +334,10 @@ std::string DescribeNode(const AstNode& node)
             out += " returns " + TypeName(function->GetSymbol().type,
                                           function->GetSymbol().composite);
             out += ", " + std::to_string(function->GetParameters().size());
-            out += " parameters, " + std::to_string(function->GetLocalSize());
+            out += " parameters";
+            if (function->GetSymbol().is_variadic)
+                out += " and more besides";
+            out += ", " + std::to_string(function->GetLocalSize());
             out += " bytes of locals";
             return out;
         }

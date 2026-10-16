@@ -184,6 +184,13 @@ struct Symbol
      * and the flag is false for everything which is not a function.
      */
     bool has_body = false;
+    /*
+     * Whether a function is declared to take more arguments than it names
+     * parameters, which is what the '...' at the end of its parameter list
+     * says. It is false for everything which is not a function, and for a
+     * function which names every argument it takes.
+     */
+    bool is_variadic = false;
     /* The number of elements of an array, and zero for anything else. */
     int32 element_count = 0;
     /* Where a member starts, measured from the base of its struct. */
