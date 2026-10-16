@@ -150,4 +150,11 @@ std::string BuildCommand(const std::vector<std::string>& /*code*/,
     return "";
 }
 
+/* The assembly of a machine target is the code the generator wrote, and
+ * nothing of the whole of it is done to it. */
+bool OptimiseCode(const std::string& /*code*/)
+{
+    return true;
+}
+
 }   /* namespace nuocc */

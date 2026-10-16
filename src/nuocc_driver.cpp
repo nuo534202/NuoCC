@@ -274,7 +274,15 @@ bool Driver::CompileToCode(const std::string& source,
     std::unique_ptr<AsmCodegen> codegen = MakeCodegen(output);
     codegen->GenProgram(program);
 
-    return true;
+    /*
+     * The file the code was written into is closed before anything is done
+     * with it, and what is done with it is the pass the target has over the
+     * whole of the code it wrote, which is the peephole optimiser for the
+     * 6809 and nothing at all for the other targets.
+     */
+    codegen.reset();
+
+    return OptimiseCode(output);
 }
 
 bool Driver::RunCommand(const std::string& command) const

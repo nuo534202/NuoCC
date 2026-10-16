@@ -44,3 +44,14 @@ the high one first. Two kinds of test therefore say something else:
 
 Everything else is the same for every target, so a test which is not in
 either of those places has to print exactly what the other targets print.
+
+## The code the target writes
+
+The pass this target has over the code it writes is the peephole
+optimiser, and the pass is not allowed to change what a program prints, so
+the programs the suite runs say nothing about whether it works. What says
+something about it is the code itself: `optimise.c` is a program the
+optimiser is written for, it is compiled with `-S`, and the assembly which
+comes out is compared with `optimise.s` beside it, which is the code the
+pass leaves. A change to the pass, or one which stops it firing, is caught
+there.

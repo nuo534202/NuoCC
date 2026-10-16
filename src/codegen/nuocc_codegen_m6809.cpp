@@ -2,10 +2,12 @@
 
 #include <stdlib.h>
 
+#include <fstream>
 #include <iostream>
 #include <string_view>
 #include <unordered_map>
 
+#include "codegen/nuocc_peephole.hpp"
 #include "utils/nuocc_command.hpp"
 #include "utils/nuocc_runtime.hpp"
 #include "utils/nuocc_type_check.hpp"
@@ -1377,6 +1379,53 @@ std::string BuildCommand(const std::vector<std::string>& code,
         command += " " + Quote(file);
 
     return command + " | lwasm --format=raw -o " + Quote(program) + " -";
+}
+
+/*
+ * The code of a program of this target is put through the peephole
+ * optimiser once the whole of it has been written: what the optimiser
+ * leaves is smaller code which does what the code the backend wrote does.
+ * The pass looks at the lines of the file the code was written into, and
+ * what it leaves is written back in the place of them.
+ */
+bool OptimiseCode(const std::string& code)
+{
+    std::ifstream source(code);
+
+    if (!source.is_open())
+    {
+        std::cerr << "error: cannot read the code in " << code << std::endl;
+        return false;
+    }
+
+    std::vector<std::string> lines;
+
+    for (std::string line; std::getline(source, line);)
+        lines.push_back(line);
+
+    source.close();
+
+    Peephole peephole;
+    const std::vector<std::string> left = peephole.Optimise(lines);
+
+    std::ofstream written(code, std::ios::out | std::ios::trunc);
+
+    if (!written.is_open())
+    {
+        std::cerr << "error: cannot write the code to " << code << std::endl;
+        return false;
+    }
+
+    for (const std::string& line : left)
+        written << line << '\n';
+
+    if (!written)
+    {
+        std::cerr << "error: cannot write the code to " << code << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 }   /* namespace nuocc */

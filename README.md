@@ -78,6 +78,10 @@ out registers the 6809 gives each of the four registers the walk asks for a
 place in the frame of the function, and the arithmetic the machine has no
 instruction for is worked out by the runtime. It gives an `int` two bytes
 and a pointer two as well, since it reaches no more than 64K of memory.
+The code this target writes is put through a peephole optimiser once the
+whole of a program has been written, which takes away the instructions the
+machine has no need of and leaves a smaller program which does the same
+thing.
 
 ## Tests
 

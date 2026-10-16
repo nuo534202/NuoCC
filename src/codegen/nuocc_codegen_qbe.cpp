@@ -919,4 +919,11 @@ std::string BuildCommand(const std::vector<std::string>& /*code*/,
     return "";
 }
 
+/* What the generator wrote is what QBE reads, and nothing of the whole of
+ * it is done to it: it is QBE which works the code over. */
+bool OptimiseCode(const std::string& /*code*/)
+{
+    return true;
+}
+
 }   /* namespace nuocc */

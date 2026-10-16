@@ -143,6 +143,32 @@ for name in $programs; do
     fi
 done
 
+# The code a target writes may be recorded as well, and what the compiler
+# writes is compared with it. This is how the pass a target has over the code
+# it wrote is tested: the pass of the 6809 is the peephole optimiser, which
+# is not allowed to change what a program does, so a program of that target
+# says nothing about it, and the code it leaves does.
+for expected in "$script_dir/$target"/*.s; do
+    [ -f "$expected" ] || continue
+    name=$(basename -- "$expected" .s)
+
+    if ! (cd "$work_dir" && "$nuocc" -S "$script_dir/$target/$name.c" \
+            >/dev/null 2>&1); then
+        echo "FAIL $name: the compiler could not build it"
+        failed=$((failed + 1))
+        continue
+    fi
+
+    if cmp -s "$expected" "$work_dir/$name.s"; then
+        echo "ok   $name (the code the target writes)"
+        passed=$((passed + 1))
+    else
+        echo "FAIL $name: the code the target writes is not the recorded one"
+        diff "$expected" "$work_dir/$name.s" | sed -n '1,10p'
+        failed=$((failed + 1))
+    fi
+done
+
 # The programs which have to be refused, and what the compiler has to say.
 for source in "$script_dir"/errors/*.c; do
     [ -f "$source" ] || continue

@@ -39,6 +39,9 @@ elseif(NUOCC_TARGET STREQUAL "qbe")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_qbe.cpp)
 elseif(NUOCC_TARGET STREQUAL "m6809")
     list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_codegen_m6809.cpp)
+    # The peephole optimiser is the pass this target has over the code it
+    # wrote, so only this target is built with it.
+    list(APPEND SRC ${PROJECT_SOURCE_DIR}/src/codegen/nuocc_peephole.cpp)
 else()
     message(FATAL_ERROR
         "NUOCC_TARGET must be x86_64, arm64, qbe or m6809, not ${NUOCC_TARGET}")
