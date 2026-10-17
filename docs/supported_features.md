@@ -430,12 +430,11 @@
     a string: its characters are put in
     the data section and the address of them is the value the variable
     starts with, so `char *str= "Hello";` begins at a `'H'` and `char
-    *empty= "";` at a zero byte. A struct or a union cannot be given a
-    value where it is declared at the top level of the program, though a
-    local one may be, as item 75 describes, and neither can an `extern`
-    name, whose storage belongs to another source file; a local name is
-    given its value by an assignment instead, which the next item
-    describes.
+    *empty= "";` at a zero byte. A struct or a union is given the values of
+    the members of its type where it is declared, as item 77 describes, and
+    an `extern` name cannot be given a value at all, since its storage
+    belongs to another source file; a local name is given its value by an
+    assignment instead, which the next item describes.
 
     An array is given a list of values between braces. The values left over
     when there are fewer of them than the array has room for start at zero,
@@ -444,7 +443,11 @@
     given, so `int f[]= { 9, 8, 7, 6 };` holds four of them. A list of
     strings fills a row of pointers, so `char *d[]= { "apple", "banana",
     "peach" };` is three of them. An array with a size but no values starts
-    out all zero, as it always has. A list with more values than the array
+    out all zero, as it always has. The room each value takes in that
+    storage is the room its type takes, so an element of two bytes is held
+    in two bytes whatever the word of the machine which writes the storage
+    is, and the element after it stands two bytes along rather than four.
+    A list with more values than the array
     has room for, a value the compiler cannot work out while it is compiling
     the program, an `extern` name given a value, a local array given a list
     of values, and an array written with neither a size nor values are all
@@ -1277,10 +1280,11 @@
 
     The values written are worked out where the declaration stands rather
     than where the whole program is read, so a value may be one the program
-    works out as it runs, as `struct point r = { a, a + 1 };` is. Only a
-    local value may be given its value this way: an array of composite
-    values and a value of one at the top level of the program still may
-    not, as items 68 and 36 describe. A list with more values than the
+    works out as it runs, as `struct point r = { a, a + 1 };` is. A value
+    of a composite type given where a global variable is declared is
+    written the same way, as item 77 describes, while an array of composite
+    values still cannot be given values where it is declared, as item 68
+    describes. A list with more values than the
     members can take, a value which does not fit the member it is written
     for, an array member with more values than it holds room for or a
     string when it does not hold characters, a character array given too
@@ -1329,3 +1333,42 @@
     after it names the tag and no member at all, as `struct known { int x;
     };` written inside another type does, and a member which is neither of
     those two needs a name.
+
+77. A Composite Value Given Where a Global Variable Is Declared (acwj Part
+    61, `61_What_Next`, the rest of the idea of a value written where a name
+    is declared). A global value of a composite type may now be given its
+    value where it is declared, written the same way a local one is:
+    between braces, as the values of the members of the type, in the order
+    the definition gives them.
+
+        struct point origin= { 0, 0 };
+        struct span  bridge= { { 1, 2 }, { 3, 4 } };
+        struct text  word= { "hi", 2 };
+        struct named item= { "hello", 7 };
+
+    Everything a value of such a type is written with counts here as it
+    does for a local one: a member which is a composite value of its own
+    takes a list of its own, an array member takes a list of element values
+    or the characters of a string, a union takes the value written for its
+    first member, the members of an anonymous member are written among the
+    members of the type which holds it, and a member which is not given a
+    value starts out at zero, as an empty list `{}` leaves every one of
+    them.
+
+    What is different is where the value goes: the compiler works it out
+    while it is compiling the program and puts it in the storage of the
+    variable, so a value the program works out as it runs may not stand
+    there, and a copy of another place may not either, since a copy is a
+    statement rather than storage. The room of such a value is filled a
+    piece at a time, every piece the room its own member takes at the
+    distance that member stands from the base of the value, and the room
+    which no piece reaches is left holding nothing, which is the nothing a
+    member which was given no value holds anyway.
+
+    A member which is a pointer to a char is given a string here as it is
+    anywhere else, and the string is put in the data section with the
+    address of it stored where the member stands, so a value of a composite
+    type may hold a pointer into storage of its own. A value which does not
+    fit the member it is written for, a list with more values than the
+    members can take, and a value the compiler cannot work out are each
+    refused with a message saying so.

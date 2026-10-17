@@ -141,6 +141,22 @@ enum class StorageClass : uint8
 using InitialValue = std::variant<int32, std::string>;
 
 /*
+ * One piece of the value a global variable of a composite type is given
+ * where it is declared: where it starts inside the value, how many bytes it
+ * takes, and what is written there. The room between two pieces is not
+ * written for anywhere, so it starts out at zero, the way a member which is
+ * given no value does. The pieces are held in the order they stand, so each
+ * one starts at or after the end of the one before it.
+ */
+struct InitialPiece
+{
+    int32 offset;
+    int32 size;
+    /* A piece which was given no value holds nothing, a number of zero. */
+    InitialValue value = 0;
+};
+
+/*
  * A type as it is written down: which primitive type, and the struct which
  * the value is of when it is one. The type value on its own cannot say
  * which struct a value is of, so the two travel together.
@@ -204,6 +220,14 @@ struct Symbol
      * without a value, in which case its storage starts out zero.
      */
     std::vector<InitialValue> initial_values = {};
+    /*
+     * The pieces of the value a global variable of a composite type is
+     * given where it is declared, in the order they stand. It is empty for
+     * a variable which is not of such a type, whose value is the one
+     * `initial_values` holds, and for one which was given no value at all,
+     * in which case its storage starts out holding nothing.
+     */
+    std::vector<InitialPiece> initial_pieces = {};
 };
 
 /*

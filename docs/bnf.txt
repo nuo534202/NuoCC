@@ -97,6 +97,14 @@ declarator_list: declarator
  * size. A member of a struct is not a place of its own, so it may not be
  * given values at all.
  *
+ * A value of a composite type is written as the values of the members of
+ * the type between braces, which is what a variable of that type is given
+ * wherever it is declared: a value the compiler works out, put in the
+ * storage of a global variable, or an expression which runs where it
+ * stands, stored into a local one. A copy of another place holding one of
+ * the same type may be given to a local one as well, since that is a
+ * statement rather than storage.
+ *
  * An array of char may be given a string in place of the list of values,
  * which gives it the characters of the string one element each and the zero
  * byte it ends with as one element more when it has room for it. A string

@@ -592,13 +592,59 @@ void AsmCodegen::GenCondition(const AstNodePtr& condition,
 void AsmCodegen::GenGlobSymbol(const Symbol& symbol)
 {
     /*
-     * A struct or a union is one block of room which starts out zero: it
-     * cannot be given a value where it is declared.
+     * A value of a composite type is given where it is declared as the
+     * values of the members of its type, one piece of its room at a time.
+     * The room between two pieces is written for nowhere, so it starts out
+     * at zero, the same nothing a member which was given no value starts
+     * out holding.
+     *
+     * An element given a string holds the address of a string, which needs
+     * room of its own, so every one of them is given a label before the
+     * variable is written, the way the elements of an array of pointers to
+     * a char are.
      */
     if (symbol.type == PrimitiveType::kComposite)
     {
+        std::vector<label_idx> string_labels(symbol.initial_pieces.size(), 0);
+
+        for (idx_t k = 0; k < symbol.initial_pieces.size(); k++)
+        {
+            const InitialPiece& piece = symbol.initial_pieces[k];
+
+            if (const std::string* text =
+                    std::get_if<std::string>(&piece.value))
+            {
+                string_labels[k] = NewLabel();
+                GenStrStorage(string_labels[k], *text);
+            }
+        }
+
         BeginGlobal(symbol, SymbolAlignment(symbol));
-        EmitGlobalSpace(SymbolStorageSize(symbol));
+
+        int32 written = 0;
+
+        for (idx_t k = 0; k < symbol.initial_pieces.size(); k++)
+        {
+            const InitialPiece& piece = symbol.initial_pieces[k];
+
+            /* The room the member stands at is where the piece starts. */
+            if (piece.offset > written)
+                EmitGlobalSpace(piece.offset - written);
+
+            if (string_labels[k] != 0)
+                EmitGlobalLabelRef(string_labels[k]);
+            else
+                EmitGlobalValue(std::get<int32>(piece.value), piece.size);
+
+            written = piece.offset + piece.size;
+        }
+
+        /* What the last piece does not reach is room which holds nothing. */
+        const int32 size = SymbolStorageSize(symbol);
+
+        if (size > written)
+            EmitGlobalSpace(size - written);
+
         EndGlobal();
         return;
     }

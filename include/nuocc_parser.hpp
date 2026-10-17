@@ -222,22 +222,36 @@ private:
                                     idx_t& i);
 
     /*
-     * Read the values written for the members of a composite value between
-     * braces and build the statements which store each of them into the
-     * member it is written for. A union takes the value written for its
-     * first member, since the members of a union share one piece of room.
+     * One value written for a member of a composite value: the member it is
+     * written for, reached by the path of members it stands inside, which
+     * element of that member it is when the member is an array, and the
+     * value itself.
      *
-     * A member is reached from the name of the value by the path of the
-     * members it stands inside, since a place cannot be built once and
-     * stored into twice: a tree is moved into the node which holds it, so
-     * one place is built for every value which is stored.
+     * A place is built out of this for every value which is stored, since a
+     * tree may be moved into the node which holds it only once; a value
+     * which becomes part of the storage of a global variable needs no place
+     * at all, since its own type and the path say where it stands.
+     */
+    struct WrittenValue
+    {
+        std::vector<const Symbol*> path;
+        int32 element = 0;
+        AstNodePtr value = nullptr;
+    };
+
+    /*
+     * Read the values written for the members of a composite value, holding
+     * each of them against the member it is written for. The members are
+     * written in order, and a member which is an array or a composite value
+     * of its own takes a list of values of its own between braces; a union
+     * takes the value written for its first member, since the members of a
+     * union share one piece of room.
      */
     void CompositeValues(const std::shared_ptr<CompositeType>& composite,
-                         const Symbol& symbol,
                          std::vector<const Symbol*>& path,
                          const std::vector<NodePtr>& token_list,
                          idx_t& i,
-                         std::vector<AstNodePtr>& statements,
+                         std::vector<WrittenValue>& values,
                          bool braced);
 
     /*
@@ -245,22 +259,41 @@ private:
      * braces give the elements one after another.
      */
     void ElementValues(int32 element_count,
-                       const Symbol& symbol,
-                       const std::vector<const Symbol*>& path,
+                       std::vector<const Symbol*>& path,
                        const TypeRef& element_type,
                        const std::vector<NodePtr>& token_list,
                        idx_t& i,
-                       std::vector<AstNodePtr>& statements);
+                       std::vector<WrittenValue>& values);
 
     /*
-     * Store the characters of a string into the elements of an array of
-     * char, which is what a string written for one gives it.
+     * The same for the characters of a string, which is what a string
+     * written for an array of char gives its elements.
      */
     void StringElementValues(int32 element_count,
-                             const Symbol& symbol,
-                             const std::vector<const Symbol*>& path,
+                             std::vector<const Symbol*>& path,
                              const std::string& text,
-                             std::vector<AstNodePtr>& statements);
+                             std::vector<WrittenValue>& values);
+
+    /*
+     * Build the statements which store values held against the members of a
+     * value of a composite type into the room the name of the value stands
+     * for, one value at a time.
+     */
+    void StoreWrittenValues(const Symbol& symbol,
+                            std::vector<WrittenValue>& values,
+                            std::vector<AstNodePtr>& statements);
+
+    /*
+     * Read the pieces of storage a global value of a composite type is
+     * given where it is declared, and leave the token after them for the
+     * caller. Every value written is one the compiler works out while it is
+     * compiling the program, since the compiler is what puts it in the
+     * storage of the variable.
+     */
+    void CompositeConstantValues(const TypeRef& type,
+                                 const std::vector<NodePtr>& token_list,
+                                 idx_t& i,
+                                 std::vector<InitialPiece>& pieces);
 
     /* The place the member a path names stands at, reached by name. */
     AstNodePtr MemberPlace(const Symbol& symbol,
