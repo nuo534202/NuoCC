@@ -385,15 +385,17 @@ AstUnary::AstUnary(AstNodePtr& expression, AstNodeTag tag, PrimitiveType type)
     : AstNode(tag, type, expression) {}
 
 /* AstIncDec */
-AstIncDec::AstIncDec(const Symbol& symbol, int32 delta, bool post)
-    : AstNode(A_AstIncDec, symbol.type),
-      symbol_(symbol),
+AstIncDec::AstIncDec(AstNodePtr& place, int32 delta, bool post)
+    : AstNode(A_AstIncDec, place->GetType(), place),
       delta_(delta),
-      post_(post) {}
-
-const Symbol& AstIncDec::GetSymbol() const
+      post_(post)
 {
-    return symbol_;
+    SetComposite(GetLeft()->GetComposite());
+}
+
+const AstNodePtr& AstIncDec::GetPlace() const
+{
+    return GetLeft();
 }
 
 int32 AstIncDec::GetDelta() const

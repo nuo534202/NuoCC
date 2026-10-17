@@ -1977,10 +1977,7 @@ AstNodePtr Parser::BinaryExpression(
              * the order the code generator wants: the value has to be
              * worked out before the location it is stored in.
              */
-            const bool array_member = left->GetAstNodeTag() == A_AstMember &&
-                static_cast<const AstMember&>(*left).GetMember().stype ==
-                    StructuralType::kArray;
-            if (!IsLvalue(left->GetAstNodeTag()) || array_member)
+            if (!IsLvalue(left->GetAstNodeTag()) || IsArrayMember(left))
             {
                 std::cerr << "syntax error: an assignment can only store";
                 std::cerr << " into a variable or into a * pointer!";
@@ -2274,28 +2271,21 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
         case T_Inc:
         case T_Dec:
         {
-            bool increment = TokenTag(token_list[i]) == T_Inc;
+            const bool increment = TokenTag(token_list[i]) == T_Inc;
+
             i++;
 
             /*
-             * The value has somewhere to go back to, so an increment or a
-             * decrement needs a variable and not an expression.
+             * The value has somewhere to go back to, so what is written
+             * before the operator is a place, and the answer is the value
+             * the place holds once it has been changed.
              */
-            AstNodePtr operand = PostfixExpression(token_list, i);
+            AstNodePtr place = PostfixExpression(token_list, i);
 
-            if (IsArrayAddress(operand))
-            {
-                std::cerr << "syntax error: an array cannot be changed!";
-                std::cerr << std::endl;
-                std::exit(1);
-            }
-
-            CheckIncrementable(operand);
-            const Symbol& symbol =
-                static_cast<const AstIdentifier&>(*operand).GetSymbol();
+            CheckIncrementable(place);
 
             return std::make_unique<AstIncDec>(
-                symbol, IncrementStep(symbol, increment), false);
+                place, IncrementStep(place, increment), false);
         }
         default:
             return PostfixExpression(token_list, i);
@@ -2452,20 +2442,6 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
 
             CheckKind(symbol, StructuralType::kVariable, "variable");
 
-            /*
-             * A '++' or a '--' after the name makes this a postfix
-             * operator, which yields the value held before the change.
-             */
-            if (TokenTag(token_list[i]) == T_Inc ||
-                TokenTag(token_list[i]) == T_Dec)
-            {
-                bool increment = TokenTag(token_list[i]) == T_Inc;
-                i++;
-
-                return std::make_unique<AstIncDec>(
-                    symbol, IncrementStep(symbol, increment), true);
-            }
-
             return MakeIdentLeaf(symbol);
         }
         default:
@@ -2487,7 +2463,20 @@ AstNodePtr Parser::PostfixExpression(const std::vector<NodePtr>& token_list,
         } else if (tag == T_LBracket) {
             expression = ArrayAccess(std::move(expression), token_list, i);
         } else if (tag == T_Inc || tag == T_Dec) {
+            /*
+             * A '++' or a '--' written after a place changes what the
+             * place holds and yields the value it held before the change.
+             * The place is anything the new value can go back into, so the
+             * name of a variable, a place a pointer reaches and a member
+             * of a value are all taken here.
+             */
+            const bool increment = tag == T_Inc;
+
+            i++;
             CheckIncrementable(expression);
+
+            expression = std::make_unique<AstIncDec>(
+                expression, IncrementStep(expression, increment), true);
         } else {
             return expression;
         }
@@ -3431,36 +3420,34 @@ bool Parser::IsTestable(const AstNodePtr& tree)
     return IsIntType(tree->GetType()) || IsPointerType(tree->GetType());
 }
 
-int32 Parser::IncrementStep(const Symbol& symbol, bool increment) const
+int32 Parser::IncrementStep(const AstNodePtr& place, bool increment) const
 {
+    const PrimitiveType type = place->GetType();
     int32 step = 1;
 
     /*
      * A pointer moves on by the room one value of what it points at takes
      * rather than by one byte. A composite takes the room its definition
-     * asks for, which the symbol carries, and every other type takes the
-     * room its own type gives it.
+     * asks for, which travels with the type of the place, and every other
+     * type takes the room its own type gives it.
      */
-    if (IsPointerType(symbol.type))
-        step = ValueSize(ValueAt(symbol.type), symbol.composite);
+    if (IsPointerType(type))
+        step = ValueSize(ValueAt(type), place->GetComposite());
 
     return increment ? step : -step;
 }
 
 void Parser::CheckIncrementable(const AstNodePtr& operand) const
 {
-    /* The name of a variable is what the new value goes back into, so
-     * an increment written on one is taken. */
-    if (operand->GetAstNodeTag() == A_AstIdentifier)
-        return;
-
     /*
-     * Everything else leaves the new value nowhere to go: the name of an
-     * array stands for an address rather than a place, an increment is not
-     * a place at all, and a value read through a pointer or taken from a
-     * member is not named rather than placed.
+     * The new value has somewhere to go back to when what is written is a
+     * place: the name of a variable, a place a pointer reaches, or a member
+     * of a value. Everything else leaves it nowhere: the name of an array
+     * stands for an address rather than a place, and so does the name of an
+     * array which is a member; an increment is not a place at all; and a
+     * value worked out is not a place either.
      */
-    if (IsArrayAddress(operand))
+    if (IsArrayAddress(operand) || IsArrayMember(operand))
     {
         std::cerr << "syntax error: an array cannot be changed!";
         std::cerr << std::endl;
@@ -3470,11 +3457,22 @@ void Parser::CheckIncrementable(const AstNodePtr& operand) const
         std::cerr << "syntax error: an increment or a decrement cannot be";
         std::cerr << " changed again!" << std::endl;
     }
-    else
+    else if (operand->GetType() == PrimitiveType::kComposite)
     {
-        std::cerr << "syntax error: increment and decrement need a";
-        std::cerr << " standalone variable!" << std::endl;
+        /*
+         * A composite value cannot be read as a value, so there is nothing
+         * for the operator to add one to.
+         */
+        std::cerr << "syntax error: a whole composite value cannot be";
+        std::cerr << " incremented or decremented!" << std::endl;
     }
+    else if (!IsLvalue(operand->GetAstNodeTag()))
+    {
+        std::cerr << "syntax error: increment and decrement need a variable";
+        std::cerr << " or a place a pointer reaches!" << std::endl;
+    }
+    else
+        return;
 
     std::exit(1);
 }
@@ -3485,6 +3483,15 @@ bool Parser::IsArrayAddress(const AstNodePtr& tree)
         return false;
 
     return static_cast<const AstAddress&>(*tree).GetSymbol().stype ==
+           StructuralType::kArray;
+}
+
+bool Parser::IsArrayMember(const AstNodePtr& tree)
+{
+    if (tree->GetAstNodeTag() != A_AstMember)
+        return false;
+
+    return static_cast<const AstMember&>(*tree).GetMember().stype ==
            StructuralType::kArray;
 }
 

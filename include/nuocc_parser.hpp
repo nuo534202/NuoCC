@@ -630,7 +630,7 @@ private:
      * and the room one value of what it points at takes for a pointer, so
      * that `p++` moves on to the next value rather than to the next byte.
      */
-    int32 IncrementStep(const Symbol& symbol, bool increment) const;
+    int32 IncrementStep(const AstNodePtr& place, bool increment) const;
 
     /*
      * Stop unless the value an increment or a decrement is written on is the
@@ -648,6 +648,13 @@ private:
      * language has.
      */
     static bool IsArrayAddress(const AstNodePtr& tree);
+
+    /*
+     * Whether a tree is an array which is a member of a value. The name of
+     * such a member stands for the address of its first element, the way
+     * the name of any array does, so it is not a place either.
+     */
+    static bool IsArrayMember(const AstNodePtr& tree);
 
     /*
      * Whether a tree names a location which can be stored into. Only a

@@ -495,24 +495,25 @@ public:
 };
 
 /*
- * The increment or the decrement of a variable, written '++' or '--'. The
- * delta is what is added, and post records whether the operator was
- * written after the variable, in which case the value of the expression is
- * the one the variable held before.
+ * The increment or the decrement of a place, written '++' or '--'. The
+ * place is the left child and is where the new value goes back: the name of
+ * a variable, a place a pointer reaches, or a member of a value. The delta
+ * is what is added, and post records whether the operator was written after
+ * the place, in which case the value of the expression is the one the place
+ * held before.
  */
 class AstIncDec : public AstNode
 {
 public:
-    AstIncDec(const Symbol& symbol, int32 delta, bool post);
+    AstIncDec(AstNodePtr& place, int32 delta, bool post);
     ~AstIncDec() = default;
 
 public:
-    const Symbol& GetSymbol() const;
+    const AstNodePtr& GetPlace() const;
     int32 GetDelta() const;
     bool IsPost() const;
 
 private:
-    Symbol symbol_;
     int32 delta_;
     bool post_;
 };

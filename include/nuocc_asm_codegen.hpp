@@ -270,6 +270,13 @@ protected:
     reg_idx GenAssign(const AstNodePtr& root);
 
     /*
+     * Change what a place other than a name holds, which is reached through
+     * an address the code generator works out rather than the way a name is
+     * reached.
+     */
+    reg_idx IncDecPlace(const AstIncDec& inc);
+
+    /*
      * Store the contents of one place holding a composite value into
      * another, which gives the room of one place over to the other rather
      * than putting a value anywhere.

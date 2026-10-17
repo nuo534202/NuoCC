@@ -451,8 +451,8 @@ std::string DescribeNode(const AstNode& node)
         {
             const AstIncDec *inc = static_cast<const AstIncDec*>(&node);
             return std::string(inc->IsPost() ? "after" : "before") +
-                   " increment of " + inc->GetSymbol().name + " by " +
-                   std::to_string(inc->GetDelta());
+                   " increment by " + std::to_string(inc->GetDelta()) +
+                   " of a place";
         }
         default:
             return "node";

@@ -29,15 +29,14 @@
    `int` and may be used as one: `print (a == b);` and `x= (a < b) + 1;`
    both read the answer. Two pointers may be compared with each other as
    well as two numbers.
-6. Increment and Decrement: `++` and `--`, written before a variable or
-   after it. `++x` yields the value the variable holds afterwards and `x++`
-   the value it held before, and both leave the variable changed by one.
-   A pointer is changed by the room one value of what it points at takes
-   rather than by one byte, so `p++` moves on to the next value of the type
-   `p` points at, whatever size that value is. The value has to go back
-   somewhere, so the operator takes the name of a variable and not a
-   location: `++b[2]` has to wait for an increment which can be given a
-   place rather than a name.
+6. Increment and Decrement: `++` and `--`, written before a place or after
+   it. `++x` yields the value the place holds afterwards and `x++` the
+   value it held before, and both leave the place changed by one. A pointer
+   is changed by the room one value of what it points at takes rather than
+   by one byte, so `p++` moves on to the next value of the type `p` points
+   at, whatever size that value is. The value has to go back somewhere, so
+   what the operator is written on is a place: the name of a variable, a
+   place a pointer reaches, or a member of a value, as item 71 describes.
 7. Taking the Address of a variable with `&`, and reading or writing
    through a pointer with `*`. A pointer may be the target of an
    assignment: `*y= 14;` stores into the location `y` points at, and only
@@ -255,9 +254,10 @@
     a struct. Unknown or missing member names, duplicate member names,
     assigning to an array member as a whole, and incompatible struct
     pointers in assignments, calls, returns and prototypes are refused.
-    Incrementing a member and taking the address of an entire array member
-    remain unsupported, while a whole struct may be given what another place
-    holding one holds, as item 69 describes. A pointer to a struct is stepped
+    Taking the address of an entire array member remains unsupported, while
+    a whole struct may be given what another place holding one holds, as
+    item 69 describes, and a member is a place an increment or a decrement
+    can change, as item 71 describes. A pointer to a struct is stepped
     on like any other pointer, by the room the struct takes, and an element
     of an array of structs is reached as `path[1].x` or `(&path[1])->x`.
 
@@ -1125,3 +1125,31 @@
     for every target, since the tree is the same tree whatever machine the
     code is written for; what differs is the code each machine writes a
     shift as.
+
+71. An Increment Over Any Place (acwj Part 61, `61_What_Next`, the idea of
+    extending the recognised grammar). An increment or a decrement changes
+    a place rather than only the name of a variable, so an element of an
+    array, a place a pointer reaches and a member of a value can each be
+    given one:
+
+        list[1]++;
+        point->number--;
+        thing.number++;
+
+    A member reached through a pointer, `p->number++`, and one reached
+    through a dereference, `(*p).number++`, are the same place written two
+    ways, and a member of an element of an array, `nodes[2].number--`, is a
+    place too. Each yields the value the place held before the change when
+    the operator is written after it and the value it holds afterwards when
+    it is written before it, the same as it does for a name.
+
+    A pointer standing in such a place steps by the room one value of what
+    it points at takes, so a member which is a pointer to a struct moves on
+    by the room the struct takes, just as a named pointer does.
+
+    What the operator is written on has to be a place the new value can go
+    back into, so an array, whose name stands for an address rather than a
+    place, is still refused, whether it is a name or a member of a value.
+    An increment or a decrement is not a place itself, so it cannot be
+    changed again, and neither a whole composite value, which cannot be read
+    as a value, nor a value worked out rather than placed can take one.

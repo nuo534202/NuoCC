@@ -749,7 +749,21 @@ reg_idx AsmCodegen::GenExpr(const AstNodePtr& root)
             const AstIncDec *inc =
                 static_cast<const AstIncDec*>(root.get());
 
-            return IncDec(inc->GetSymbol(), inc->GetDelta(), inc->IsPost());
+            /*
+             * A name is reached directly by the machine, which has a way of
+             * its own of changing what one holds and is asked for it here;
+             * every other place is reached through an address the code
+             * generator works out, which the target is not told about.
+             */
+            if (inc->GetPlace()->GetAstNodeTag() == A_AstIdentifier)
+            {
+                const Symbol& symbol = static_cast<const AstIdentifier&>(
+                    *inc->GetPlace()).GetSymbol();
+
+                return IncDec(symbol, inc->GetDelta(), inc->IsPost());
+            }
+
+            return IncDecPlace(*inc);
         }
         case A_AstFuncCall:
             return GenCall(root);
@@ -1038,6 +1052,50 @@ reg_idx AsmCodegen::GenTernary(const AstNodePtr& root)
     EmitLabel(end_label);
 
     return result;
+}
+
+/*
+ * Change what a place other than a name holds, giving the expression the
+ * value the place held before the change or the one it holds after it.
+ *
+ * The place is reached through an address the code generator works out, and
+ * the value there is read, changed and stored back through it. The old
+ * value is kept beside the new one, since a value written after the place
+ * is the one the place held before the change; a value written before it is
+ * the new one, which the register holding it already has.
+ */
+reg_idx AsmCodegen::IncDecPlace(const AstIncDec& inc)
+{
+    const AstNodePtr& place = inc.GetPlace();
+    const PrimitiveType type = place->GetType();
+    const int32 amount = inc.GetDelta() > 0 ? inc.GetDelta() : -inc.GetDelta();
+
+    reg_idx address = GenAddress(place);
+    reg_idx value = LoadDeref(address, type);
+
+    reg_idx before = AllocRegister();
+
+    Move(before, value, type);
+
+    reg_idx step = LoadInt(amount, type);
+
+    if (inc.GetDelta() > 0)
+        value = Add(value, step, type);
+    else
+        value = Sub(value, step, type);
+
+    StoreDeref(value, address, type);
+    FreeRegister(address);
+
+    if (inc.IsPost())
+    {
+        FreeRegister(value);
+        return before;
+    }
+
+    FreeRegister(before);
+
+    return value;
 }
 
 /*
