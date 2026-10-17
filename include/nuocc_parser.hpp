@@ -241,6 +241,13 @@ private:
                                  AstNodePtr& value);
 
     /*
+     * The statement which gives every byte of an array of composite values
+     * a zero, since a composite value cannot be written as a whole and the
+     * elements of such an array therefore cannot be given anything.
+     */
+    AstNodePtr ClearArray(const Symbol& symbol, int32 room);
+
+    /*
      * composite_type: struct_type | union_type
      *      ;
      *

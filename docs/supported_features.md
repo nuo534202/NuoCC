@@ -82,19 +82,23 @@
     reach the global variables declared above it. The variables are stored
     one after another in the order they are declared.
 15. Pointer Arithmetic. An integer may be added to or subtracted from a
-    pointer, and is scaled by the size of what the pointer points at, so
-    `&c + 1` is the address of the next value of `c`'s type and not the
-    address one byte along. An integer added to a pointer through `+=` or
-    `-=` is scaled the same way, so `p += 2` moves on by two values of the
-    type `p` points at and not by two bytes. Two pointers may be compared
-    with each other whatever they point at, since the question is which
-    address is the lower one, and that is how a pointer is asked whether it
-    points at anything: `if (p != NULL) ...`. An increment or a decrement of
-    a pointer moves on by one value of what it points at as well, so
-    `p++`, `++p`, `p += 1` and `p= p + 1` all move an `int *` on by four
-    bytes. Nothing else may be done with
-    a pointer: it cannot be multiplied or divided yet, and the address it
-    holds cannot be printed.
+    pointer, and is scaled by the room one value of what the pointer points
+    at takes, so `&c + 1` is the address of the next value of `c`'s type and
+    not the address one byte along. What a struct or a union takes is the
+    room its definition gives it, so a pointer to one is moved on by that
+    whole room rather than by the room of one member: at the first element
+    of an array of structs, `p + 1` reaches the second one. An integer added
+    to a pointer through `+=` or `-=` is scaled the same way, so `p += 2`
+    moves on by two values of the type `p` points at and not by two bytes.
+    Two pointers may be compared with each other whatever they point at,
+    since the question is which address is the lower one, and that is how a
+    pointer is asked whether it points at anything: `if (p != NULL) ...`.
+    An increment or a decrement of a pointer moves on by one value of what
+    it points at as well, so `p++`, `++p`, `p += 1` and `p= p + 1` all move
+    an `int *` on by four bytes and a `struct point *` on by the room a
+    struct point takes. Nothing else may be done with a pointer: it cannot
+    be multiplied or divided yet, and the address it holds cannot be
+    printed.
 16. Function-local Variables. Variables declared inside a function are
     stored in that function's stack frame, are released when the function
     returns, and may have the same name as a variable in another function.
@@ -220,12 +224,12 @@
         struct node { int value; struct node *next; };
 
     A struct value cannot be read, written, passed to a function or returned
-    as a whole yet. Members can be read and written as described below.
-    An array of structs, arithmetic on a pointer to a struct, a struct which
-    contains itself by value, a struct with no members, and a
-    tag which is defined twice are all refused with a message saying so.
-    Pointers to different struct types are distinct even when their members
-    have the same names and layout.
+    as a whole yet. Members can be read and written as described below, and
+    an array of structs may be declared and every element of it reached, as
+    item 68 describes. A struct which contains itself by value, a struct
+    with no members, and a tag which is defined twice are all refused with a
+    message saying so. Pointers to different struct types are distinct even
+    when their members have the same names and layout.
 
 28. Struct Member Access (acwj Stage 32, `32_Struct_Access_pt1`).
     `item.number` selects a member of a struct value and `ptr->number`
@@ -249,9 +253,11 @@
     a struct. Unknown or missing member names, duplicate member names,
     assigning to an array member as a whole, and incompatible struct
     pointers in assignments, calls, returns and prototypes are refused.
-    Incrementing a member or a struct pointer, taking the address of an
-    entire array member, arrays of structs, arithmetic on a struct pointer
-    and copying a whole struct remain unsupported.
+    Incrementing a member, taking the address of an entire array member and
+    copying a whole struct remain unsupported. A pointer to a struct is
+    stepped on like any other pointer, by the room the struct takes, and an
+    element of an array of structs is reached as `path[1].x` or
+    `(&path[1])->x`.
 
 29. Unions (acwj Stage 33, `33_Union`). `union name { ... };` declares a
     composite type whose members all start at offset zero, and an anonymous
@@ -267,8 +273,8 @@
     any member asks for. `union same` and `struct same` cannot share a
     tag, and pointers to different composite types remain distinct. A
     whole composite value still cannot be copied, passed by value or
-    returned, and arrays of composite values and arithmetic on pointers to
-    them are still refused.
+    returned, while an array of them may be declared and reached as item 68
+    describes.
 
 30. Enums and Typedefs (acwj Stage 34, `34_Enums_and_Typedefs`). An
     `enum name { ... };` gives names to numbers, and each name may be
@@ -735,8 +741,10 @@
     with, so `int ary[5]= { 1, 2, 3, 4, 5 };` is refused and the values have
     to be stored into its elements; a size is therefore the one thing a
     local array must have, and `int ary[];` is refused for the same reason a
-    global one would be. An array of structs or unions is not part of the
-    language yet, whether it is declared here or at the top level.
+    global one would be. An array of composite values may be declared here
+    as it may at the top level, with the one difference that its elements
+    cannot be given values and are cleared to nothing where the declaration
+    stands, which is what item 68 describes.
 
 54. Addresses Compared, and Files of Storage (acwj Stage 57,
     `57_Mop_up_pt3`). Two pointers may be compared with each other, and a
@@ -1002,3 +1010,32 @@
     under test/arm64 and test/x86_64, and the suite compares what the
     compiler writes with it; every program of the suite still prints what
     it printed before, since what the pass takes away is what did nothing.
+
+68. Arrays of Composite Values, and Stepping a Pointer to One (acwj Part
+    61, `61_What_Next`, the rest of what items 27, 28, 29 and 53 left out).
+    An array may now hold composite values: `struct point path[4];`
+    declares room for four of them, at the top level of the program or
+    inside a function, and an element is reached by counting the room a
+    whole element takes along from the first one, so `path[3]` is the
+    fourth element and its members are reached as `path[3].x` and
+    `(&path[3])->y`. A pointer to a composite value is stepped on by that
+    same room, so `p + 1`, `1 + p`, `p - 1`, `p += 2`, `p++` and `p= p + 1`
+    all move a `struct point *` from one element of such an array to the
+    next, `p--` and `--p` move it back, and `p[i]` reaches the element that
+    many along. The room a composite takes comes from its definition rather
+    than from its type value, so the definition travels beside the type
+    wherever an offset into one is worked out; that is what lets an array of
+    composite values be indexed and a pointer to one be stepped on.
+
+    An array of composite values cannot be given values where it is
+    declared, since a composite value cannot be written as a whole and
+    there is nothing to store into an element with, so a list of values
+    written for such an array is refused with a message saying so. A local
+    array of them is cleared where it is declared instead, the room of it
+    being walked a byte at a time and every byte given a zero, which leaves
+    an element which was not stored into holding the nothing an element of
+    any other local array is left holding. A global array of them is given
+    that same nothing by the room its declaration reserves. A whole
+    composite value still cannot be read, written, passed or returned, so
+    `path[0]= path[1]`, `print path[0]` and `return (path[0]);` are all
+    still refused.

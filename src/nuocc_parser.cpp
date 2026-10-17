@@ -955,17 +955,10 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     }
 
     /*
-     * Every element of an array is reached by counting its size along from
-     * the first one, and the room a struct takes is only known from its
-     * definition, which an index does not carry yet.
+     * Every element of an array is reached by counting the room it takes
+     * along from the first one, and the room a composite takes comes from
+     * the definition the element type carries.
      */
-    if (element_type.type == PrimitiveType::kComposite)
-    {
-        std::cerr << "syntax error: an array of composite values is not supported";
-        std::cerr << " yet!" << std::endl;
-        std::exit(1);
-    }
-
     const int32 element_size = ValueSize(element_type.type,
                                          element_type.composite);
 
@@ -994,6 +987,20 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
      */
     const bool is_global = storage == StorageClass::kGlobal;
     std::vector<AstNodePtr> elements;
+
+    /*
+     * A composite value cannot be written as a whole, so there is nothing
+     * to give an element of an array of them: the array may be declared,
+     * but not with the values its elements start out holding.
+     */
+    if (element_type.type == PrimitiveType::kComposite &&
+        TokenTag(token_list[i]) == T_Assign)
+    {
+        std::cerr << "syntax error: the array " << name << " holds composite";
+        std::cerr << " values, which cannot be given where it is declared!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
 
     if (TokenTag(token_list[i]) == T_Assign)
     {
@@ -1064,6 +1071,21 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
             ValueAlignment(element_type.type, element_type.composite));
 
         /*
+         * The elements of a local array of composite values cannot be
+         * given anything where the declaration stands, since a composite
+         * value cannot be written, so what the whole array starts out
+         * holding is cleared instead. That is the nothing an element of
+         * any other local array which was not given a value is left
+         * holding, so an array of composites starts out like any other.
+         */
+        if (element_type.type == PrimitiveType::kComposite)
+        {
+            initialiser = ClearArray(symbol,
+                                     element_size * symbol.element_count);
+            return symbol;
+        }
+
+        /*
          * The elements of a local array are given their values one after
          * another where the declaration stands, each value being worked
          * out and stored as the ones before it were.
@@ -1106,6 +1128,80 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 }
 
 /*
+ * Give every byte of an array of composite values a zero.
+ *
+ * A composite value cannot be written as a whole, so an array of them
+ * cannot be given the values its elements start with and there is no store
+ * of a whole element to clear it with. The room of the array is walked one
+ * byte at a time instead, which leaves every element holding the nothing an
+ * element of any other local array which was not given a value is left
+ * holding.
+ */
+AstNodePtr Parser::ClearArray(const Symbol& symbol, int32 room)
+{
+    /*
+     * The walk counts with a variable of its own, which lives in the frame
+     * of the function beside the array. It is made here rather than read
+     * from the program, so it is never named and nothing else reaches it.
+     */
+    Symbol counter;
+    counter.type = PrimitiveType::kInt;
+    counter.stype = StructuralType::kVariable;
+    counter.storage = StorageClass::kLocal;
+    counter.stack_offset = AllocateLocal(
+        TypeRef{.type = PrimitiveType::kInt, .composite = nullptr});
+
+    /* counter= 0; */
+    AstNodePtr zero = MakeIntLitLeaf(0, PrimitiveType::kInt);
+    AstNodePtr counter_target = MakeIdentLeaf(counter);
+    AstNodePtr start = std::make_unique<AstOperator>(
+        zero, counter_target, T_Assign, PrimitiveType::kInt);
+
+    /* counter < room */
+    AstNodePtr limit = MakeIntLitLeaf(room, PrimitiveType::kInt);
+    AstNodePtr counting = MakeIdentLeaf(counter);
+    AstNodePtr condition = std::make_unique<AstOperator>(counting, limit, T_LT,
+                                                         PrimitiveType::kInt);
+
+    /*
+     * *((char *)array + counter)= 0;
+     *
+     * The array is reached as the address of its first element, which is a
+     * pointer to a composite value, and the count is added to it as an
+     * offset of one byte rather than of one element: the addition is given
+     * the type of a pointer to a char, so what it steps by is the room a
+     * char takes and the count is how many bytes of the array have been
+     * walked.
+     */
+    AstNodePtr base = std::make_unique<AstAddress>(symbol);
+    AstNodePtr offset = MakeIdentLeaf(counter);
+    AstNodePtr address = std::make_unique<AstOperator>(
+        base, offset, T_Plus, PointerTo(PrimitiveType::kChar));
+    AstNodePtr element = std::make_unique<AstDeref>(address,
+                                                    PrimitiveType::kChar);
+    AstNodePtr nothing = MakeIntLitLeaf(0, PrimitiveType::kChar);
+    AstNodePtr body = std::make_unique<AstOperator>(nothing, element, T_Assign,
+                                                    PrimitiveType::kChar);
+
+    /* counter= counter + 1; */
+    AstNodePtr one = MakeIntLitLeaf(1, PrimitiveType::kInt);
+    AstNodePtr step_target = MakeIdentLeaf(counter);
+    AstNodePtr counted = MakeIdentLeaf(counter);
+    AstNodePtr sum = std::make_unique<AstOperator>(counted, one, T_Plus,
+                                                   PrimitiveType::kInt);
+    AstNodePtr step = std::make_unique<AstOperator>(sum, step_target, T_Assign,
+                                                    PrimitiveType::kInt);
+
+    AstNodePtr loop = std::make_unique<AstFor>(condition, body, step);
+
+    std::vector<AstNodePtr> statements;
+    statements.push_back(std::move(start));
+    statements.push_back(std::move(loop));
+
+    return GlueStatements(statements);
+}
+
+/*
  * The assignment which stores one value into one element of an array: the
  * element is reached the way `name[index]` reaches it, and the value stands
  * on the left of the assignment the way it does in every other one.
@@ -1120,11 +1216,13 @@ AstNodePtr Parser::ElementAssignment(const Symbol& symbol,
     /*
      * An index counts elements and not bytes, so it reaches the element it
      * names only once it has been scaled by the room one element takes,
-     * which is what giving it to the operator does. An array of composite
-     * values is not part of the language, so there is no element whose size
-     * would not be known and this always works.
+     * which is what giving it to the operator does. An element which is a
+     * composite takes the room its own definition asks for, which travels
+     * with the type of the element.
      */
-    if (!ModifyType(offset, base->GetType(), T_Plus))
+    if (!ModifyType(offset, TypeRef{.type = base->GetType(),
+                                    .composite = base->GetComposite()},
+                    T_Plus))
     {
         std::cerr << "syntax error: this element of the array " << symbol.name;
         std::cerr << " cannot be reached!" << std::endl;
@@ -1940,8 +2038,19 @@ AstNodePtr Parser::BinaryExpression(
             }
             else
             {
-                bool left_fits = ModifyType(left, right_type, op_type);
-                bool right_fits = ModifyType(right, left_type, op_type);
+                /*
+                 * Each side is given the type of the other one, and the
+                 * definition of a composite travels with the type: a
+                 * pointer to a composite is stepped along by the room the
+                 * composite takes, which is only known from it.
+                 */
+                const TypeRef left_wanted{.type = left_type,
+                                          .composite = left->GetComposite()};
+                const TypeRef right_wanted{.type = right_type,
+                                           .composite = right->GetComposite()};
+
+                bool left_fits = ModifyType(left, right_wanted, op_type);
+                bool right_fits = ModifyType(right, left_wanted, op_type);
 
                 if (!left_fits && !right_fits)
                 {
@@ -2148,12 +2257,6 @@ AstNodePtr Parser::PrefixExpression(const std::vector<NodePtr>& token_list,
             CheckIncrementable(operand);
             const Symbol& symbol =
                 static_cast<const AstIdentifier&>(*operand).GetSymbol();
-            if (BaseType(symbol.type) == PrimitiveType::kComposite) {
-                std::cerr << "syntax error: increment and decrement of composite"
-                          << " values or pointers to them are not supported yet!"
-                          << std::endl;
-                std::exit(1);
-            }
 
             return std::make_unique<AstIncDec>(
                 symbol, IncrementStep(symbol, increment), false);
@@ -2322,13 +2425,6 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             {
                 bool increment = TokenTag(token_list[i]) == T_Inc;
                 i++;
-                if (BaseType(symbol.type) == PrimitiveType::kComposite) {
-                    std::cerr << "syntax error: increment and decrement of"
-                              << " composite values or pointers to them are not"
-                              << " supported yet!"
-                              << std::endl;
-                    std::exit(1);
-                }
 
                 return std::make_unique<AstIncDec>(
                     symbol, IncrementStep(symbol, increment), true);
@@ -2410,11 +2506,15 @@ AstNodePtr Parser::ArrayAccess(AstNodePtr base,
     /*
      * The index counts elements and not bytes, so it becomes an offset:
      * element six of an int array starts 24 bytes along, which is what
-     * scaling it by the size of one element works out. Only an integer
-     * counts elements, so anything else is refused here rather than
-     * scaled into an offset which would not mean anything.
+     * scaling it by the size of one element works out. An element which is
+     * a composite takes the room its own definition asks for, which the
+     * type of what is indexed carries with it. Only an integer counts
+     * elements, so anything else is refused here rather than scaled into
+     * an offset which would not mean anything.
      */
-    if (!ModifyType(index, base_type, T_Plus))
+    if (!ModifyType(index, TypeRef{.type = base_type,
+                                   .composite = base->GetComposite()},
+                    T_Plus))
     {
         std::cerr << "syntax error: an array index must be an integer!";
         std::cerr << std::endl;
@@ -3299,8 +3399,14 @@ int32 Parser::IncrementStep(const Symbol& symbol, bool increment) const
 {
     int32 step = 1;
 
+    /*
+     * A pointer moves on by the room one value of what it points at takes
+     * rather than by one byte. A composite takes the room its definition
+     * asks for, which the symbol carries, and every other type takes the
+     * room its own type gives it.
+     */
     if (IsPointerType(symbol.type))
-        step = PrimitiveSize(ValueAt(symbol.type));
+        step = ValueSize(ValueAt(symbol.type), symbol.composite);
 
     return increment ? step : -step;
 }

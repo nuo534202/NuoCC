@@ -26,6 +26,20 @@ PrimitiveType WithIndirection(PrimitiveType type, uint8 levels)
     return static_cast<PrimitiveType>(base | levels);
 }
 
+/*
+ * An integer standing beside a pointer becomes an offset into what the
+ * pointer points at, so it is scaled by the room one of those values takes.
+ * A composite takes the room its definition asks for, which the type value
+ * on its own does not carry, so the definition comes with the type here.
+ */
+AstNodePtr ScaleOffset(AstNodePtr& tree,
+                       PrimitiveType pointer_type,
+                       const std::shared_ptr<CompositeType>& composite)
+{
+    return std::make_unique<AstScale>(
+        tree, pointer_type, ValueSize(ValueAt(pointer_type), composite));
+}
+
 }   /* namespace */
 
 bool ValueFitsType(int64 value, PrimitiveType type)
@@ -234,35 +248,25 @@ bool ModifyType(AstNodePtr& tree,
          ValueAt(wanted) == PrimitiveType::kVoid))
         return true;
 
-    if (op == T_Plus || op == T_Minus)
+    /*
+     * The integer becomes an offset into what the pointer points at, so it
+     * is scaled by the room one of those takes; a room of one leaves the
+     * value alone. A composite takes the room its definition asks for and
+     * a type value carries no definition, so an offset into one is scaled
+     * by the overload which is given the definition and never here.
+     */
+    if ((op == T_Plus || op == T_Minus) && IsIntType(type) &&
+        IsPointerType(wanted))
     {
-        if (IsIntType(type) && IsPointerType(wanted))
+        if (ValueAt(wanted) == PrimitiveType::kComposite)
         {
-            /*
-             * How far along the next value is is the size of what the
-             * pointer points at, and a composite type only knows that
-             * once its definition says so and not from the type value,
-             * which the tree being scaled here does not carry. Stepping a
-             * pointer to one along is therefore refused rather than scaled
-             * by a size of zero.
-             */
-            if (ValueAt(wanted) == PrimitiveType::kComposite)
-            {
-                std::cerr << "syntax error: arithmetic on a pointer to a";
-                std::cerr << " composite value is not supported yet!" << std::endl;
-                std::exit(1);
-            }
-
-            /*
-             * The integer becomes an offset into what the pointer points
-             * at, so it is scaled by the size of one of those. A size of
-             * one scales by one, which leaves the value alone.
-             */
-            tree = std::make_unique<AstScale>(tree,
-                                              wanted,
-                                              PrimitiveSize(ValueAt(wanted)));
-            return true;
+            std::cerr << "Error: an offset into a composite is scaled where";
+            std::cerr << " its definition is at hand!" << std::endl;
+            std::exit(1);
         }
+
+        tree = ScaleOffset(tree, wanted, nullptr);
+        return true;
     }
 
     return false;
@@ -275,6 +279,20 @@ bool ModifyType(AstNodePtr& tree, const TypeRef& wanted,
         tree->GetComposite() != wanted.composite) {
         return false;
     }
+
+    /*
+     * An integer added to or taken from a pointer becomes an offset into
+     * what the pointer points at. How far along the next value is is the
+     * room one of them takes, and a composite takes the room its
+     * definition asks for: the definition is here, so this is the overload
+     * which scales an offset into a composite.
+     */
+    if ((op == T_Plus || op == T_Minus) && IsIntType(tree->GetType()) &&
+        IsPointerType(wanted.type)) {
+        tree = ScaleOffset(tree, wanted.type, wanted.composite);
+        return true;
+    }
+
     return ModifyType(tree, wanted.type, op);
 }
 

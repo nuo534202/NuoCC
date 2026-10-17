@@ -70,7 +70,10 @@ parameter: type opt_pointer identifier
  * Every name of a declaration brings its own stars and its own array size,
  * so plain values, pointers and arrays may stand in one list. An array
  * holds a fixed number of elements, which may not be zero, and every
- * element has to be a type which can hold a value.
+ * element has to be a type which takes room, which a struct or a union
+ * does. An array of composite values cannot be given values, since there is
+ * no way to write a composite value, so what tells such an array apart is
+ * that its elements are only ever stored into one member at a time.
  */
 var_declaration: type declarator_list ';'
     ;
@@ -87,7 +90,9 @@ declarator_list: declarator
  * it: `int x= 10 + 6;` is the value 16, and a string is the address of its
  * characters. A value written where a local variable is declared, array or
  * not, is an expression which runs where it stands, and the values of an
- * array are stored into its elements there one after another. An array
+ * array are stored into its elements there one after another, while an
+ * array of composite values is cleared instead, since none of its elements
+ * can be given anything. An array
  * written without a size takes the number of values it is given as its
  * size. A member of a struct is not a place of its own, so it may not be
  * given values at all.
@@ -505,7 +510,10 @@ cast_expression: '(' type opt_pointer ')' prefix_expression
 /*
  * An array named on its own stands for the address of its first element,
  * so an array_access may also be written where a pointer is wanted, and
- * the index counts elements rather than bytes.
+ * the index counts elements rather than bytes. An element which is a
+ * composite value takes the room its own definition asks for, so the same
+ * index reaches the same element whether the room of one is the room of a
+ * member or the room of a struct.
  */
 array_access: postfix_expression '[' expression ']'
     ;
