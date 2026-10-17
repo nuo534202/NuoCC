@@ -379,8 +379,10 @@ expression: assignment_expression
 
 /*
  * Every assignment takes what stands on its right first, so they all bind
- * to the right. `=` stores the value as it stands, while `+=`, `-=`, `*=`
- * and `/=` combine it with the value the target holds.
+ * to the right. `=` stores the value as it stands, while every other one
+ * combines it with the value the target holds: `+=`, `-=`, `*=` and `/=`
+ * arithmetically, `%=` by the remainder, and `&=`, `|=`, `^=`, `<<=` and
+ * `>>=` bitwise or by a shift.
  *
  * An assignment whose target holds a composite value stores no value: it
  * gives the room of the target the contents of another place holding the
@@ -395,6 +397,11 @@ assignment_expression: conditional_expression
     | lvalue '*=' assignment_expression
     | lvalue '/=' assignment_expression
     | lvalue '%=' assignment_expression
+    | lvalue '&=' assignment_expression
+    | lvalue '|=' assignment_expression
+    | lvalue '^=' assignment_expression
+    | lvalue '<<=' assignment_expression
+    | lvalue '>>=' assignment_expression
     ;
 
 /*

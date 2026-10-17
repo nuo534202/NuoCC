@@ -1153,3 +1153,25 @@
     An increment or a decrement is not a place itself, so it cannot be
     changed again, and neither a whole composite value, which cannot be read
     as a value, nor a value worked out rather than placed can take one.
+
+72. Compound Assignments Which Combine With a Bitwise or a Shift Operator
+    (acwj Part 61, `61_What_Next`, the rest of the family items 39 and 55
+    began). `&=`, `|=`, `^=`, `<<=` and `>>=` combine the value the target
+    holds with the value on their right the way `&`, `|`, `^`, `<<` and
+    `>>` do, store the result back in the target and yield it. So
+    `bits &= mask;` keeps only the bits `mask` holds, and `print count <<= 2;`
+    moves `count` up by two places and prints the value it now holds.
+
+    What may stand on the left is what any assignment may store into, so a
+    variable, the location a pointer holds, an element of an array and a
+    member of a value all work. What is written inside such a place is
+    worked out once even though the value there is read and stored back
+    over, so `list[k++] |= 1;` counts `k` on by one. What stands on the
+    right is worked out first, so two of them written one after the other
+    read from the right: `x &= y |= 4;` gives `y` four and then combines
+    the new `y` with `x`.
+
+    A value which does not fit the target is refused the way an arithmetic
+    compound assignment refuses one, since the result has to be narrowed to
+    fit it: `c <<= x;` is refused when `c` is a `char` and `x` is an `int`,
+    just as `c += x;` is.

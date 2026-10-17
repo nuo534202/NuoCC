@@ -428,6 +428,11 @@ void Scanner::CommitToken(const std::string& token)
         case T_StarAssign:
         case T_SlashAssign:
         case T_PercentAssign:
+        case T_AmperAssign:
+        case T_OrAssign:
+        case T_XorAssign:
+        case T_LShiftAssign:
+        case T_RShiftAssign:
         case T_Question:
         case T_Ellipsis:
             token_node = std::make_unique<Node>(nodetag);
@@ -593,12 +598,14 @@ const std::unordered_map<char, NodeTag> Scanner::kSingleOp = {
 };
 
 /*
- * The operators written with three characters. There is one of them, and
- * it is asked about before the two character operators, since the first
- * two of the three dots are not an operator on their own.
+ * The operators written with three characters. They are asked about before
+ * the two character ones, since the two characters a three character
+ * operator begins with may be an operator of their own, as `<<` is, and
+ * the longer one is the one meant.
  */
 const std::unordered_map<std::string, NodeTag> Scanner::kTripleOp = {
-    {"...", T_Ellipsis}
+    {"...", T_Ellipsis},
+    {"<<=", T_LShiftAssign}, {">>=", T_RShiftAssign}
 };
 
 const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
@@ -608,7 +615,8 @@ const std::unordered_map<std::string, NodeTag> Scanner::kDoubleOp = {
     {"++", T_Inc}, {"--", T_Dec}, {"->", T_Arrow},
     {"+=", T_PlusAssign}, {"-=", T_MinusAssign},
     {"*=", T_StarAssign}, {"/=", T_SlashAssign},
-    {"%=", T_PercentAssign}
+    {"%=", T_PercentAssign},
+    {"&=", T_AmperAssign}, {"|=", T_OrAssign}, {"^=", T_XorAssign}
 };
 
 const std::unordered_set<char> Scanner::kAlphabet = {

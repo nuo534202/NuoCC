@@ -31,6 +31,11 @@ typedef enum NodeTag
     T_StarAssign,
     T_SlashAssign,
     T_PercentAssign,
+    T_AmperAssign,
+    T_OrAssign,
+    T_XorAssign,
+    T_LShiftAssign,
+    T_RShiftAssign,
     T_Question,
 
     /* Comparison Operator */
@@ -145,20 +150,24 @@ inline bool IsComparisonOp(NodeTag tag)
 /*
  * Whether an assignment combines the value on its right with the one the
  * target holds rather than storing it as it stands. `=` stores, while `+=`
- * and its three companions combine.
+ * and its companions, arithmetic and bitwise alike, combine.
  */
 inline bool IsCompoundAssign(NodeTag tag)
 {
     return tag == T_PlusAssign || tag == T_MinusAssign ||
            tag == T_StarAssign || tag == T_SlashAssign ||
-           tag == T_PercentAssign;
+           tag == T_PercentAssign || tag == T_AmperAssign ||
+           tag == T_OrAssign || tag == T_XorAssign ||
+           tag == T_LShiftAssign || tag == T_RShiftAssign;
 }
 
 /*
  * The operator a compound assignment combines its two sides with: `+=`
- * adds, `-=` subtracts, `*=` multiplies and `/=` divides. The caller asks
- * this only after IsCompoundAssign has said which tags are the compound
- * ones, so any other tag is answered with itself and used by nobody.
+ * adds, `-=` subtracts, `*=` multiplies, `/=` divides, `%=` takes the
+ * remainder, `&=` ands, `|=` ors, `^=` exclusive ors, `<<=` shifts left
+ * and `>>=` shifts right. The caller asks this only after
+ * IsCompoundAssign has said which tags are the compound ones, so any other
+ * tag is answered with itself and used by nobody.
  */
 inline NodeTag CompoundAssignOperator(NodeTag tag)
 {
@@ -174,6 +183,16 @@ inline NodeTag CompoundAssignOperator(NodeTag tag)
             return T_Slash;
         case T_PercentAssign:
             return T_Percent;
+        case T_AmperAssign:
+            return T_Amper;
+        case T_OrAssign:
+            return T_Or;
+        case T_XorAssign:
+            return T_Xor;
+        case T_LShiftAssign:
+            return T_LShift;
+        case T_RShiftAssign:
+            return T_RShift;
         default:
             return tag;
     }

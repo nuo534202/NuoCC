@@ -3280,6 +3280,11 @@ AstNodePtr Parser::MakeOperatorNode(AstNodePtr& left,
         case T_StarAssign:
         case T_SlashAssign:
         case T_PercentAssign:
+        case T_AmperAssign:
+        case T_OrAssign:
+        case T_XorAssign:
+        case T_LShiftAssign:
+        case T_RShiftAssign:
             return std::make_unique<AstOperator>(left, right,
                                                  node->GetNodeTag(), type);
         default:
@@ -3555,6 +3560,8 @@ const std::unordered_map<NodeTag, uint8> Parser::kOpPrecedence = {
     {T_Assign, 10},
     {T_PlusAssign, 10}, {T_MinusAssign, 10},
     {T_StarAssign, 10}, {T_SlashAssign, 10}, {T_PercentAssign, 10},
+    {T_AmperAssign, 10}, {T_OrAssign, 10}, {T_XorAssign, 10},
+    {T_LShiftAssign, 10}, {T_RShiftAssign, 10},
 
     {T_Question, 15},
 

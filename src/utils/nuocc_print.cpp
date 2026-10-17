@@ -87,6 +87,21 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_PercentAssign:
             out = "%=";
             break;
+        case T_AmperAssign:
+            out = "&=";
+            break;
+        case T_OrAssign:
+            out = "|=";
+            break;
+        case T_XorAssign:
+            out = "^=";
+            break;
+        case T_LShiftAssign:
+            out = "<<=";
+            break;
+        case T_RShiftAssign:
+            out = ">>=";
+            break;
         case T_EQ:
             out = "==";
             break;
