@@ -90,20 +90,11 @@ declarator_list: declarator
  * it: `int x= 10 + 6;` is the value 16, and a string is the address of its
  * characters. A value written where a local variable is declared, array or
  * not, is an expression which runs where it stands, and the values of an
- * array are stored into its elements there one after another, while an
- * array of composite values is cleared instead, since none of its elements
- * can be given anything. An array
- * written without a size takes the number of values it is given as its
- * size. A member of a struct is not a place of its own, so it may not be
- * given values at all.
- *
- * A value of a composite type is written as the values of the members of
- * the type between braces, which is what a variable of that type is given
- * wherever it is declared: a value the compiler works out, put in the
- * storage of a global variable, or an expression which runs where it
- * stands, stored into a local one. A copy of another place holding one of
- * the same type may be given to a local one as well, since that is a
- * statement rather than storage.
+ * array are stored into its elements there one after another, while the
+ * room of an array of composite values is cleared before the values written
+ * for it are stored. An array written without a size takes the number of
+ * values it is given as its size. A member of a struct is not a place of its
+ * own, so it may not be given values at all.
  *
  * An array of char may be given a string in place of the list of values,
  * which gives it the characters of the string one element each and the zero
@@ -121,6 +112,14 @@ declarator_list: declarator
  * takes the value written for its first member. The braces may be closed
  * before every member has been written for, and what is not written is
  * left at zero.
+ *
+ * A value of a composite type given to a global variable is one the
+ * compiler works out and puts in the storage of the variable, while one
+ * given to a local variable is an expression which runs where it stands; a
+ * copy of another place holding one of the same type may be given to a
+ * local one as well, since that is a statement rather than storage. An
+ * array whose elements are composite values is given one such value for
+ * each element, and the size it was not written with is the number of them.
  */
 declarator: opt_pointer identifier opt_value
     | opt_pointer identifier '[' opt_size ']' opt_values
@@ -147,6 +146,16 @@ opt_values: <empty>
     ;
 
 value: expression
+    | composite_value
+    ;
+
+/*
+ * A composite value written for an element of an array of them is one of
+ * the two ways such a value is ever written, and the list of them is the
+ * list of the array: a value of any other type is a plain expression.
+ */
+composite_value: '{' member_value_list '}'
+    | expression
     ;
 
 value_list: <empty>

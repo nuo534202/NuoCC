@@ -1031,15 +1031,13 @@ void Parser::StringElementValues(int32 element_count,
 }
 
 /*
- * The place the member a path names stands at, reached from the name of the
- * value it stands in: an empty path is the value itself, and each member of
- * the path is reached through the one written before it.
+ * The place the member a path names stands at, reached from a place which is
+ * given: an empty path is that place itself, and each member of the path is
+ * reached through the one written before it.
  */
-AstNodePtr Parser::MemberPlace(const Symbol& symbol,
+AstNodePtr Parser::MemberPlace(AstNodePtr place,
     const std::vector<const Symbol*>& path)
 {
-    AstNodePtr place = MakeIdentLeaf(symbol);
-
     for (const Symbol* member : path)
         place = std::make_unique<AstMember>(place, *member, false);
 
@@ -1058,20 +1056,57 @@ void Parser::StoreWrittenValues(const Symbol& symbol,
     std::vector<AstNodePtr>& statements)
 {
     for (WrittenValue& written : values)
+        StoreValue(MemberPlace(MakeIdentLeaf(symbol), written.path), written,
+                   statements);
+}
+
+/*
+ * Build the statements which store the values written for one element of an
+ * array of composite values into the room that element takes. The room of
+ * the element is worked out again for every value which is stored into it,
+ * since a tree is moved into the node which holds it and a place is used
+ * once.
+ */
+void Parser::StoreElementValues(const Symbol& symbol,
+    int32 element,
+    std::vector<WrittenValue>& values,
+    std::vector<AstNodePtr>& statements)
+{
+    for (WrittenValue& written : values)
     {
-        AstNodePtr place = MemberPlace(symbol, written.path);
+        AstNodePtr base = ElementPlace(std::make_unique<AstAddress>(symbol),
+                                       element);
 
-        if (written.path.back()->stype == StructuralType::kArray)
-        {
-            statements.push_back(
-                PlaceElementAssignment(place, written.element,
-                                       written.value));
-            continue;
-        }
-
-        statements.push_back(std::make_unique<AstOperator>(
-            written.value, place, T_Assign, written.value->GetType()));
+        StoreValue(MemberPlace(std::move(base), written.path), written,
+                   statements);
     }
+}
+
+void Parser::StoreValue(AstNodePtr place,
+    WrittenValue& written,
+    std::vector<AstNodePtr>& statements)
+{
+    /*
+     * A value written for a value of a composite type itself is a place
+     * holding one of the same type, which is copied whole; the path is
+     * empty then, since the value stands where the member path begins.
+     */
+    if (written.path.empty())
+    {
+        statements.push_back(std::make_unique<AstOperator>(
+            written.value, place, T_Assign, PrimitiveType::kComposite));
+        return;
+    }
+
+    if (written.path.back()->stype == StructuralType::kArray)
+    {
+        statements.push_back(
+            PlaceElementAssignment(place, written.element, written.value));
+        return;
+    }
+
+    statements.push_back(std::make_unique<AstOperator>(
+        written.value, place, T_Assign, written.value->GetType()));
 }
 
 /*
@@ -1094,9 +1129,30 @@ void Parser::CompositeConstantValues(const TypeRef& type,
 
     CompositeValues(type.composite, path, token_list, i, values, true);
 
+    WrittenValuePieces(0, values, pieces);
+}
+
+void Parser::WrittenValuePieces(int32 base,
+    std::vector<WrittenValue>& values,
+    std::vector<InitialPiece>& pieces)
+{
     for (WrittenValue& written : values)
     {
-        int32 offset = 0;
+        /*
+         * A value written for a value of a composite type itself is a place
+         * holding one of the same type, which is a statement rather than
+         * storage, so a global value of such a type may not be given one.
+         */
+        if (written.path.empty())
+        {
+            std::cerr << "syntax error: a value of a composite type given";
+            std::cerr << " where a global variable is declared is written";
+            std::cerr << " as the values of the members of its type!";
+            std::cerr << std::endl;
+            std::exit(1);
+        }
+
+        int32 offset = base;
 
         for (const Symbol* member : written.path)
             offset += member->member_offset;
@@ -1496,23 +1552,101 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
      * works out, since they are stored into it once the program runs.
      */
     const bool is_global = storage == StorageClass::kGlobal;
+    const bool is_composite = element_type.type == PrimitiveType::kComposite;
     std::vector<AstNodePtr> elements;
-
     /*
-     * A composite value cannot be written as a whole, so there is nothing
-     * to give an element of an array of them: the array may be declared,
-     * but not with the values its elements start out holding.
+     * The values written for the elements of an array of composite values,
+     * one list for each element which was given one, since an element of
+     * one takes the values of the members of the element type.
      */
-    if (element_type.type == PrimitiveType::kComposite &&
-        TokenTag(token_list[i]) == T_Assign)
-    {
-        std::cerr << "syntax error: the array " << name << " holds composite";
-        std::cerr << " values, which cannot be given where it is declared!";
-        std::cerr << std::endl;
-        std::exit(1);
-    }
+    std::vector<std::vector<WrittenValue>> written;
 
-    if (TokenTag(token_list[i]) == T_Assign)
+    if (TokenTag(token_list[i]) == T_Assign && is_composite)
+    {
+        CheckInitialisable(storage, name);
+
+        i++;    /* step over '=' */
+
+        /*
+         * A composite value cannot be read as a value, so the one written
+         * for an element is written one of the two ways a composite value
+         * ever is: as the values of the members of the type, between
+         * braces, or as another place holding a value of the same type,
+         * which is copied whole.
+         */
+        Match(token_list, i, T_LBrace, "{");
+
+        while (TokenTag(token_list[i]) != T_RBrace)
+        {
+            std::vector<WrittenValue> one;
+
+            if (TokenTag(token_list[i]) == T_LBrace)
+            {
+                std::vector<const Symbol*> path;
+
+                CompositeValues(element_type.composite, path, token_list, i,
+                                one, true);
+            }
+            else
+            {
+                AstNodePtr source = BinaryExpression(token_list, i, 0);
+
+                if (source->GetType() != PrimitiveType::kComposite ||
+                    source->GetComposite() != element_type.composite ||
+                    !IsLvalue(source->GetAstNodeTag()))
+                {
+                    std::cerr << "syntax error: a value of a composite type";
+                    std::cerr << " given to an element of an array can only";
+                    std::cerr << " be another place holding one of the same";
+                    std::cerr << " type, or the values of its members!";
+                    std::cerr << std::endl;
+                    std::exit(1);
+                }
+
+                one.push_back(WrittenValue{.path = {},
+                                           .element = 0,
+                                           .value = std::move(source)});
+            }
+
+            written.push_back(std::move(one));
+
+            /* A ',' separates two values, and the last one needs none. */
+            if (TokenTag(token_list[i]) != T_Comma)
+                break;
+
+            i++;
+        }
+
+        Match(token_list, i, T_RBrace, "}");
+
+        const idx_t given = written.size();
+
+        if (has_size && static_cast<int32>(given) > size)
+        {
+            std::cerr << "syntax error: too many values for the array ";
+            std::cerr << name << "!" << std::endl;
+            std::exit(1);
+        }
+
+        if (!has_size)
+            symbol.element_count = static_cast<int32>(given);
+
+        /*
+         * The storage of a global array holds what the values written for
+         * its elements stand for, each at its own distance from the base of
+         * the array, which is the room an element takes counted along from
+         * the first one.
+         */
+        if (is_global)
+        {
+            for (idx_t k = 0; k < written.size(); k++)
+            {
+                WrittenValuePieces(static_cast<int32>(k) * element_size,
+                                   written[k], symbol.initial_pieces);
+            }
+        }
+    }
+    else if (TokenTag(token_list[i]) == T_Assign)
     {
         CheckInitialisable(storage, name);
 
@@ -1630,17 +1764,27 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
             ValueAlignment(element_type.type, element_type.composite));
 
         /*
-         * The elements of a local array of composite values cannot be
-         * given anything where the declaration stands, since a composite
-         * value cannot be written, so what the whole array starts out
-         * holding is cleared instead. That is the nothing an element of
-         * any other local array which was not given a value is left
-         * holding, so an array of composites starts out like any other.
+         * A composite value cannot be written as one value, so the elements
+         * of a local array of them are given their values a member at a
+         * time. The room of the whole array is cleared first, which leaves
+         * an element which is not given a value holding the nothing an
+         * element of any other local array is left holding, and what is
+         * written for the elements which are given one is stored after it.
          */
-        if (element_type.type == PrimitiveType::kComposite)
+        if (is_composite)
         {
-            initialiser = ClearArray(symbol,
-                                     element_size * symbol.element_count);
+            std::vector<AstNodePtr> stores;
+
+            stores.push_back(ClearArray(symbol,
+                                        element_size * symbol.element_count));
+
+            for (idx_t k = 0; k < written.size(); k++)
+            {
+                StoreElementValues(symbol, static_cast<int32>(k), written[k],
+                                   stores);
+            }
+
+            initialiser = GlueStatements(stores);
             return symbol;
         }
 
@@ -1796,23 +1940,21 @@ AstNodePtr Parser::ElementAssignment(const Symbol& symbol,
 }
 
 /*
- * The same for an array whose place is known rather than being reached by
- * name, which is how an element of an array a struct holds is reached: the
- * place of the array is what an address is taken of instead of a name.
+ * The place one element of an array stands at, where the place of the array
+ * is known rather than being reached by name, which is how an element of an
+ * array a struct holds is reached: the place of the array is what an address
+ * is taken of instead of a name.
+ *
+ * An index counts elements and not bytes, so it reaches the element it names
+ * only once it has been scaled by the room one element takes, which is what
+ * giving it to the operator does. An element which is a composite takes the
+ * room its own definition asks for, which travels with the type of the
+ * element.
  */
-AstNodePtr Parser::PlaceElementAssignment(AstNodePtr& place,
-    int32 index,
-    AstNodePtr& value)
+AstNodePtr Parser::ElementPlace(AstNodePtr place, int32 index)
 {
     AstNodePtr offset = MakeIntLitLeaf(index, PrimitiveType::kInt);
 
-    /*
-     * An index counts elements and not bytes, so it reaches the element it
-     * names only once it has been scaled by the room one element takes,
-     * which is what giving it to the operator does. An element which is a
-     * composite takes the room its own definition asks for, which travels
-     * with the type of the element.
-     */
     if (!ModifyType(offset, TypeRef{.type = place->GetType(),
                                     .composite = place->GetComposite()},
                     T_Plus))
@@ -1825,8 +1967,18 @@ AstNodePtr Parser::PlaceElementAssignment(AstNodePtr& place,
     const PrimitiveType pointer_type = place->GetType();
     AstNodePtr address = std::make_unique<AstOperator>(place, offset, T_Plus,
                                                        pointer_type);
-    AstNodePtr element = std::make_unique<AstDeref>(address,
-                                                    ValueAt(pointer_type));
+
+    return std::make_unique<AstDeref>(address, ValueAt(pointer_type));
+}
+
+/*
+ * The assignment which stores a value into one element of such an array.
+ */
+AstNodePtr Parser::PlaceElementAssignment(AstNodePtr& place,
+    int32 index,
+    AstNodePtr& value)
+{
+    AstNodePtr element = ElementPlace(std::move(place), index);
 
     return std::make_unique<AstOperator>(value, element, T_Assign,
                                          value->GetType());

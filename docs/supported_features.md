@@ -1039,16 +1039,15 @@
     wherever an offset into one is worked out; that is what lets an array of
     composite values be indexed and a pointer to one be stepped on.
 
-    An array of composite values cannot be given values where it is
-    declared, since there is no way of writing a composite value down: a
-    list of values written for such an array is refused with a message
-    saying so, and an element is stored into one member at a time or given
-    a whole value later as item 69 describes. A local array of them is
-    cleared where it is declared instead, the room of it
-    being walked a byte at a time and every byte given a zero, which leaves
-    an element which was not stored into holding the nothing an element of
-    any other local array is left holding. A global array of them is given
-    that same nothing by the room its declaration reserves. A whole
+    An array of composite values is given the values of its elements where
+    it is declared, as item 78 describes, and an element is stored into one
+    member at a time or given a whole value as item 69 describes. A local
+    array of them is cleared where it is declared before the values written
+    for its elements are stored, the room of it being walked a byte at a
+    time and every byte given a zero, which leaves an element which was not
+    given a value holding the nothing an element of any other local array
+    is left holding. A global array of them which is given no value is
+    given that same nothing by the room its declaration reserves. A whole
     composite value still cannot be read as a value, passed or returned, so
     `print path[0]` and `return (path[0]);` are still refused, while one
     place holding such a value may be given the contents of another as item
@@ -1282,9 +1281,9 @@
     than where the whole program is read, so a value may be one the program
     works out as it runs, as `struct point r = { a, a + 1 };` is. A value
     of a composite type given where a global variable is declared is
-    written the same way, as item 77 describes, while an array of composite
-    values still cannot be given values where it is declared, as item 68
-    describes. A list with more values than the
+    written the same way, as item 77 describes, and so is one given to an
+    element of an array of composite values, as item 78 describes. A list
+    with more values than the
     members can take, a value which does not fit the member it is written
     for, an array member with more values than it holds room for or a
     string when it does not hold characters, a character array given too
@@ -1372,3 +1371,47 @@
     fit the member it is written for, a list with more values than the
     members can take, and a value the compiler cannot work out are each
     refused with a message saying so.
+
+78. An Array of Composite Values Given Its Values Where It Is Declared (acwj
+    Part 61, `61_What_Next`, the rest of what items 66 and 68 left out). An
+    array whose elements are composite values may now be given the values of
+    its elements where it is declared, which is the last kind of array that
+    could not be:
+
+        struct point ends[2]= { { 1, 2 }, { 3, 4 } };
+        struct point path[]= { { 5, 6 }, { 7, 8 } };
+        struct text  words[2]= { { "hi", 1 }, { "ok", 2 } };
+
+    A value written for an element is written one of the two ways a
+    composite value ever is: as the values of the members of the element
+    type, between braces, or as another place holding a value of the same
+    type, which is copied whole where the element stands. Everything an
+    element of such an array is written with therefore works here as it does
+    anywhere else: a member which is a composite value of its own takes a
+    list of its own, an array member takes a list of element values or the
+    characters of a string, a union takes the value written for its first
+    member, the members of an anonymous member are written among the members
+    of the element type, and a member which is not given a value starts out
+    at zero.
+
+    Where the values go is what tells a global array from a local one. A
+    global array is given values the compiler works out while it is
+    compiling the program, since it is the compiler which puts them in the
+    storage, so a copy of another place may not be written for an element of
+    one; a member which is a pointer to a char may be given a string there
+    as it may anywhere else, and the string is put in the data section with
+    the address of it stored where the member stands. A local array is given
+    values the program works out as the declaration is reached, so any value
+    may be written for an element, a copy of a place among them.
+
+    An array written without a size holds exactly the elements it was given,
+    and one with room for more keeps that room: the room of the whole array
+    is cleared before the values written for it are stored, so an element
+    which is not given a value starts out holding nothing. An element of
+    such an array is a place like any other afterwards, so it may be read,
+    stored into, counted up, copied out whole, and given the address of
+    something a pointer member points at. A list with more values than the
+    array has room for, a value which does not fit the member it is written
+    for, a copy written for an element of a global array, and a value the
+    compiler cannot work out there are each refused with a message saying
+    so.

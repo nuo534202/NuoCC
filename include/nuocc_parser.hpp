@@ -284,6 +284,27 @@ private:
                             std::vector<AstNodePtr>& statements);
 
     /*
+     * The same for the values written for one element of an array of
+     * composite values, which stand in the room that element takes rather
+     * than in the room of a name of their own.
+     */
+    void StoreElementValues(const Symbol& symbol,
+                            int32 element,
+                            std::vector<WrittenValue>& values,
+                            std::vector<AstNodePtr>& statements);
+
+    /*
+     * The statement which stores one value into the place written for it: a
+     * value written for an array member is stored into the element it is
+     * written for, a value written for a composite value of its own is a
+     * place holding one of the same type copied whole, and every other
+     * value is stored into the member itself.
+     */
+    void StoreValue(AstNodePtr place,
+                    WrittenValue& written,
+                    std::vector<AstNodePtr>& statements);
+
+    /*
      * Read the pieces of storage a global value of a composite type is
      * given where it is declared, and leave the token after them for the
      * caller. Every value written is one the compiler works out while it is
@@ -295,9 +316,29 @@ private:
                                  idx_t& i,
                                  std::vector<InitialPiece>& pieces);
 
-    /* The place the member a path names stands at, reached by name. */
-    AstNodePtr MemberPlace(const Symbol& symbol,
+    /*
+     * Turn the values written for one value of a composite type into the
+     * pieces of storage they stand for, each at its own distance from the
+     * base that value stands at, which is where an element of an array of
+     * such values stands unless it is the first one.
+     */
+    void WrittenValuePieces(int32 base,
+                            std::vector<WrittenValue>& values,
+                            std::vector<InitialPiece>& pieces);
+
+    /*
+     * The place the member a path names stands at, reached from a place
+     * which is given: an empty path is that place itself, and each member of
+     * the path is reached through the one written before it.
+     */
+    AstNodePtr MemberPlace(AstNodePtr place,
                            const std::vector<const Symbol*>& path);
+
+    /*
+     * The place one element of an array stands at, where the place of the
+     * array is known and the element is counted from the first one.
+     */
+    AstNodePtr ElementPlace(AstNodePtr place, int32 index);
 
     /*
      * The assignment which stores a value into one element of an array

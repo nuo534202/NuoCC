@@ -1,1 +1,1 @@
-syntax error: the array pair holds composite values, which cannot be given where it is declared!
+syntax error: a value of a composite type given to an element of an array can only be another place holding one of the same type, or the values of its members!
