@@ -1080,3 +1080,48 @@
     written as the condition of a statement are all refused. A whole
     composite value still cannot be read as a value, passed to a function
     by value or returned by value.
+
+70. Operations the Compiler Writes Another Way (acwj Part 61,
+    `61_What_Next`, the rest of the idea of writing the code a compiler
+    reads another way). The tree the parser builds is put through a pass
+    before any code is written for it, and that pass does three things,
+    each of which leaves a tree which gives the value the one before it
+    gave:
+
+    * an operation whose two sides the compiler already knows is worked out
+      while the program is being compiled, and the number it comes to is
+      left in its place. This is what the pass did first, and it is still
+      done first, so that `2 * 3 + 4` is left as the number 10;
+    * an operation which does nothing with one of its sides is taken away,
+      leaving the other side in its place: `x + 0`, `0 + x`, `x - 0`,
+      `x * 1`, `1 * x`, `x / 1`, `x | 0`, `0 | x`, `x ^ 0`, `0 ^ x`,
+      `x << 0` and `x >> 0` are all the value of the other side. The other
+      side is already of the type the operation answers with, since the two
+      sides of an operation are made to agree on a type before the
+      operation is built, so nothing has to be widened or cut down where it
+      now stands. An operation which answers with the number rather than
+      with the other side, such as `x & 0` or `x * 0`, is left as it was:
+      taking it away would take the other side away with it, and that side
+      may be something which has to be worked out even when the answer does
+      not depend on it, so `print f() * 0;` still calls `f`, which is what
+      the count of calls in test/test67.c is there to show;
+    * a multiplication by a power of two is written as a shift of the other
+      side, so `value * 8` is `value << 3`. Every place up doubles a value,
+      so moving a value up and multiplying it by a power of two are the
+      same value whatever the other side is, and the machine works the
+      shift out in one step where a multiplication works out a whole
+      product. A division by a power of two is not written this way: a
+      division rounds towards nothing while a shift of a value below
+      nothing moves the top bits down with it, so the two answer with the
+      same value only where the value is not below nothing, which the
+      compiler does not know.
+
+    An operation written another way changes no value, so the programs of
+    the suite say nothing about whether the pass works, and what they would
+    say is whether it went wrong. What says something about it is the code
+    the compiler writes, which is recorded beside the programs under
+    test/arm64, test/x86_64 and test/m6809, and the suite compares what the
+    compiler writes with what is recorded there. The pass itself is the same
+    for every target, since the tree is the same tree whatever machine the
+    code is written for; what differs is the code each machine writes a
+    shift as.

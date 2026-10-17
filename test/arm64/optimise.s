@@ -20,8 +20,8 @@ _twice:
 	stp	x21, x22, [sp, #32]
 	str	w0, [x29, #48]
 	ldrsw	x19, [x29, #48]
-	movz	x20, #2
-	mul	x19, x19, x20
+	movz	x20, #1
+	lsl	x19, x19, x20
 	mov	w0, w19
 L1:
 	ldp	x19, x20, [sp, #16]

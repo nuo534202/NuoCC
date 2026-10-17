@@ -175,6 +175,164 @@ AstNodePtr FoldedLeaf(int64 value, PrimitiveType type)
                                        static_cast<int32>(value), type);
 }
 
+/*
+ * Whether an operation answers with the value of the side which is not the
+ * number given, which is what lets the operation be taken away and that
+ * side left in its place.
+ *
+ * Which number does nothing depends on the operation, and so does the side
+ * it does nothing on: `x + 0`, `0 + x`, `x - 0`, `x * 1`, `1 * x`, `x / 1`,
+ * `x | 0`, `0 | x`, `x ^ 0`, `0 ^ x`, `x << 0` and `x >> 0` are all the
+ * value of the other side, while `0 - x` and `0 / x` are not, which is why
+ * the side is asked about as well as the number.
+ *
+ * An operation which answers with the number itself, such as `x & 0` or
+ * `x * 0`, is not one of these. Taking such an operation away would take
+ * the other side away with it, and the other side may be something which
+ * has to be worked out even when the answer does not depend on it: a call
+ * which prints is not made to go away by writing `0` beside it.
+ */
+bool LeavesOtherSideAlone(NodeTag op_type, bool right_side, int32 value)
+{
+    /*
+     * An addition and a bitwise or or exclusive or do nothing with a zero
+     * wherever the zero stands, and a multiplication does nothing with a
+     * one.
+     */
+    if (op_type == T_Plus || op_type == T_Or || op_type == T_Xor)
+        return value == 0;
+
+    if (op_type == T_Star)
+        return value == 1;
+
+    /*
+     * What the other side is taken from, divided by or moved by stands on
+     * the right, so only a number there leaves the other side alone.
+     */
+    if (!right_side)
+        return false;
+
+    if (op_type == T_Minus || op_type == T_LShift || op_type == T_RShift)
+        return value == 0;
+
+    return op_type == T_Slash && value == 1;
+}
+
+/*
+ * Take away an operation which does nothing with one of its sides,
+ * leaving the other side in its place, and answer whether there was one.
+ *
+ * What is left is already of the type the operation answers with, since
+ * the two sides of an operation are made to agree on a type before it is
+ * built, so nothing has to be widened or cut down where it now stands.
+ */
+bool TakeAwayIdentity(AstNodePtr& tree)
+{
+    const NodeTag op_type = static_cast<const AstOperator&>(*tree).GetOpType();
+
+    if (IsLiteral(tree->GetLeft()) &&
+        LeavesOtherSideAlone(op_type, false, LiteralValue(tree->GetLeft())))
+    {
+        tree = tree->ReleaseRight();
+        return true;
+    }
+
+    if (IsLiteral(tree->GetRight()) &&
+        LeavesOtherSideAlone(op_type, true, LiteralValue(tree->GetRight())))
+    {
+        tree = tree->ReleaseLeft();
+        return true;
+    }
+
+    return false;
+}
+
+/*
+ * How many places a power of two moves a value up by, and -1 for a number
+ * which is not a power of two above one: a one moves a value up no places,
+ * a two moves it up one, a four two, and so on.
+ */
+int32 PowerOfTwoPlaces(int32 value)
+{
+    if (value < 2)
+        return -1;
+
+    int32 places = 0;
+
+    while ((value & 1) == 0)
+    {
+        value = value >> 1;
+        places++;
+    }
+
+    return value == 1 ? places : -1;
+}
+
+/*
+ * Write a multiplication by a power of two as a shift of the other side,
+ * and answer whether there was one.
+ *
+ * A product by a power of two is the other side moved up as many places as
+ * the power says, since every place up doubles the value, and a shift
+ * moves a value up by a number of places in one step where a multiplication
+ * works out a whole product: `x * 8` is `x << 3`. The two are the same
+ * value whatever the other side is: moving a value up one place leaves
+ * every bit of it standing one place higher with a zero at the bottom,
+ * which is what doubling it does.
+ *
+ * A division by a power of two is not written this way. A division rounds
+ * towards nothing, while a shift of a value below nothing moves the top
+ * bits down with it, so the two answer with the same value only where the
+ * value is not below nothing, which the compiler does not know.
+ */
+bool WriteMultiplyAsShift(AstNodePtr& tree)
+{
+    const AstOperator& op = static_cast<const AstOperator&>(*tree);
+
+    if (op.GetOpType() != T_Star)
+        return false;
+
+    AstNodePtr value;
+    int32 places = -1;
+
+    if (IsLiteral(tree->GetLeft()))
+        places = PowerOfTwoPlaces(LiteralValue(tree->GetLeft()));
+
+    if (places > 0)
+        value = tree->ReleaseRight();
+    else
+    {
+        if (!IsLiteral(tree->GetRight()))
+            return false;
+
+        places = PowerOfTwoPlaces(LiteralValue(tree->GetRight()));
+
+        if (places <= 0)
+            return false;
+
+        value = tree->ReleaseLeft();
+    }
+
+    const PrimitiveType type = tree->GetType();
+    AstNodePtr places_leaf = FoldedLeaf(places, type);
+
+    tree = std::make_unique<AstOperator>(value, places_leaf, T_LShift, type);
+    return true;
+}
+
+/*
+ * Write what is left of an operation another way where that can be done:
+ * one which does nothing with one of its sides is taken away, and one which
+ * multiplies by a power of two is written as a shift.
+ */
+void Simplify(AstNodePtr& tree)
+{
+    if (TakeAwayIdentity(tree))
+        return;
+
+    WriteMultiplyAsShift(tree);
+}
+
 void Fold(AstNodePtr& tree);
 
 /*
@@ -211,7 +369,18 @@ void FoldNode(AstNodePtr& tree)
     if (IsLiteral(tree->GetLeft()) &&
         FoldUnary(tag, LiteralValue(tree->GetLeft()), folded) &&
         ValueFitsType(folded, tree->GetType()))
+    {
         tree = FoldedLeaf(folded, tree->GetType());
+        return;
+    }
+
+    /*
+     * What is left is an operation with a side the compiler does not know
+     * the value of, which may still be an operation it can write another
+     * way or one it does nothing with.
+     */
+    if (tag == A_AstOperator)
+        Simplify(tree);
 }
 
 /*

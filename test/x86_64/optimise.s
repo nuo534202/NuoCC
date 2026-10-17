@@ -19,8 +19,9 @@ twice:
 	subq	$144, %rsp
 	movl	%edi, -4(%rbp)
 	movslq	-4(%rbp), %r8
-	movq	$2, %r9
-	imulq	%r9, %r8
+	movq	$1, %r9
+	movb	%r9b, %cl
+	shlq	%cl, %r8
 	movl	%r8d, %eax
 L1:
 	movq	%rbp, %rsp

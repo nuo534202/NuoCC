@@ -55,11 +55,13 @@ public:
     AstNodePtr& GetRight();
 
     /*
-     * Move the left child out of this node, which is left without one. It
-     * is how '&' of a dereference takes back the expression the '*' was
-     * written before, as '&*p' is p itself.
+     * Move a child out of this node, which is left without one. It is how
+     * '&' of a dereference takes back the expression the '*' was written
+     * before, as '&*p' is p itself, and how an operation which does nothing
+     * with one of its sides leaves the other one in its place.
      */
     AstNodePtr ReleaseLeft();
+    AstNodePtr ReleaseRight();
 
     AstNodeTag GetAstNodeTag() const;
     PrimitiveType GetType() const;
