@@ -54,7 +54,15 @@ void AssemblyCodegen::EmitGlobalSpace(int32 size)
     ofs_ << "\t.space\t" << size << std::endl;
 }
 
-/* One element of a global variable, held by the directive of its size. */
+/*
+ * One element of a global variable, held by the directive of its size.
+ *
+ * The directive is named for the number of bytes it holds rather than for
+ * the word of a machine, since the assemblers these targets are written
+ * with do not agree on how wide their word is: a two byte element would
+ * take four bytes of storage on the 64 bit arm machine, and the element
+ * after it would stand in the wrong place.
+ */
 void AssemblyCodegen::EmitGlobalValue(int32 value, int32 size)
 {
     switch (size)
@@ -63,7 +71,7 @@ void AssemblyCodegen::EmitGlobalValue(int32 value, int32 size)
             ofs_ << "\t.byte\t" << value << std::endl;
             return;
         case 2:
-            ofs_ << "\t.word\t" << value << std::endl;
+            ofs_ << "\t.short\t" << value << std::endl;
             return;
         case 4:
             ofs_ << "\t.long\t" << value << std::endl;
