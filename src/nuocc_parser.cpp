@@ -781,27 +781,34 @@ AstNodePtr Parser::CompositeInitialiser(const Symbol& symbol,
 
     std::vector<const Symbol*> path;
 
-    CompositeValues(symbol.composite, symbol, path, token_list, i, statements);
+    CompositeValues(symbol.composite, symbol, path, token_list, i, statements,
+                    true);
 
     return GlueStatements(statements);
 }
 
 /*
- * Read the values written for the members of a composite value between
- * braces, storing each of them into the member it is written for. The
- * members are written in order, and a member which is an array or a
- * composite value of its own takes a list of values of its own between
- * braces; a union takes the value written for its first member, since its
- * members share one piece of room.
+ * Read the values written for the members of a composite value, storing
+ * each of them into the member it is written for. The members are written
+ * in order, and a member which is an array or a composite value of its own
+ * takes a list of values of its own between braces; a union takes the value
+ * written for its first member, since its members share one piece of room.
+ *
+ * The list is written between braces of its own unless `braced` is false,
+ * which is how the members of an anonymous member are written: they are
+ * members of the type which holds it, so they take their place in the list
+ * of that type rather than in a list of their own.
  */
 void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
     const Symbol& symbol,
     std::vector<const Symbol*>& path,
     const std::vector<NodePtr>& token_list,
     idx_t& i,
-    std::vector<AstNodePtr>& statements)
+    std::vector<AstNodePtr>& statements,
+    bool braced)
 {
-    Match(token_list, i, T_LBrace, "{");
+    if (braced)
+        Match(token_list, i, T_LBrace, "{");
 
     const idx_t count = composite->kind == CompositeKind::kUnion
                             ? 1
@@ -818,6 +825,13 @@ void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
             break;
 
         const Symbol& member = composite->members[k];
+
+        /*
+         * What a message about this member calls it, since an anonymous
+         * member has no name to be written with.
+         */
+        const std::string written_as =
+            member.name.empty() ? "an anonymous member" : member.name;
 
         path.push_back(&member);
 
@@ -861,8 +875,18 @@ void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
         }
         else if (member.type == PrimitiveType::kComposite)
         {
+            /*
+             * The members of an anonymous member are written as the
+             * members of the type which holds it are, so they take braces
+             * of their own only when some are written; every other
+             * composite member takes them.
+             */
+            const bool inner_braced =
+                member.name.empty() ? TokenTag(token_list[i]) == T_LBrace
+                                    : true;
+
             CompositeValues(member.composite, symbol, path, token_list, i,
-                            statements);
+                            statements, inner_braced);
         }
         else
         {
@@ -894,7 +918,7 @@ void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
             if (TokenTag(token_list[i]) != T_Comma)
             {
                 std::cerr << "syntax error: expect a ',' or a '}' after a";
-                std::cerr << " value of " << member.name << "!" << std::endl;
+                std::cerr << " value of " << written_as << "!" << std::endl;
                 std::exit(1);
             }
 
@@ -902,14 +926,23 @@ void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
         }
     }
 
-    if (TokenTag(token_list[i]) != T_RBrace)
+    /*
+     * A list written between braces of its own is the whole list, so
+     * anything left in it is a value too many; the members of an anonymous
+     * member, written in the list of the type which holds it, leave what
+     * follows to that list.
+     */
+    if (braced)
     {
-        std::cerr << "syntax error: too many values where a value of a";
-        std::cerr << " composite type is given!" << std::endl;
-        std::exit(1);
-    }
+        if (TokenTag(token_list[i]) != T_RBrace)
+        {
+            std::cerr << "syntax error: too many values where a value of a";
+            std::cerr << " composite type is given!" << std::endl;
+            std::exit(1);
+        }
 
-    i++;    /* step over '}' */
+        i++;    /* step over '}' */
+    }
 }
 
 /*
@@ -2969,15 +3002,83 @@ AstNodePtr Parser::MemberAccess(AstNodePtr base,
 
     ++i;
     const std::string name = MatchIdentifier(token_list, i, "a member name");
-    const auto& members = base->GetComposite()->members;
-    const auto member = std::find_if(members.begin(), members.end(),
-        [&name](const Symbol& candidate) { return candidate.name == name; });
-    if (member == members.end()) {
+
+    /*
+     * The name may be a member of an anonymous member as well as one of the
+     * type itself, so what is looked up is the path of members which
+     * reaches it: the member the name is written for, or an anonymous
+     * member and the way through it.
+     */
+    const std::shared_ptr<CompositeType> composite = base->GetComposite();
+    std::vector<const Symbol*> path;
+
+    if (!MemberPath(composite, name, path)) {
         std::cerr << "syntax error: composite type has no member " << name << "!"
                   << std::endl;
         std::exit(1);
     }
-    return std::make_unique<AstMember>(base, *member, through_pointer);
+
+    /*
+     * A member stands at its own offset from the base of what holds it, so
+     * a name reached through an anonymous member is the place of the
+     * anonymous member with the place of the member inside it, and the two
+     * offsets add up. Only the first step is taken through a pointer, since
+     * that is the one the value itself is.
+     */
+    AstNodePtr place = std::move(base);
+
+    for (idx_t k = 0; k < path.size(); k++)
+        place = std::make_unique<AstMember>(place, *path[k],
+                                            through_pointer && k == 0);
+
+    return place;
+}
+
+bool Parser::MemberPath(const std::shared_ptr<CompositeType>& composite,
+                        const std::string& name,
+                        std::vector<const Symbol*>& path) const
+{
+    /*
+     * A member written for the name is the one meant, whether or not an
+     * anonymous member also reaches it: two members of one type never share
+     * a name, so at most one of them is.
+     */
+    for (const Symbol& member : composite->members)
+    {
+        if (member.name == name)
+        {
+            path.push_back(&member);
+            return true;
+        }
+    }
+
+    for (const Symbol& member : composite->members)
+    {
+        if (!member.name.empty() || !member.composite)
+            continue;
+
+        path.push_back(&member);
+
+        if (MemberPath(member.composite, name, path))
+            return true;
+
+        path.pop_back();
+    }
+
+    return false;
+}
+
+void Parser::CollectMemberNames(
+    const std::shared_ptr<CompositeType>& composite,
+    std::vector<std::string>& names) const
+{
+    for (const Symbol& member : composite->members)
+    {
+        if (!member.name.empty())
+            names.push_back(member.name);
+        else if (member.composite)
+            CollectMemberNames(member.composite, names);
+    }
 }
 
 AstNodePtr Parser::ArrayAccess(AstNodePtr base,
@@ -3367,18 +3468,34 @@ void Parser::TypedefDeclaration(const std::vector<NodePtr>& token_list,
 /*
  * member_list: type identifier ';'
  *      |       type identifier '[' expression ']' ';'
+ *      |       'struct' '{' member_list '}' ';'
+ *      |       'union' '{' member_list '}' ';'
  *      |       member_list member_list
  *      ;
  *
  * A struct lines its members up one after another, each at its own
  * alignment. A union puts every member at the start and takes as much
  * room as the largest one, rounded up to the alignment they share.
+ *
+ * A member written as an unnamed struct or union definition has no name of
+ * its own, and the names of its members are the ones reached from the type
+ * which holds it: the two are one piece of room written two ways. Such a
+ * member is held with no name, since every other member is given one where
+ * it is declared and a name is what tells them apart.
  */
 void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
     idx_t& i,
     const std::shared_ptr<CompositeType>& type)
 {
     Match(token_list, i, T_LBrace, "{");
+
+    /*
+     * Every name the type reaches so far, the ones an anonymous member
+     * brings with it among them. Two members of one type may never share a
+     * name, since a name written for a value has to say which member is
+     * meant.
+     */
+    std::vector<std::string> reachable;
 
     while (TokenTag(token_list[i]) != T_RBrace)
     {
@@ -3389,9 +3506,35 @@ void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
         }
 
         TypeRef member_type = ParseType(token_list, i);
+
+        /*
+         * A member written as an unnamed struct or union definition and
+         * nothing else is an anonymous member, whose own members are the
+         * names reached from this type.
+         */
+        const bool is_anonymous =
+            member_type.type == PrimitiveType::kComposite &&
+            member_type.composite && member_type.composite->name.empty() &&
+            TokenTag(token_list[i]) == T_Semicolon;
+
         member_type = ParseStars(token_list, i, member_type);
 
-        std::string name = MatchIdentifier(token_list, i, "a member name");
+        /*
+         * A definition written with a tag and nothing after it names the
+         * tag and no member of this type, the way `struct fred { int x;
+         * };` does where a variable is declared.
+         */
+        if (!is_anonymous && TokenTag(token_list[i]) == T_Semicolon &&
+            type_definition_)
+        {
+            Match(token_list, i, T_Semicolon, ";");
+            continue;
+        }
+
+        std::string name;
+
+        if (!is_anonymous)
+            name = MatchIdentifier(token_list, i, "a member name");
 
         Symbol member{.name = name,
                       .type = member_type.type,
@@ -3399,14 +3542,30 @@ void Parser::ParseMembers(const std::vector<NodePtr>& token_list,
                       .stype = StructuralType::kVariable,
                       .storage = StorageClass::kMember};
 
-        if (std::any_of(type->members.begin(), type->members.end(),
-            [&name](const Symbol& previous) {
-                return previous.name == name;
-            })) {
-            std::cerr << "syntax error: duplicate composite member " << name
-                      << "!" << std::endl;
-            std::exit(1);
+        /*
+         * What this member adds to the names the type reaches: its own
+         * name, or every name an anonymous member brings with it.
+         */
+        std::vector<std::string> added;
+
+        if (is_anonymous)
+            CollectMemberNames(member.composite, added);
+        else
+            added.push_back(name);
+
+        for (const std::string& candidate : added)
+        {
+            if (std::any_of(reachable.begin(), reachable.end(),
+                [&candidate](const std::string& previous) {
+                    return previous == candidate;
+                })) {
+                std::cerr << "syntax error: duplicate composite member "
+                          << candidate << "!" << std::endl;
+                std::exit(1);
+            }
         }
+
+        reachable.insert(reachable.end(), added.begin(), added.end());
 
         if (TokenTag(token_list[i]) == T_LBracket)
         {

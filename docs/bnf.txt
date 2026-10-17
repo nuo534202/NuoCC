@@ -221,9 +221,17 @@ member_list: member
  * but it cannot be given a value where it is declared. The size of such an
  * array is an expression the compiler works out while it is compiling the
  * program, as the size of any other array is.
+ *
+ * A member written as an unnamed struct or union definition is an
+ * anonymous member, which has no name of its own: the names of its members
+ * are the ones reached from the type which holds it, so one piece of room
+ * is given two views. A definition written with a tag and nothing after it
+ * names the tag and no member at all.
  */
 member: type opt_pointer identifier ';'
     | type opt_pointer identifier '[' expression ']' ';'
+    | 'struct' '{' member_list '}' ';'
+    | 'union' '{' member_list '}' ';'
     ;
 
 opt_pointer: <empty>

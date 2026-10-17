@@ -636,7 +636,8 @@ void PrintSyntaxTree(const Program& program)
         {
             std::cout << "  at " << member.member_offset << ": ";
             std::cout << TypeName(member.type, member.composite);
-            std::cout << " " << member.name;
+            std::cout << " "
+                      << (member.name.empty() ? "(no name)" : member.name);
 
             if (member.stype == StructuralType::kArray)
                 std::cout << "[" << member.element_count << "]";

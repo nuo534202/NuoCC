@@ -260,7 +260,9 @@
     item 69 describes, and a member is a place an increment or a decrement
     can change, as item 71 describes. A pointer to a struct is stepped
     on like any other pointer, by the room the struct takes, and an element
-    of an array of structs is reached as `path[1].x` or `(&path[1])->x`.
+    of an array of structs is reached as `path[1].x` or `(&path[1])->x`. A
+    name may also reach a member of an anonymous member, as item 76
+    describes.
 
 29. Unions (acwj Stage 33, `33_Union`). `union name { ... };` declares a
     composite type whose members all start at offset zero, and an anonymous
@@ -1284,3 +1286,46 @@
     string when it does not hold characters, a character array given too
     long a string, and a member which is an array of composite values are
     all refused with a message saying so.
+
+76. Anonymous Struct and Union Members (acwj Part 61, `61_What_Next`, the
+    rest of what the design of composite types left out). A member written
+    as an unnamed struct or union definition has no name of its own, and
+    the names of its own members are the ones reached, as though they stood
+    in the type which holds it:
+
+        struct box {
+            int tag;
+            union { int number; char glyph; };
+            struct { int left; int right; };
+        };
+
+        struct box item;
+        item.number= 2;
+        item.left= 3;
+
+    One piece of room is given two views by this, which is how a value of
+    two shapes at once is written: `item.number` and `item.glyph` reach the
+    same bytes, and so do the members of the anonymous struct among
+    themselves. A name is reached the same way however deeply the anonymous
+    members are written, one inside another, and it is a place like any
+    other: it may be read, stored into, counted up or down, given the
+    address of a place holding one of the same type, and handed to a
+    function, and `&item.left` takes its address.
+
+    The room an anonymous member takes is the room its own type takes,
+    lined up the way any other member is, so the members of it stand inside
+    the room of the type which holds it and the offsets of the two add up.
+    Its members may not share a name with any other member the type
+    reaches, so two anonymous members of one type may not hold one of the
+    same name each, and neither may one of them hold a name the type
+    already has.
+
+    A value written where one of these is declared has the members of an
+    anonymous member written among the members of the type which holds it,
+    in the order they stand, so `struct box item= { 1, 2, 3, 4 };` gives
+    `tag`, `number`, `left` and `right` one value each. A list of its own
+    may be written for one as well, which is what `struct box item= { 1,
+    { 2 }, { 3, 4 } };` does. A definition written with a tag and nothing
+    after it names the tag and no member at all, as `struct known { int x;
+    };` written inside another type does, and a member which is neither of
+    those two needs a name.

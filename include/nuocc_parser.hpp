@@ -237,7 +237,8 @@ private:
                          std::vector<const Symbol*>& path,
                          const std::vector<NodePtr>& token_list,
                          idx_t& i,
-                         std::vector<AstNodePtr>& statements);
+                         std::vector<AstNodePtr>& statements,
+                         bool braced);
 
     /*
      * The same for the elements of an array: the values written between
@@ -373,12 +374,16 @@ private:
     /*
      * member_list: type identifier ';'
      *      |       type identifier '[' expression ']' ';'
+     *      |       'struct' '{' member_list '}' ';'
+     *      |       'union' '{' member_list '}' ';'
      *      |       member_list member_list
      *      ;
      *
      * Every member is given the place it takes inside a value of the
      * type, and the room the whole type takes is worked out once they
-     * have all been read.
+     * have all been read. A member written as an unnamed struct or union
+     * definition has no name of its own: the names of its members are the
+     * ones reached, which is how one piece of room is given two views.
      */
     void ParseMembers(const std::vector<NodePtr>& token_list,
                       idx_t& i,
@@ -568,6 +573,24 @@ private:
     AstNodePtr MemberAccess(AstNodePtr base,
                            const std::vector<NodePtr>& token_list,
                            idx_t& i);
+
+    /*
+     * The path of members which reaches a name from a composite type: the
+     * member the name is written for, or an anonymous member and the way
+     * through it, since the members of an anonymous member are reached as
+     * though they stood in the type which holds it. False is answered when
+     * the type reaches no such name.
+     */
+    bool MemberPath(const std::shared_ptr<CompositeType>& composite,
+                    const std::string& name,
+                    std::vector<const Symbol*>& path) const;
+
+    /*
+     * Every name a composite type reaches, the ones its anonymous members
+     * bring with them included.
+     */
+    void CollectMemberNames(const std::shared_ptr<CompositeType>& composite,
+                            std::vector<std::string>& names) const;
 
     /*
      * Parse the type which starts a declaration and step over it. Only the

@@ -141,6 +141,8 @@ member access, once the shape of the offset arithmetic is in front of us.
 | 33 | unions: the members share an address, sized by the largest |
 | 34 | enums, whose names stand for numbers, and `typedef` |
 
-An anonymous struct or union member is left until the stage which needs it; the
-member list described above is what it will hang from, so it is a change to
-the parser rather than to the representation.
+An anonymous struct or union member hangs from the member list the design above
+describes: it is one member of the type which holds it, taking the room its own
+type takes, and the names of its own members are looked up through it, so a name
+reached that way is a path of members rather than one member. That is a change
+to the parser and to the lookup, while the representation is what it always was.
