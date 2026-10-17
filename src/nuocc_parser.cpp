@@ -701,6 +701,15 @@ AstNodePtr Parser::InitialiserAssignment(const Symbol& symbol,
     const std::vector<NodePtr>& token_list,
     idx_t& i)
 {
+    /*
+     * A composite value cannot be read as a value, so the value one is
+     * given is written one of the two ways a composite value ever is: as
+     * the values of the members of the type, or as another place holding a
+     * value of the same type.
+     */
+    if (symbol.type == PrimitiveType::kComposite)
+        return CompositeInitialiser(symbol, token_list, i);
+
     AstNodePtr expression = BinaryExpression(token_list, i, 0);
 
     /* The value has to fit the type the variable was declared with. */
@@ -722,6 +731,289 @@ AstNodePtr Parser::InitialiserAssignment(const Symbol& symbol,
      * right one, which is the order every assignment is built in.
      */
     return std::make_unique<AstOperator>(expression, target, T_Assign, type);
+}
+
+/*
+ * Build the statement which gives a local value of a composite type the
+ * value it is declared with, and leave the token after that value for the
+ * caller.
+ *
+ * A composite value cannot be read as a value, so what it is given is
+ * written one of the two ways a composite value is ever written: as the
+ * values of the members of its type, between braces, or as another place
+ * holding a value of the same type, which is copied whole the way item 69
+ * gives one place what another holds.
+ */
+AstNodePtr Parser::CompositeInitialiser(const Symbol& symbol,
+    const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    if (TokenTag(token_list[i]) != T_LBrace)
+    {
+        AstNodePtr source = BinaryExpression(token_list, i, 0);
+
+        if (source->GetType() != PrimitiveType::kComposite ||
+            source->GetComposite() != symbol.composite ||
+            !IsLvalue(source->GetAstNodeTag()))
+        {
+            std::cerr << "syntax error: a value of a composite type can only";
+            std::cerr << " be given another place holding one of the same";
+            std::cerr << " type, or the values of its members!" << std::endl;
+            std::exit(1);
+        }
+
+        AstNodePtr target = MakeIdentLeaf(symbol);
+
+        return std::make_unique<AstOperator>(source, target, T_Assign,
+                                             PrimitiveType::kComposite);
+    }
+
+    std::vector<AstNodePtr> statements;
+
+    /*
+     * The room of the variable holds nothing before the values written for
+     * its members are stored into it, so every part of the value the list
+     * does not reach starts out at zero, the way an element of an array
+     * which is not given a value does.
+     */
+    statements.push_back(ClearArray(
+        symbol, ValueSize(PrimitiveType::kComposite, symbol.composite)));
+
+    std::vector<const Symbol*> path;
+
+    CompositeValues(symbol.composite, symbol, path, token_list, i, statements);
+
+    return GlueStatements(statements);
+}
+
+/*
+ * Read the values written for the members of a composite value between
+ * braces, storing each of them into the member it is written for. The
+ * members are written in order, and a member which is an array or a
+ * composite value of its own takes a list of values of its own between
+ * braces; a union takes the value written for its first member, since its
+ * members share one piece of room.
+ */
+void Parser::CompositeValues(const std::shared_ptr<CompositeType>& composite,
+    const Symbol& symbol,
+    std::vector<const Symbol*>& path,
+    const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    std::vector<AstNodePtr>& statements)
+{
+    Match(token_list, i, T_LBrace, "{");
+
+    const idx_t count = composite->kind == CompositeKind::kUnion
+                            ? 1
+                            : composite->members.size();
+
+    for (idx_t k = 0; k < count; k++)
+    {
+        /*
+         * The braces may be closed before a value has been written for
+         * every member, since a member which is not given a value starts
+         * out holding nothing at all.
+         */
+        if (TokenTag(token_list[i]) == T_RBrace)
+            break;
+
+        const Symbol& member = composite->members[k];
+
+        path.push_back(&member);
+
+        if (member.stype == StructuralType::kArray)
+        {
+            if (member.type == PrimitiveType::kComposite)
+            {
+                std::cerr << "syntax error: the member " << member.name;
+                std::cerr << " is an array of composite values, which cannot";
+                std::cerr << " be given values where it is declared!"
+                          << std::endl;
+                std::exit(1);
+            }
+
+            /*
+             * An array of char may be given a string in place of the list
+             * of values, the way one declared on its own may.
+             */
+            if (TokenTag(token_list[i]) == T_StrLit)
+            {
+                if (member.type != PrimitiveType::kChar)
+                {
+                    std::cerr << "syntax error: only an array of char may be";
+                    std::cerr << " given a string where it is declared!";
+                    std::cerr << std::endl;
+                    std::exit(1);
+                }
+
+                const std::string text = StringLiteralText(token_list, i);
+
+                StringElementValues(member.element_count, symbol, path, text,
+                                    statements);
+            }
+            else
+            {
+                ElementValues(member.element_count, symbol, path,
+                              TypeRef{.type = member.type,
+                                      .composite = member.composite},
+                              token_list, i, statements);
+            }
+        }
+        else if (member.type == PrimitiveType::kComposite)
+        {
+            CompositeValues(member.composite, symbol, path, token_list, i,
+                            statements);
+        }
+        else
+        {
+            AstNodePtr value = BinaryExpression(token_list, i, 0);
+
+            if (!ModifyType(value, TypeRef{.type = member.type,
+                                           .composite = member.composite},
+                            std::nullopt))
+            {
+                std::cerr << "syntax error: this value does not fit the";
+                std::cerr << " member " << member.name << "!" << std::endl;
+                std::exit(1);
+            }
+
+            AstNodePtr place = MemberPlace(symbol, path);
+
+            statements.push_back(std::make_unique<AstOperator>(
+                value, place, T_Assign, value->GetType()));
+        }
+
+        path.pop_back();
+
+        /*
+         * A ',' separates the values written for two members, and the last
+         * one written needs none, since what is left starts out at zero.
+         */
+        if (k + 1 < count && TokenTag(token_list[i]) != T_RBrace)
+        {
+            if (TokenTag(token_list[i]) != T_Comma)
+            {
+                std::cerr << "syntax error: expect a ',' or a '}' after a";
+                std::cerr << " value of " << member.name << "!" << std::endl;
+                std::exit(1);
+            }
+
+            i++;
+        }
+    }
+
+    if (TokenTag(token_list[i]) != T_RBrace)
+    {
+        std::cerr << "syntax error: too many values where a value of a";
+        std::cerr << " composite type is given!" << std::endl;
+        std::exit(1);
+    }
+
+    i++;    /* step over '}' */
+}
+
+/*
+ * Read the values written between braces for the elements of an array,
+ * storing each of them into the element it is written for. The elements are
+ * written in order, and the braces may be closed before every one of them
+ * has been written for, since what is left starts out at zero.
+ */
+void Parser::ElementValues(int32 element_count,
+    const Symbol& symbol,
+    const std::vector<const Symbol*>& path,
+    const TypeRef& element_type,
+    const std::vector<NodePtr>& token_list,
+    idx_t& i,
+    std::vector<AstNodePtr>& statements)
+{
+    Match(token_list, i, T_LBrace, "{");
+
+    for (int32 k = 0; k < element_count; k++)
+    {
+        /* The braces may be closed before every element is written for. */
+        if (TokenTag(token_list[i]) == T_RBrace)
+            break;
+
+        AstNodePtr value = BinaryExpression(token_list, i, 0);
+
+        if (!ModifyType(value, element_type, std::nullopt))
+        {
+            std::cerr << "syntax error: value " << (k + 1) << " of the array";
+            std::cerr << " does not fit the type of an element!" << std::endl;
+            std::exit(1);
+        }
+
+        AstNodePtr place = MemberPlace(symbol, path);
+
+        statements.push_back(PlaceElementAssignment(place, k, value));
+
+        if (k + 1 < element_count && TokenTag(token_list[i]) != T_RBrace)
+        {
+            if (TokenTag(token_list[i]) != T_Comma)
+            {
+                std::cerr << "syntax error: expect a ',' or a '}' after an";
+                std::cerr << " element of an array!" << std::endl;
+                std::exit(1);
+            }
+
+            i++;
+        }
+    }
+
+    if (TokenTag(token_list[i]) != T_RBrace)
+    {
+        std::cerr << "syntax error: too many values for an array!"
+                  << std::endl;
+        std::exit(1);
+    }
+
+    i++;    /* step over '}' */
+}
+
+/*
+ * Store the characters of a string into the elements of an array of char,
+ * which is what a string written for one gives it. The room of the array
+ * holds nothing before the characters are stored into it, so the zero byte
+ * the string ends with is already there and is not written here.
+ */
+void Parser::StringElementValues(int32 element_count,
+    const Symbol& symbol,
+    const std::vector<const Symbol*>& path,
+    const std::string& text,
+    std::vector<AstNodePtr>& statements)
+{
+    if (static_cast<int32>(text.size()) > element_count)
+    {
+        std::cerr << "syntax error: too many characters for the array!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    for (idx_t k = 0; k < text.size(); k++)
+    {
+        AstNodePtr value = MakeIntLitLeaf(
+            static_cast<unsigned char>(text[k]), PrimitiveType::kChar);
+        AstNodePtr place = MemberPlace(symbol, path);
+
+        statements.push_back(PlaceElementAssignment(
+            place, static_cast<int32>(k), value));
+    }
+}
+
+/*
+ * The place the member a path names stands at, reached from the name of the
+ * value it stands in: an empty path is the value itself, and each member of
+ * the path is reached through the one written before it.
+ */
+AstNodePtr Parser::MemberPlace(const Symbol& symbol,
+    const std::vector<const Symbol*>& path)
+{
+    AstNodePtr place = MakeIdentLeaf(symbol);
+
+    for (const Symbol* member : path)
+        place = std::make_unique<AstMember>(place, *member, false);
+
+    return place;
 }
 
 /*
@@ -1330,6 +1622,19 @@ AstNodePtr Parser::ElementAssignment(const Symbol& symbol,
     AstNodePtr& value)
 {
     AstNodePtr base = std::make_unique<AstAddress>(symbol);
+
+    return PlaceElementAssignment(base, index, value);
+}
+
+/*
+ * The same for an array whose place is known rather than being reached by
+ * name, which is how an element of an array a struct holds is reached: the
+ * place of the array is what an address is taken of instead of a name.
+ */
+AstNodePtr Parser::PlaceElementAssignment(AstNodePtr& place,
+    int32 index,
+    AstNodePtr& value)
+{
     AstNodePtr offset = MakeIntLitLeaf(index, PrimitiveType::kInt);
 
     /*
@@ -1339,17 +1644,17 @@ AstNodePtr Parser::ElementAssignment(const Symbol& symbol,
      * composite takes the room its own definition asks for, which travels
      * with the type of the element.
      */
-    if (!ModifyType(offset, TypeRef{.type = base->GetType(),
-                                    .composite = base->GetComposite()},
+    if (!ModifyType(offset, TypeRef{.type = place->GetType(),
+                                    .composite = place->GetComposite()},
                     T_Plus))
     {
-        std::cerr << "syntax error: this element of the array " << symbol.name;
-        std::cerr << " cannot be reached!" << std::endl;
+        std::cerr << "syntax error: this element of the array cannot be";
+        std::cerr << " reached!" << std::endl;
         std::exit(1);
     }
 
-    const PrimitiveType pointer_type = base->GetType();
-    AstNodePtr address = std::make_unique<AstOperator>(base, offset, T_Plus,
+    const PrimitiveType pointer_type = place->GetType();
+    AstNodePtr address = std::make_unique<AstOperator>(place, offset, T_Plus,
                                                        pointer_type);
     AstNodePtr element = std::make_unique<AstDeref>(address,
                                                     ValueAt(pointer_type));

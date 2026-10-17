@@ -224,7 +224,8 @@
 
     A struct value cannot be read, passed to a function or returned as a
     whole yet, and one may be written as a whole only from a place holding
-    one of the same type, as item 69 describes. Members can be read and
+    one of the same type, as item 69 describes, or given its value where it
+    is declared, as item 75 describes. Members can be read and
     written as described below, and an array of structs may be declared and
     every element of it reached, as item 68 describes. A struct which
     contains itself by value, a struct with no members, and a tag which is
@@ -276,7 +277,8 @@
     tag, and pointers to different composite types remain distinct. A
     whole composite value still cannot be read as a value, passed by value
     or returned, while one place may be given the contents of another as
-    item 69 describes and an array of them may be declared and reached as
+    item 69 describes, one may be given its value where it is declared as
+    item 75 describes, and an array of them may be declared and reached as
     item 68 describes.
 
 30. Enums and Typedefs (acwj Stage 34, `34_Enums_and_Typedefs`). An
@@ -427,9 +429,11 @@
     the data section and the address of them is the value the variable
     starts with, so `char *str= "Hello";` begins at a `'H'` and `char
     *empty= "";` at a zero byte. A struct or a union cannot be given a
-    value where it is declared, and neither can an `extern` name, whose
-    storage belongs to another source file; a local name is given its value
-    by an assignment instead, which the next item describes.
+    value where it is declared at the top level of the program, though a
+    local one may be, as item 75 describes, and neither can an `extern`
+    name, whose storage belongs to another source file; a local name is
+    given its value by an assignment instead, which the next item
+    describes.
 
     An array is given a list of values between braces. The values left over
     when there are fewer of them than the array has room for start at zero,
@@ -1237,3 +1241,46 @@
     block of its own there; a `break` or a `return` with statements written
     after it is written that way as well, which that target could not do
     before.
+
+75. A Composite Value Given Where It Is Declared (acwj Part 61,
+    `61_What_Next`, the rest of what items 27, 29, 68 and 69 left out). A
+    local value of a composite type may now be given its value where it is
+    declared, the same way a value of any other type may:
+
+        struct point p = { 3, 4 };
+        struct span  s = { { 1, 2 }, { 3, 4 } };
+        struct line  l = { { 1, 2 }, { 3, 4 }, "hi" };
+        struct point q = p;
+
+    A composite value cannot be read as a value, so what it is given is
+    written one of the two ways a composite value ever is: as the values of
+    the members of its type, between braces, or as another place holding a
+    value of the same type, which is copied whole the way item 69 gives one
+    place what another holds. A place of another type is refused, so a
+    struct may not be given a union or a struct of another type, a number,
+    or a place which stands for an address rather than one holding such a
+    value.
+
+    The members are written in the order the definition gives them, a
+    member which is a composite value of its own takes a list of its own
+    between braces, and a member which is an array takes a list of element
+    values, or the characters of a string when it holds characters. A union
+    takes the value written for its first member, since its members share
+    one piece of room. The braces may be closed before every member has
+    been written for, and a list with no value at all between them is
+    written as `{}`: what the list does not reach starts out at zero, which
+    is the nothing an element of an array which is not given a value starts
+    out holding, so the whole room of the value is cleared before the
+    values written for it are stored.
+
+    The values written are worked out where the declaration stands rather
+    than where the whole program is read, so a value may be one the program
+    works out as it runs, as `struct point r = { a, a + 1 };` is. Only a
+    local value may be given its value this way: an array of composite
+    values and a value of one at the top level of the program still may
+    not, as items 68 and 36 describe. A list with more values than the
+    members can take, a value which does not fit the member it is written
+    for, an array member with more values than it holds room for or a
+    string when it does not hold characters, a character array given too
+    long a string, and a member which is an array of composite values are
+    all refused with a message saying so.

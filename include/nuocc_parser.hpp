@@ -211,6 +211,69 @@ private:
                                      idx_t& i);
 
     /*
+     * Build the statement which gives a local value of a composite type the
+     * value it is declared with. A composite value cannot be read as a
+     * value, so what it is given is written one of the two ways a composite
+     * value is ever written: as the values of the members of the type, or as
+     * another place holding a value of the same type, which is copied whole.
+     */
+    AstNodePtr CompositeInitialiser(const Symbol& symbol,
+                                    const std::vector<NodePtr>& token_list,
+                                    idx_t& i);
+
+    /*
+     * Read the values written for the members of a composite value between
+     * braces and build the statements which store each of them into the
+     * member it is written for. A union takes the value written for its
+     * first member, since the members of a union share one piece of room.
+     *
+     * A member is reached from the name of the value by the path of the
+     * members it stands inside, since a place cannot be built once and
+     * stored into twice: a tree is moved into the node which holds it, so
+     * one place is built for every value which is stored.
+     */
+    void CompositeValues(const std::shared_ptr<CompositeType>& composite,
+                         const Symbol& symbol,
+                         std::vector<const Symbol*>& path,
+                         const std::vector<NodePtr>& token_list,
+                         idx_t& i,
+                         std::vector<AstNodePtr>& statements);
+
+    /*
+     * The same for the elements of an array: the values written between
+     * braces give the elements one after another.
+     */
+    void ElementValues(int32 element_count,
+                       const Symbol& symbol,
+                       const std::vector<const Symbol*>& path,
+                       const TypeRef& element_type,
+                       const std::vector<NodePtr>& token_list,
+                       idx_t& i,
+                       std::vector<AstNodePtr>& statements);
+
+    /*
+     * Store the characters of a string into the elements of an array of
+     * char, which is what a string written for one gives it.
+     */
+    void StringElementValues(int32 element_count,
+                             const Symbol& symbol,
+                             const std::vector<const Symbol*>& path,
+                             const std::string& text,
+                             std::vector<AstNodePtr>& statements);
+
+    /* The place the member a path names stands at, reached by name. */
+    AstNodePtr MemberPlace(const Symbol& symbol,
+                           const std::vector<const Symbol*>& path);
+
+    /*
+     * The assignment which stores a value into one element of an array
+     * whose place is known, where the element is counted from the first one.
+     */
+    AstNodePtr PlaceElementAssignment(AstNodePtr& place,
+                                      int32 index,
+                                      AstNodePtr& value);
+
+    /*
      * array_declaration: '[' opt_size ']' opt_values  ;
      *
      * The type and the name have already been parsed by the caller. The
