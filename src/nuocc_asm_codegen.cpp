@@ -110,6 +110,9 @@ void AsmCodegen::GenProgram(const Program& program)
         function_return_type_ = ast_function->GetSymbol().type;
         function_local_size_ = ast_function->GetLocalSize();
 
+        /* A label belongs to the function it is written in. */
+        label_indices_.clear();
+
         EmitFunctionPreamble(ast_function->GetSymbol(),
                              function_local_size_,
                              ast_function->GetParameters());
@@ -138,6 +141,8 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
 {
     if (!root)
         return;
+
+    BeginStatement();
 
     /*
      * A whole composite value cannot be read, so the one tree of that type
@@ -210,6 +215,24 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
             /* Begin the next pass of that loop. */
             EmitJump(loop_continue_label_);
             return;
+
+        case A_AstGoto:
+            /* Jump to the label the name stands for, wherever it is. */
+            EmitJump(LabelIndex(static_cast<const AstGoto&>(*root).GetName()));
+            return;
+
+        case A_AstLabel:
+        {
+            /*
+             * A label names the statement after it, which may be nothing
+             * at all, so the label stands where the statement does.
+             */
+            const AstLabel& label = static_cast<const AstLabel&>(*root);
+
+            EmitLabel(LabelIndex(label.GetName()));
+            GenStatement(root->GetLeft());
+            return;
+        }
 
         case A_AstReturn:
         {
@@ -1304,6 +1327,27 @@ void AsmCodegen::FreeAllRegister()
 label_idx AsmCodegen::NewLabel()
 {
     return next_label_++;
+}
+
+/*
+ * The label a name stands for within the function being generated. The
+ * name is given a label the first time it is seen and keeps it for the
+ * rest of the function, so a goto and the label it names, whichever of the
+ * two is written first, are given the same one.
+ */
+label_idx AsmCodegen::LabelIndex(const std::string& name)
+{
+    const std::unordered_map<std::string, label_idx>::iterator found =
+        label_indices_.find(name);
+
+    if (found != label_indices_.end())
+        return found->second;
+
+    const label_idx label = NewLabel();
+
+    label_indices_[name] = label;
+
+    return label;
 }
 
 const bool* AsmCodegen::FreeRegisters() const

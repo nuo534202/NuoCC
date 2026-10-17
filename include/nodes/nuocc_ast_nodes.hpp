@@ -258,6 +258,44 @@ public:
 };
 
 /*
+ * Jump to a label, written `goto name;`. Where the label stands is not
+ * known until the whole function has been read, since a goto may name one
+ * which is written after it, so the name travels here and the code
+ * generator gives it the label it stands for.
+ */
+class AstGoto : public AstNode
+{
+public:
+    AstGoto(const std::string& name);
+    ~AstGoto() = default;
+
+public:
+    const std::string& GetName() const;
+
+private:
+    std::string name_;
+};
+
+/*
+ * A label, written `name: statement`. The statement it names is the left
+ * child, and a goto which names the label jumps to it. A label may be
+ * written in front of a ';' on its own, which is a statement that does
+ * nothing, so the child may be null.
+ */
+class AstLabel : public AstNode
+{
+public:
+    AstLabel(AstNodePtr& statement, const std::string& name);
+    ~AstLabel() = default;
+
+public:
+    const std::string& GetName() const;
+
+private:
+    std::string name_;
+};
+
+/*
  * One arm of a switch: the left child holds the compound statement which
  * runs when the arm is taken, and `value` is what the switch expression has
  * to equal for that to happen. A default arm is taken when no other arm's

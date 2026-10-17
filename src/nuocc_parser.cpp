@@ -234,7 +234,28 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
     current_function_type_ = type;
     loop_level_ = 0;
     switch_level_ = 0;
+    labels_.clear();
+    named_labels_.clear();
     AstNodePtr body = CompoundStatement(token_list, i);
+
+    /*
+     * Every name a goto gave has to be a label of this function, since a
+     * goto reaches a statement of the function it stands in and nothing
+     * else. Whether one was written is only known once the whole body has
+     * been read, since a goto may name a label written after it.
+     */
+    for (const std::string& name : named_labels_)
+    {
+        if (std::find(labels_.begin(), labels_.end(), name) == labels_.end())
+        {
+            std::cerr << "syntax error: there is no label named " << name;
+            std::cerr << "!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    labels_.clear();
+    named_labels_.clear();
 
     current_function_type_ = {};
     const int32 local_size = local_stack_size_;
@@ -250,7 +271,18 @@ AstNodePtr Parser::FunctionDeclaration(const std::vector<NodePtr>& token_list,
                                  ? body->GetRight()
                                  : body;
 
-        if (!last || last->GetAstNodeTag() != A_AstReturn)
+        /*
+         * A label names the statement which follows it rather than being a
+         * statement of its own, so a label in front of the return which
+         * ends the body names that return: the statement the label names
+         * is the one which has to be looked at.
+         */
+        const AstNode *ending = last.get();
+
+        while (ending && ending->GetAstNodeTag() == A_AstLabel)
+            ending = ending->GetLeft().get();
+
+        if (!ending || ending->GetAstNodeTag() != A_AstReturn)
         {
             std::cerr << "syntax error: function " << symbol.name;
             std::cerr << " does not end with a return!" << std::endl;
@@ -473,7 +505,18 @@ ParsedStatement Parser::Statement(const std::vector<NodePtr>& token_list,
             return {ContinueStatement(token_list, i), true};
         case T_Switch:
             return {SwitchStatement(token_list, i), false};
+        case T_Goto:
+            return {GotoStatement(token_list, i), true};
         default:
+            /*
+             * A name with a ':' after it is a label, which names the
+             * statement that follows it and which a goto reaches by that
+             * name. Every other name begins an expression.
+             */
+            if (TokenTag(token_list[i]) == T_Identifier &&
+                TokenTag(token_list[i + 1]) == T_Colon)
+                return LabelStatement(token_list, i);
+
             /*
              * A statement may declare a variable whose type is a name
              * made with typedef, so a name which is one of those starts a
@@ -1542,6 +1585,66 @@ AstNodePtr Parser::ContinueStatement(const std::vector<NodePtr>& token_list,
     Match(token_list, i, T_Continue, "continue");
 
     return std::make_unique<AstContinue>();
+}
+
+/*
+ * goto_statement: 'goto' identifier  ;
+ *
+ * A goto reaches a label of the function it stands in, which may be written
+ * after it, so the name is remembered and looked for once the whole body
+ * has been read rather than here.
+ */
+AstNodePtr Parser::GotoStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    Match(token_list, i, T_Goto, "goto");
+
+    if (TokenTag(token_list[i]) != T_Identifier)
+    {
+        std::cerr << "syntax error: a goto needs the name of a label!";
+        std::cerr << std::endl;
+        std::exit(1);
+    }
+
+    const std::string name =
+        static_cast<const Identifier*>(token_list[i].get())->GetName();
+    i++;
+
+    named_labels_.push_back(name);
+
+    return std::make_unique<AstGoto>(name);
+}
+
+/*
+ * label_statement: identifier ':' statement  ;
+ *
+ * The name is a label of the function the statement stands in, and no two
+ * labels of one function may have the same name. What the label names is
+ * the statement after it, which may be a ';' on its own and so nothing at
+ * all; a statement which ends in a semicolon leaves that to the caller.
+ */
+ParsedStatement Parser::LabelStatement(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    const std::string name =
+        static_cast<const Identifier*>(token_list[i].get())->GetName();
+    i++;
+
+    Match(token_list, i, T_Colon, ":");
+
+    if (std::find(labels_.begin(), labels_.end(), name) != labels_.end())
+    {
+        std::cerr << "syntax error: the label " << name;
+        std::cerr << " is defined twice!" << std::endl;
+        std::exit(1);
+    }
+
+    labels_.push_back(name);
+
+    ParsedStatement labelled = Statement(token_list, i);
+    AstNodePtr body = std::move(labelled.tree);
+
+    return {std::make_unique<AstLabel>(body, name), labelled.semicolon};
 }
 
 /*

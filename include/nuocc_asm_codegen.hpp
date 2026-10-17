@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "nodes/nuocc_ast_nodes.hpp"
@@ -71,6 +72,18 @@ protected:
     virtual void EmitFunctionPostamble() = 0;
     virtual void EmitLabel(label_idx label) = 0;
     virtual void EmitJump(label_idx label) = 0;
+
+    /*
+     * Called as the code of every statement is about to be written. A
+     * target whose code is written in blocks which each end in a jump, as
+     * the intermediate language of QBE is, opens a block of its own here
+     * when the statement which came before this one jumped away: no
+     * instruction may follow a jump in one block, so what is written after
+     * one, which is reached from somewhere else, begins a block of its
+     * own. A machine is a run of instructions and has no blocks, so it
+     * does nothing here.
+     */
+    virtual void BeginStatement() {}
 
     /*
      * The name of a global symbol as the assembler of this target wants it
@@ -321,6 +334,14 @@ protected:
     label_idx NewLabel();
 
     /*
+     * The label a name stands for within the function being generated. A
+     * name is given a label the first time it is seen, whether it is a goto
+     * which reaches it or the label itself, so that a goto written before
+     * the label it names reaches the same place.
+     */
+    label_idx LabelIndex(const std::string& name);
+
+    /*
      * The name of the file of code being written, without its directory
      * and its suffix. A target which puts the code of several source files
      * into one program tells the static names of one of them from another
@@ -357,6 +378,14 @@ protected:
      */
     label_idx loop_break_label_ = 0;
     label_idx loop_continue_label_ = 0;
+    /*
+     * The labels of the function being generated, by the name the program
+     * gave them. A goto and the label it names hold one name between them,
+     * so the two are given the same label here. The map is emptied at the
+     * start of every function, since a label belongs to the function it is
+     * written in.
+     */
+    std::unordered_map<std::string, label_idx> label_indices_;
     std::ofstream ofs_;
 };
 

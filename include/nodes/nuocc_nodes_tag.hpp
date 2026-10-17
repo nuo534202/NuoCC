@@ -79,6 +79,7 @@ typedef enum NodeTag
     T_Default,
     T_Sizeof,
     T_Static,
+    T_Goto,
 
     T_Identifier,
 
@@ -130,6 +131,8 @@ typedef enum AstNodeTag
     A_AstBreak,
     A_AstContinue,
     A_AstSwitch,
+    A_AstGoto,
+    A_AstLabel,
     A_AstCase,
     A_AstCast,
     A_AstTernary

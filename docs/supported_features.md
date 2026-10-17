@@ -1207,3 +1207,33 @@
     *words[]= "hi";` are both refused with a message saying so. An array
     too small for the characters themselves is refused as well, so `char
     word[2]= "word";` may not be written.
+
+74. Jumping to a Label (acwj Part 61, `61_What_Next`, the idea of extending
+    the recognised grammar). A statement may be named with a label, written
+    as a name and a ':' in front of it, and a `goto` jumps to that name:
+
+        goto done;
+        ...
+        done: print 1;
+
+    A goto reaches a label of the function it stands in from anywhere in
+    it, so it may name a label written after it, and it is how more than
+    one loop is left at once, since a `break` leaves only the innermost
+    one. A goto written backwards is a loop of its own, and a label may
+    name a ';' on its own, which is a statement that does nothing.
+
+    Labels belong to the function they are written in, so two functions may
+    each give a name of their own, while a goto may not reach a label of
+    another function. A name a goto gives which no label of the function
+    has is refused, as is a name two labels of one function share. A label
+    at the end of a body in front of its return names that return, so such
+    a function still ends with one.
+
+    What a goto jumps over is left where it stands, since nothing reaches
+    it. The target which writes the intermediate language of QBE writes a
+    function as a series of blocks, each of which has to end in a jump, so
+    the code of a statement which jumps away now ends the block it stands
+    in and what follows, which is reached from somewhere else, begins a
+    block of its own there; a `break` or a `return` with statements written
+    after it is written that way as well, which that target could not do
+    before.

@@ -53,6 +53,7 @@ protected:
     void EmitFunctionPostamble() override;
     void EmitLabel(label_idx label) override;
     void EmitJump(label_idx label) override;
+    void BeginStatement() override;
 
     reg_idx LoadInt(int32 value, PrimitiveType type) override;
     reg_idx LoadSymbol(const Symbol& symbol) override;
@@ -146,6 +147,13 @@ private:
     /* Whether a function is being written, which is where the storage of a
      * string literal may not be written. */
     bool in_function_ = false;
+    /*
+     * Whether the block of code being written has ended in a jump, so that
+     * nothing more may be written into it. QBE writes a function as a
+     * series of blocks, each of which begins with a label and ends in a
+     * jump, and a statement which jumps away ends the block it stands in.
+     */
+    bool block_ended_ = false;
     /* The storage of the string literals found while the function being
      * written is written, waiting for it to be over. */
     std::vector<std::pair<label_idx, std::string>> held_strings_;

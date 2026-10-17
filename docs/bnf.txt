@@ -229,6 +229,8 @@ statement: compound_statement
     | return_statement
     | break_statement
     | continue_statement
+    | goto_statement
+    | label_statement
     ;
 
 print_statement: 'print' expression ';'
@@ -294,6 +296,19 @@ break_statement: 'break' ';'
     ;
 
 continue_statement: 'continue' ';'
+    ;
+
+/*
+ * A goto jumps to a label of the function it stands in, which may be
+ * written after it, since the whole of a function is read before any of it
+ * is made into code. A label names the statement which follows it, which
+ * may be a ';' on its own and so nothing at all, and no two labels of one
+ * function may have the same name.
+ */
+goto_statement: 'goto' identifier ';'
+    ;
+
+label_statement: identifier ':' statement
     ;
 
 expression_statement: expression ';'

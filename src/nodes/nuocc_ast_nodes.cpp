@@ -203,6 +203,26 @@ AstBreak::AstBreak() : AstNode(A_AstBreak, PrimitiveType::kNone) {}
 /* AstContinue */
 AstContinue::AstContinue() : AstNode(A_AstContinue, PrimitiveType::kNone) {}
 
+/* AstGoto */
+AstGoto::AstGoto(const std::string& name)
+    : AstNode(A_AstGoto, PrimitiveType::kNone),
+      name_(name) {}
+
+const std::string& AstGoto::GetName() const
+{
+    return name_;
+}
+
+/* AstLabel */
+AstLabel::AstLabel(AstNodePtr& statement, const std::string& name)
+    : AstNode(A_AstLabel, PrimitiveType::kNone, statement),
+      name_(name) {}
+
+const std::string& AstLabel::GetName() const
+{
+    return name_;
+}
+
 /* AstCase */
 AstCase::AstCase(AstNodePtr& body, int32 value, bool is_default)
     : AstNode(A_AstCase, PrimitiveType::kNone, body),

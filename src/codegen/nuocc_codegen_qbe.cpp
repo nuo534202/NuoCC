@@ -238,6 +238,7 @@ void QbeCodegen::EmitFunctionPreamble(
     EmitLabel(NewLabel());
 
     in_function_ = true;
+    block_ended_ = false;
 
     /*
      * The room the locals of the function take, which was worked out while
@@ -292,11 +293,33 @@ void QbeCodegen::EmitLabel(label_idx label)
     /* QBE takes the name of a label on a line of its own, with nothing
      * after it. */
     ofs_ << Label(label) << std::endl;
+
+    /* The label begins a block, whatever came before it. */
+    block_ended_ = false;
 }
 
 void QbeCodegen::EmitJump(label_idx label)
 {
     ofs_ << "  jmp " << Label(label) << std::endl;
+
+    block_ended_ = true;
+}
+
+/*
+ * QBE writes a function as a series of blocks, each of which begins with a
+ * label and ends in a jump, so no instruction may follow a jump in the same
+ * block. A statement which jumped away therefore ends the block it stands
+ * in, and what follows it, which is reached from somewhere else rather than
+ * by carrying on, begins a block of its own here.
+ */
+void QbeCodegen::BeginStatement()
+{
+    if (!block_ended_)
+        return;
+
+    ofs_ << Label(NewLabel()) << std::endl;
+
+    block_ended_ = false;
 }
 
 reg_idx QbeCodegen::LoadInt(int32 value, PrimitiveType /*type*/)
@@ -737,6 +760,8 @@ void QbeCodegen::Return(reg_idx reg)
      * what every function of the language takes its arguments as well.
      */
     ofs_ << "  ret " << Register(reg) << std::endl;
+
+    block_ended_ = true;
 }
 
 void QbeCodegen::PrintInt(reg_idx reg)

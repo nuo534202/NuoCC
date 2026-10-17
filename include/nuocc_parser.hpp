@@ -391,6 +391,29 @@ private:
         idx_t& i);
 
     /*
+     * goto_statement: 'goto' identifier  ;
+     *
+     * A goto names a label of the function it stands in, which may be
+     * written after it. The name is remembered here and every one of them
+     * is looked for once the whole body has been read, since a label which
+     * is never written is a name nothing reaches. The semicolon is left to
+     * the caller.
+     */
+    AstNodePtr GotoStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    /*
+     * label_statement: identifier ':' statement  ;
+     *
+     * A label is a name for a statement which a goto reaches. No two labels
+     * of one function may have the same name. The statement the label names
+     * may end in a semicolon, which is left to the caller of the label the
+     * way it is for every other statement.
+     */
+    ParsedStatement LabelStatement(const std::vector<NodePtr>& token_list,
+        idx_t& i);
+
+    /*
      * switch_statement: 'switch' '(' expression ')' '{' case_list '}'  ;
      *
      * case_list: case_item
@@ -709,6 +732,15 @@ private:
      */
     int32 loop_level_ = 0;
     int32 switch_level_ = 0;
+
+    /*
+     * The labels of the function being parsed, by name, and the labels its
+     * gotos named whether or not they were written. Both are emptied at the
+     * start of every function, and every name a goto gave is looked for
+     * among the labels once the whole body has been read.
+     */
+    std::vector<std::string> labels_;
+    std::vector<std::string> named_labels_;
 
     /*
      * Whether the type just parsed was written as a definition of a tag.

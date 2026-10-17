@@ -201,6 +201,9 @@ std::string NodeTagToString(const NodeTag& tag)
         case T_Static:
             out = "static";
             break;
+        case T_Goto:
+            out = "goto";
+            break;
         case T_Question:
             out = "?";
             break;
@@ -383,6 +386,10 @@ std::string DescribeNode(const AstNode& node)
             return "break";
         case A_AstContinue:
             return "continue";
+        case A_AstGoto:
+            return "goto " + static_cast<const AstGoto*>(&node)->GetName();
+        case A_AstLabel:
+            return "label " + static_cast<const AstLabel*>(&node)->GetName();
         case A_AstSwitch:
             return "switch";
         case A_AstCast:
