@@ -1989,25 +1989,61 @@ AstNodePtr Parser::BinaryExpression(
             }
 
             /*
-             * A plain assignment stores the value as it stands, so there is
-             * no operator for it to be made to fit through; a compound one
-             * combines the value with what the target holds.
+             * A composite value cannot be read as a value, so an
+             * assignment of one is not a value made to fit the target but
+             * the room of the target given what another place holds. That
+             * is only possible with '=', since there is no operation which
+             * combines two composite values, and only from a place holding
+             * the same composite type, since there is nothing else the
+             * room could be taken from.
              */
-            std::optional<NodeTag> combine;
-
-            if (IsCompoundAssign(op_type))
-                combine = CompoundAssignOperator(op_type);
-
-            if (!ModifyType(right, TypeRef{.type = left->GetType(),
-                                           .composite = left->GetComposite()},
-                            combine))
+            if (left->GetType() == PrimitiveType::kComposite)
             {
-                std::cerr << "syntax error: this value does not fit the";
-                std::cerr << " target of the assignment!" << std::endl;
-                std::exit(1);
-            }
+                if (IsCompoundAssign(op_type))
+                {
+                    std::cerr << "syntax error: a composite value cannot be";
+                    std::cerr << " combined with another, only given one as a";
+                    std::cerr << " whole!" << std::endl;
+                    std::exit(1);
+                }
 
-            std::swap(left, right);
+                if (right->GetType() != PrimitiveType::kComposite ||
+                    right->GetComposite() != left->GetComposite() ||
+                    !IsLvalue(right->GetAstNodeTag()))
+                {
+                    std::cerr << "syntax error: a composite value can only be";
+                    std::cerr << " given the contents of a place holding one";
+                    std::cerr << " of the same type!" << std::endl;
+                    std::exit(1);
+                }
+
+                std::swap(left, right);
+            }
+            else
+            {
+                /*
+                 * A plain assignment stores the value as it stands, so
+                 * there is no operator for it to be made to fit through; a
+                 * compound one combines the value with what the target
+                 * holds.
+                 */
+                std::optional<NodeTag> combine;
+
+                if (IsCompoundAssign(op_type))
+                    combine = CompoundAssignOperator(op_type);
+
+                if (!ModifyType(right,
+                                TypeRef{.type = left->GetType(),
+                                        .composite = left->GetComposite()},
+                                combine))
+                {
+                    std::cerr << "syntax error: this value does not fit the";
+                    std::cerr << " target of the assignment!" << std::endl;
+                    std::exit(1);
+                }
+
+                std::swap(left, right);
+            }
         }
         else
         {

@@ -381,6 +381,12 @@ expression: assignment_expression
  * Every assignment takes what stands on its right first, so they all bind
  * to the right. `=` stores the value as it stands, while `+=`, `-=`, `*=`
  * and `/=` combine it with the value the target holds.
+ *
+ * An assignment whose target holds a composite value stores no value: it
+ * gives the room of the target the contents of another place holding the
+ * same type. The right side is therefore a place and not a value, and only
+ * `=` is read for one, since there is no operation which combines two
+ * composite values.
  */
 assignment_expression: conditional_expression
     | lvalue '=' assignment_expression

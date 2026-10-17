@@ -270,6 +270,19 @@ protected:
     reg_idx GenAssign(const AstNodePtr& root);
 
     /*
+     * Store the contents of one place holding a composite value into
+     * another, which gives the room of one place over to the other rather
+     * than putting a value anywhere.
+     */
+    void GenCompositeCopy(const AstNodePtr& root);
+
+    /*
+     * Move the given room from one place to another, a piece at a time, as
+     * wide as the alignment the two places share.
+     */
+    void CopyValue(reg_idx to, reg_idx from, int32 room, int32 piece);
+
+    /*
      * Generate the code for a compound assignment, which combines the value
      * the target holds now with the value on its right and stores the
      * result back where the target is. The operator is the one the

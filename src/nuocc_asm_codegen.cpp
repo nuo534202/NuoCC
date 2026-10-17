@@ -11,6 +11,30 @@
 namespace nuocc
 {
 
+namespace
+{
+
+/*
+ * The type which takes the given room on the machine this compiler is
+ * built for, which is what a value of that room is moved as. Every room a
+ * copy moves a piece of is the room of one of the language's types, since
+ * it is the alignment the two places share.
+ */
+PrimitiveType TypeOfRoom(int32 room)
+{
+    for (PrimitiveType type : {PrimitiveType::kChar, PrimitiveType::kShort,
+                               PrimitiveType::kInt, PrimitiveType::kLong})
+    {
+        if (PrimitiveSize(type) == room)
+            return type;
+    }
+
+    std::cerr << "Error: no type takes this much room!" << std::endl;
+    std::exit(1);
+}
+
+}   /* namespace */
+
 AsmCodegen::AsmCodegen(const std::string& output_file)
     : unit_name_(UnitNameOf(output_file)),
       next_label_(1),
@@ -115,7 +139,22 @@ void AsmCodegen::GenStatement(const AstNodePtr& root)
     if (!root)
         return;
 
-    if (root->GetType() == PrimitiveType::kComposite) {
+    /*
+     * A whole composite value cannot be read, so the one tree of that type
+     * which may be a statement is the storing of one place holding such a
+     * value into another. That gives the room of the target what the other
+     * place holds rather than giving a value anywhere, which is why it is
+     * written where it stands rather than worked out into a register.
+     */
+    if (root->GetType() == PrimitiveType::kComposite)
+    {
+        if (root->GetAstNodeTag() == A_AstOperator &&
+            static_cast<const AstOperator&>(*root).GetOpType() == T_Assign)
+        {
+            GenCompositeCopy(root);
+            return;
+        }
+
         std::cerr << "syntax error: whole composite values are not supported yet!"
                   << std::endl;
         std::exit(1);
@@ -827,6 +866,61 @@ reg_idx AsmCodegen::GenAssign(const AstNodePtr& root)
     std::cerr << "Error: node " << target->GetAstNodeTag();
     std::cerr << " cannot be assigned to!" << std::endl;
     std::exit(1);
+}
+
+/*
+ * Store the contents of one place holding a composite value into another.
+ *
+ * The two places hold the same type, so the same room is given over, and
+ * the room is moved in as few whole moves as it takes: a piece as wide as
+ * the alignment the two places share, since a value is moved whole and the
+ * two places are lined up for a value of that width. The room of a
+ * composite type is a whole number of pieces, since it is rounded up to
+ * its alignment when the type is built.
+ *
+ * Both places are reached before either is read or written. Reaching a
+ * place cannot change another one, since the value a pointer holds is only
+ * changed by an increment, and an increment needs a name to go back into
+ * rather than a place.
+ */
+void AsmCodegen::GenCompositeCopy(const AstNodePtr& root)
+{
+    const std::shared_ptr<CompositeType>& composite = root->GetComposite();
+    const int32 room = ValueSize(PrimitiveType::kComposite, composite);
+    const int32 piece = ValueAlignment(PrimitiveType::kComposite, composite);
+
+    reg_idx to = GenAddress(root->GetRight());
+    reg_idx from = GenAddress(root->GetLeft());
+
+    CopyValue(to, from, room, piece);
+
+    FreeRegister(from);
+    FreeRegister(to);
+}
+
+/*
+ * Move the given room from one place to another, a piece at a time. The
+ * places are walked along rather than moved back to the start for every
+ * piece, so a move of each piece is an offset of the piece which came
+ * before it.
+ */
+void AsmCodegen::CopyValue(reg_idx to, reg_idx from, int32 room, int32 piece)
+{
+    const PrimitiveType type = TypeOfRoom(piece);
+
+    for (int32 moved = 0; moved < room; moved = moved + piece)
+    {
+        if (moved != 0)
+        {
+            AddOffset(from, piece);
+            AddOffset(to, piece);
+        }
+
+        reg_idx value = LoadDeref(from, type);
+
+        StoreDeref(value, to, type);
+        FreeRegister(value);
+    }
 }
 
 // Compute an lvalue's address without loading the value stored there.

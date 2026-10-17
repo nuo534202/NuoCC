@@ -214,22 +214,24 @@
     itself, `struct { int x; } variable;`. Every member is lined up to what
     its own type asks for, the room the whole type takes is rounded up to
     the strictest of them, and a global variable of the type is given that
-    much storage. A member may be an array of a type which is not a struct,
-    and the members may be named as they are declared, as
-    `struct name { int x; };` does on its own.
+    much storage. A member may be an array of any type which takes room, a
+    struct or a union included, and the members may be named as they are
+    declared, as `struct name { int x; };` does on its own.
 
     A member may be a pointer back at the struct it stands in, which is how
     a type which refers to itself is written:
 
         struct node { int value; struct node *next; };
 
-    A struct value cannot be read, written, passed to a function or returned
-    as a whole yet. Members can be read and written as described below, and
-    an array of structs may be declared and every element of it reached, as
-    item 68 describes. A struct which contains itself by value, a struct
-    with no members, and a tag which is defined twice are all refused with a
-    message saying so. Pointers to different struct types are distinct even
-    when their members have the same names and layout.
+    A struct value cannot be read, passed to a function or returned as a
+    whole yet, and one may be written as a whole only from a place holding
+    one of the same type, as item 69 describes. Members can be read and
+    written as described below, and an array of structs may be declared and
+    every element of it reached, as item 68 describes. A struct which
+    contains itself by value, a struct with no members, and a tag which is
+    defined twice are all refused with a message saying so. Pointers to
+    different struct types are distinct even when their members have the
+    same names and layout.
 
 28. Struct Member Access (acwj Stage 32, `32_Struct_Access_pt1`).
     `item.number` selects a member of a struct value and `ptr->number`
@@ -253,11 +255,11 @@
     a struct. Unknown or missing member names, duplicate member names,
     assigning to an array member as a whole, and incompatible struct
     pointers in assignments, calls, returns and prototypes are refused.
-    Incrementing a member, taking the address of an entire array member and
-    copying a whole struct remain unsupported. A pointer to a struct is
-    stepped on like any other pointer, by the room the struct takes, and an
-    element of an array of structs is reached as `path[1].x` or
-    `(&path[1])->x`.
+    Incrementing a member and taking the address of an entire array member
+    remain unsupported, while a whole struct may be given what another place
+    holding one holds, as item 69 describes. A pointer to a struct is stepped
+    on like any other pointer, by the room the struct takes, and an element
+    of an array of structs is reached as `path[1].x` or `(&path[1])->x`.
 
 29. Unions (acwj Stage 33, `33_Union`). `union name { ... };` declares a
     composite type whose members all start at offset zero, and an anonymous
@@ -272,9 +274,10 @@
     the union's alignment, and its alignment is the strictest alignment
     any member asks for. `union same` and `struct same` cannot share a
     tag, and pointers to different composite types remain distinct. A
-    whole composite value still cannot be copied, passed by value or
-    returned, while an array of them may be declared and reached as item 68
-    describes.
+    whole composite value still cannot be read as a value, passed by value
+    or returned, while one place may be given the contents of another as
+    item 69 describes and an array of them may be declared and reached as
+    item 68 describes.
 
 30. Enums and Typedefs (acwj Stage 34, `34_Enums_and_Typedefs`). An
     `enum name { ... };` gives names to numbers, and each name may be
@@ -1028,14 +1031,52 @@
     composite values be indexed and a pointer to one be stepped on.
 
     An array of composite values cannot be given values where it is
-    declared, since a composite value cannot be written as a whole and
-    there is nothing to store into an element with, so a list of values
-    written for such an array is refused with a message saying so. A local
-    array of them is cleared where it is declared instead, the room of it
+    declared, since there is no way of writing a composite value down: a
+    list of values written for such an array is refused with a message
+    saying so, and an element is stored into one member at a time or given
+    a whole value later as item 69 describes. A local array of them is
+    cleared where it is declared instead, the room of it
     being walked a byte at a time and every byte given a zero, which leaves
     an element which was not stored into holding the nothing an element of
     any other local array is left holding. A global array of them is given
     that same nothing by the room its declaration reserves. A whole
-    composite value still cannot be read, written, passed or returned, so
-    `path[0]= path[1]`, `print path[0]` and `return (path[0]);` are all
-    still refused.
+    composite value still cannot be read as a value, passed or returned, so
+    `print path[0]` and `return (path[0]);` are still refused, while one
+    place holding such a value may be given the contents of another as item
+    69 describes.
+
+69. A Whole Composite Value Given to a Place Holding One (acwj Part 61,
+    `61_What_Next`, the rest of what items 27, 28, 29 and 68 left out). A
+    place holding a composite value may now be given the contents of
+    another place holding one of the same type, written with `=`:
+
+        struct point path[4];
+        struct point first;
+
+        first= path[3];
+
+    Both sides have to hold the same composite type, so a struct may not be
+    given a union or a struct of another type, and what is given has to be
+    a place holding such a value rather than a pointer to one or a number:
+    the room is taken from what a place holds rather than from a value
+    worked out, so `first= path[3]` copies, while `first= &path[0]` and
+    `first= 3` are both refused. A member, an element of an array and a
+    value reached through a pointer are all places, so `box.one= box.two`,
+    `path[0]= path[1]` and `*to= *from` all copy, a value may be copied
+    into a member of itself, and a value may be its own source.
+
+    The room of the target is given over a piece at a time, each piece as
+    wide as the alignment the two places share, since a value is moved as a
+    whole and two places are lined up for a value of that width: a value of
+    eight bytes which stands at eight bytes moves in one piece, while one
+    of eight bytes which stands at four moves in two. The room a composite
+    value takes is rounded up to its alignment when its type is built, so
+    it is a whole number of those pieces and a copy misses no byte of the
+    value and writes no byte outside it.
+
+    The copy is a statement rather than a value. What it stores is nothing
+    an expression may be given, so it cannot stand where a value is wanted:
+    `print a= b`, `n= (a= b)`, `return (a= b);`, `a= b= c` and a copy
+    written as the condition of a statement are all refused. A whole
+    composite value still cannot be read as a value, passed to a function
+    by value or returned by value.
