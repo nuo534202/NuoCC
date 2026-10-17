@@ -1175,3 +1175,35 @@
     compound assignment refuses one, since the result has to be narrowed to
     fit it: `c <<= x;` is refused when `c` is a `char` and `x` is an `int`,
     just as `c += x;` is.
+
+73. A Character Array Given a String Where It Is Declared (acwj Part 61,
+    `61_What_Next`, the rest of the idea of a value written where a name is
+    declared). An array of `char` may be given a string in place of the
+    list of values item 66 gives one, and the characters of the string
+    become the values of the elements, one element each:
+
+        char greeting[]= "hello";
+        char roomy[8]= "hi";
+
+    The zero byte the string ends with becomes one element more, so an
+    array written without a size holds the characters and that byte. An
+    array written with the size of the characters alone has no room for the
+    zero byte, which is then left out and the string ends at the last
+    element, so `char word[4]= "word";` holds `w`, `o`, `r` and `d` and
+    nothing after them. An array with room for more than the string needs
+    keeps that room, and the elements left over start out at zero the way
+    they do for a list of values.
+
+    The string is read apart where the declaration stands, so its
+    characters travel to the elements as the values they are and no string
+    of its own is put in the program: a global array has them put in its
+    storage and a local one is given them by the program, and `sizeof`
+    answers with the room the array takes. Strings written one after
+    another are one string here, as they are anywhere else, and an escape
+    may put any byte the language holds in a string which is read this way.
+
+    Only an array of `char` may be given a string, the way only a pointer
+    to a `char` may be given one, so `int numbers[]= "hi";` and `char
+    *words[]= "hi";` are both refused with a message saying so. An array
+    too small for the characters themselves is refused as well, so `char
+    word[2]= "word";` may not be written.

@@ -233,6 +233,14 @@ private:
                             AstNodePtr& initialiser);
 
     /*
+     * The characters a run of strings written one after another stands for,
+     * which is how a string too long for the line it is written on is
+     * written down over several lines.
+     */
+    static std::string StringLiteralText(
+        const std::vector<NodePtr>& token_list, idx_t& i);
+
+    /*
      * The assignment which stores a value into one element of an array,
      * where the element is counted from the first one.
      */

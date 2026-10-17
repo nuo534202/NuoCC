@@ -96,6 +96,11 @@ declarator_list: declarator
  * written without a size takes the number of values it is given as its
  * size. A member of a struct is not a place of its own, so it may not be
  * given values at all.
+ *
+ * An array of char may be given a string in place of the list of values,
+ * which gives it the characters of the string one element each and the zero
+ * byte it ends with as one element more when it has room for it. A string
+ * written for an array of any other type is refused.
  */
 declarator: opt_pointer identifier opt_value
     | opt_pointer identifier '[' opt_size ']' opt_values
@@ -107,6 +112,7 @@ opt_value: <empty>
 
 opt_values: <empty>
     | '=' '{' value_list '}'
+    | '=' string_literal
     ;
 
 value: expression

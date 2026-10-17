@@ -920,6 +920,12 @@ bool Parser::IsFunctionDeclarator(const std::vector<NodePtr>& token_list,
  * them put in its storage by the compiler, so they travel back in the
  * symbol; a local array is given them by the program, so what comes back
  * is the `initialiser` which stores them where the declaration stands.
+ *
+ * An array of char may be given a string instead of a list of values, which
+ * gives it the characters of the string one element each, and its zero byte
+ * as one element more when it has room for it. The string is read apart
+ * here, so the characters become the values of the elements and no string
+ * of its own is put in the program.
  */
 Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
     idx_t& i,
@@ -1008,25 +1014,74 @@ Symbol Parser::ArrayDeclaration(const std::vector<NodePtr>& token_list,
 
         i++;    /* step over '=' */
 
-        Match(token_list, i, T_LBrace, "{");
-
         std::vector<InitialValue> values;
 
-        while (TokenTag(token_list[i]) != T_RBrace)
+        if (TokenTag(token_list[i]) == T_StrLit)
         {
-            if (is_global)
-                values.push_back(ParseConstantValue(element_type, token_list, i));
-            else
-                elements.push_back(BinaryExpression(token_list, i, 0));
+            /*
+             * A string gives an array of char its characters, one element
+             * each, and the zero byte it ends with as one element more
+             * when the array has room for it. An array with too little
+             * room for the characters themselves is refused, so `char
+             * word[4]= "word";` is the shortest one which holds a whole
+             * four letter word, with no room left for the zero byte.
+             */
+            if (element_type.type != PrimitiveType::kChar)
+            {
+                std::cerr << "syntax error: only an array of char may be";
+                std::cerr << " given a string where it is declared!";
+                std::cerr << std::endl;
+                std::exit(1);
+            }
 
-            /* A ',' separates two values, and the last one needs none. */
-            if (TokenTag(token_list[i]) != T_Comma)
-                break;
+            const std::string text = StringLiteralText(token_list, i);
+            const int32 length = static_cast<int32>(text.size());
 
-            i++;
+            if (has_size && size < length)
+            {
+                std::cerr << "syntax error: too many characters for the";
+                std::cerr << " array " << name << "!" << std::endl;
+                std::exit(1);
+            }
+
+            std::vector<int32> codes;
+
+            for (char character : text)
+                codes.push_back(static_cast<unsigned char>(character));
+
+            if (!has_size || size > length)
+                codes.push_back(0);
+
+            for (int32 code : codes)
+            {
+                if (is_global)
+                    values.push_back(code);
+                else
+                    elements.push_back(
+                        MakeIntLitLeaf(code, PrimitiveType::kChar));
+            }
         }
+        else
+        {
+            Match(token_list, i, T_LBrace, "{");
 
-        Match(token_list, i, T_RBrace, "}");
+            while (TokenTag(token_list[i]) != T_RBrace)
+            {
+                if (is_global)
+                    values.push_back(
+                        ParseConstantValue(element_type, token_list, i));
+                else
+                    elements.push_back(BinaryExpression(token_list, i, 0));
+
+                /* A ',' separates two values, and the last one needs none. */
+                if (TokenTag(token_list[i]) != T_Comma)
+                    break;
+
+                i++;
+            }
+
+            Match(token_list, i, T_RBrace, "}");
+        }
 
         const idx_t given = is_global ? values.size() : elements.size();
 
@@ -1199,6 +1254,27 @@ AstNodePtr Parser::ClearArray(const Symbol& symbol, int32 room)
     statements.push_back(std::move(loop));
 
     return GlueStatements(statements);
+}
+
+/*
+ * The characters a run of strings written one after another stands for. Two
+ * strings written side by side are one string, which is how a string too
+ * long for the line it is written on is written down over several lines.
+ */
+std::string Parser::StringLiteralText(const std::vector<NodePtr>& token_list,
+    idx_t& i)
+{
+    std::string text;
+
+    while (TokenTag(token_list[i]) == T_StrLit)
+    {
+        text += static_cast<const Literal<std::string, T_StrLit>*>(
+                    token_list[i].get())
+                    ->GetValue();
+        i++;
+    }
+
+    return text;
 }
 
 /*
@@ -2327,24 +2403,8 @@ AstNodePtr Parser::ParsePrimary(const std::vector<NodePtr>& token_list,
             return MakeIntLitLeaf(token, type);
         }
         case T_StrLit:
-        {
-            /*
-             * Strings written one after another are one string, which is how
-             * a string too long for the line it is written on is written
-             * down over several lines.
-             */
-            std::string text;
-
-            while (TokenTag(token_list[i]) == T_StrLit)
-            {
-                text += static_cast<const Literal<std::string, T_StrLit>*>(
-                            token_list[i].get())
-                            ->GetValue();
-                i++;
-            }
-
-            return std::make_unique<AstStrLit>(text);
-        }
+            return std::make_unique<AstStrLit>(
+                StringLiteralText(token_list, i));
         case T_Sizeof:
         {
             Match(token_list, i, T_Sizeof, "sizeof");
