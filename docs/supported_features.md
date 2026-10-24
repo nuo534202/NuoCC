@@ -327,7 +327,9 @@
     column of the line, and the scanner steps over them. A `#` anywhere else
     is a character the language has no use for and is refused, so that a
     stray one is reported where it stands rather than swallowing the rest of
-    its line.
+    its line. The ASCII space, tab, line feed, carriage return, vertical tab
+    and form feed characters separate tokens, so input written with CRLF line
+    endings is scanned like input written with LF line endings.
 
     `extern` declares a name whose storage is given in another source
     file, so the name may be used here but no storage is emitted for it.

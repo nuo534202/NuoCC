@@ -1,6 +1,5 @@
 #include "nuocc_scanner.hpp"
 
-#include <cctype>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -12,13 +11,18 @@ namespace nuocc
 namespace
 {
 
+constexpr bool IsAsciiDigit(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
 /*
  * The value of one digit of a number, or -1 when the character is not a
  * digit of any radix the language writes numbers in.
  */
 int DigitValue(char c)
 {
-    if (c >= '0' && c <= '9')
+    if (IsAsciiDigit(c))
         return c - '0';
 
     if (c >= 'a' && c <= 'f')
@@ -28,6 +32,26 @@ int DigitValue(char c)
         return c - 'A' + 10;
 
     return -1;
+}
+
+/*
+ * The ASCII whitespace set is identified in one place so the token loop
+ * and SkipEmpty cannot disagree about which bytes end a token.
+ */
+constexpr bool IsWhitespace(char c)
+{
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+        c == '\v' || c == '\f';
+}
+
+constexpr bool IsLineBreak(char c)
+{
+    return c == '\n' || c == '\r';
+}
+
+constexpr bool IsAsciiAlpha(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 }   /* namespace */
@@ -65,7 +89,7 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
          * character the language has no use for, and saying so is better
          * than swallowing the rest of the line and failing somewhere else.
          */
-        if (buf[i] == '#' && (i == 0 || buf[i - 1] == '\n'))
+        if (buf[i] == '#' && (i == 0 || IsLineBreak(buf[i - 1])))
         {
             SkipDirective(buf, i);
             continue;
@@ -93,8 +117,7 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
              * A word ends at whitespace and at the quote which starts a
              * literal, so the loop below can pick the literal up again.
              */
-            if (std::isspace(static_cast<unsigned char>(ch)) ||
-                ch == '\'' || ch == '"')
+            if (IsWhitespace(ch) || ch == '\'' || ch == '"')
                 break;
 
             /* character is not in the alphabet */
@@ -128,7 +151,7 @@ void Scanner::ScanCharLiteral(const std::string& buf, idx_t& i)
 {
     i++;    /* step over the opening quote */
 
-    if (i >= buf.size() || buf[i] == '\n')
+    if (i >= buf.size() || IsLineBreak(buf[i]))
     {
         std::cerr << "lexical error: unterminated character literal!";
         std::cerr << std::endl;
@@ -165,7 +188,7 @@ void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
     while (true)
     {
         /* A string may not reach the end of the file or a new line. */
-        if (i >= buf.size() || buf[i] == '\n')
+        if (i >= buf.size() || IsLineBreak(buf[i]))
         {
             std::cerr << "lexical error: unterminated string literal!";
             std::cerr << std::endl;
@@ -197,7 +220,7 @@ char Scanner::ScanEscape(const std::string& buf, idx_t& i)
     if (c != '\\')
         return c;
 
-    if (i >= buf.size() || buf[i] == '\n')
+    if (i >= buf.size() || IsLineBreak(buf[i]))
     {
         std::cerr << "lexical error: expected a character after a ";
         std::cerr << "backslash!" << std::endl;
@@ -286,26 +309,13 @@ int Scanner::ScanCode(const std::string& buf, idx_t& i, int radix)
 
 void Scanner::SkipEmpty(const std::string& buf, idx_t& i)
 {
-    size_t size = buf.size();
-
-    while (i < size)
-    {
-        if (buf[i] == ' ' ||
-            buf[i] == '\n' ||
-            buf[i] == '\t')
-        {
-            i++;
-        }
-        else
-        {
-            break;
-        }
-    }
+    while (i < buf.size() && IsWhitespace(buf[i]))
+        i++;
 }
 
 void Scanner::SkipDirective(const std::string& buf, idx_t& i)
 {
-    while (i < buf.size() && buf[i] != '\n')
+    while (i < buf.size() && !IsLineBreak(buf[i]))
         i++;
 }
 
@@ -480,7 +490,7 @@ bool Scanner::IsIntLit(const std::string& token)
      * written with is decided by the radix it says it is written in, and
      * ToIntLit is what reads it and reports a digit of the wrong radix.
      */
-    return !token.empty() && isdigit(static_cast<unsigned char>(token.front()));
+    return !token.empty() && IsAsciiDigit(token.front());
 }
 
 /*
@@ -550,14 +560,13 @@ bool Scanner::IsIdent(const std::string& token)
     if (token.empty())
         return false;
 
-    if (isdigit(static_cast<unsigned char>(token.front())))
+    if (IsAsciiDigit(token.front()))
         return false;
 
     for (char c : token)
     {
-        bool is_valid = c == '_' ||
-                        isalpha(static_cast<unsigned char>(c)) ||
-                        isdigit(static_cast<unsigned char>(c));
+        const bool is_valid = c == '_' || IsAsciiAlpha(c) ||
+            IsAsciiDigit(c);
 
         if (!is_valid)
             return false;

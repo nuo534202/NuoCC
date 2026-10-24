@@ -56,6 +56,86 @@ message(STATUS "NuoCC will generate ${NUOCC_TARGET} assembly")
 
 add_executable(nuocc ${SRC})
 
+include(CTest)
+
+if(BUILD_TESTING)
+    find_package(Threads REQUIRED)
+
+    add_executable(scanner_whitespace_test
+        test/scanner_whitespace_test.cpp
+        src/nuocc_scanner.cpp)
+    target_include_directories(scanner_whitespace_test PRIVATE
+        ${PROJECT_SOURCE_DIR}/include)
+    target_link_libraries(scanner_whitespace_test PRIVATE Threads::Threads)
+
+    add_test(NAME scanner_whitespace
+        COMMAND scanner_whitespace_test)
+    set_tests_properties(scanner_whitespace PROPERTIES TIMEOUT 10)
+
+    add_test(NAME scanner_unterminated_character_cr
+        COMMAND scanner_whitespace_test --unterminated-character-cr)
+    set_tests_properties(scanner_unterminated_character_cr PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: unterminated character literal!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_unterminated_character_eof
+        COMMAND scanner_whitespace_test --unterminated-character-eof)
+    set_tests_properties(scanner_unterminated_character_eof PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: unterminated character literal!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_unterminated_string_cr
+        COMMAND scanner_whitespace_test --unterminated-string-cr)
+    set_tests_properties(scanner_unterminated_string_cr PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: unterminated string literal!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_unterminated_string_eof
+        COMMAND scanner_whitespace_test --unterminated-string-eof)
+    set_tests_properties(scanner_unterminated_string_eof PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: unterminated string literal!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_trailing_escape_crlf
+        COMMAND scanner_whitespace_test --trailing-escape-crlf)
+    set_tests_properties(scanner_trailing_escape_crlf PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: expected a character after a backslash!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_trailing_escape_eof
+        COMMAND scanner_whitespace_test --trailing-escape-eof)
+    set_tests_properties(scanner_trailing_escape_eof PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "lexical error: expected a character after a backslash!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+
+    add_test(NAME scanner_inline_directive
+        COMMAND scanner_whitespace_test --inline-directive)
+    set_tests_properties(scanner_inline_directive PROPERTIES
+        TIMEOUT 10
+        PASS_REGULAR_EXPRESSION
+            "Error: unrecognized character #!"
+        FAIL_REGULAR_EXPRESSION
+            "scanner accepted invalid input")
+endif()
+
 # The runtime the generated programs are linked with, which holds printint()
 # and printchar(): the language may call them but does not define them. The
 # path is fixed here so that the compiler can be run from anywhere. The
