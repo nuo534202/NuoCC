@@ -197,7 +197,16 @@
     typedefs and the enum values, each with the size it takes in bytes.
     What a compilation produces is written where the compiler is run, named
     after the input file, and the object files made on the way to an
-    executable are removed once it has been linked.
+    executable are removed once it has been linked. External tools receive
+    their arguments directly rather than through a shell, so a path containing
+    spaces or shell metacharacters remains one argument. A configured command
+    is split with single quotes, double quotes, and backslash escapes, without
+    variable or glob expansion, so `CC="ccache '/path with space/cc'"`
+    works. Captured standard output and standard error share a 64 MiB limit,
+    and each external tool has a 30 minute timeout. Several generated files
+    are joined through an anonymous file in the directory selected by `TMPDIR`, so
+    that directory must be writable. Standard input is otherwise redirected
+    from `/dev/null`.
 26. Pointers at Any Depth. A type records how many levels of pointer it
     has, so a `char **` is as ordinary a type as a `char *`: it may be
     declared, assigned, passed to a function, held in an array and read

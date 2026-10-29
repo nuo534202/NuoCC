@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 #include "codegen/nuocc_peephole.hpp"
 #include "utils/nuocc_command.hpp"
@@ -1370,15 +1371,17 @@ std::string CodeBuilder()
  * than one source file is the code of each of them after the runtime, and
  * a name declared twice is caught by the assembler.
  */
-std::string BuildCommand(const std::vector<std::string>& code,
-    const std::string& program)
+std::optional<ToolCommand> BuildCommand(
+    const std::vector<std::string>& code, const std::string& program)
 {
-    std::string command = "cat " + Quote(kRuntimeName);
+    std::vector<std::string> input_files;
+    input_files.reserve(code.size() + 1);
+    input_files.push_back(kRuntimeName);
+    input_files.insert(input_files.end(), code.begin(), code.end());
 
-    for (const std::string& file : code)
-        command += " " + Quote(file);
-
-    return command + " | lwasm --format=raw -o " + Quote(program) + " -";
+    return ToolCommand{
+        .arguments = {CodeBuilder(), "--format=raw", "-o", program, "-"},
+        .input_files = std::move(input_files)};
 }
 
 /*

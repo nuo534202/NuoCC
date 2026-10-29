@@ -1,10 +1,13 @@
 #include "nuocc_driver.hpp"
 
+#include <cctype>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <utility>
 
 #include "nuocc_asm_codegen.hpp"
 #include "nuocc_parser.hpp"
@@ -46,19 +49,132 @@ namespace nuocc
 namespace
 {
 
-/*
- * The name of the C compiler to assemble and to link with. The CC
- * environment variable names another one, the same way a makefile reads
- * it.
- */
-std::string CompilerName()
+struct ToolWords
 {
-    const char *named = std::getenv("CC");
+    std::vector<std::string> arguments;
+    std::string error;
+};
 
-    if (named != nullptr && named[0] != '\0')
-        return named;
+/*
+ * Split a configured command into words using quoting and backslash escapes,
+ * without asking a shell to expand variables, globs, or command substitutions.
+ */
+ToolWords SplitWords(const std::string& value)
+{
+    ToolWords result;
+    std::string word;
+    char quote = '\0';
+    bool started = false;
 
-    return NUOCC_CC;
+    for (std::size_t index = 0; index < value.size(); ++index)
+    {
+        const char character = value[index];
+        if (quote == '\'')
+        {
+            if (character == '\'')
+                quote = '\0';
+            else
+                word += character;
+            continue;
+        }
+
+        if (character == '\\' && index + 1 < value.size() &&
+            (value[index + 1] == '\n' ||
+                (value[index + 1] == '\r' && index + 2 < value.size() &&
+                    value[index + 2] == '\n')))
+        {
+            index += value[index + 1] == '\n' ? 1 : 2;
+            continue;
+        }
+        if (quote == '"')
+        {
+            if (character == '"')
+            {
+                quote = '\0';
+            }
+            else if (character == '\\' && index + 1 < value.size() &&
+                (value[index + 1] == '"' || value[index + 1] == '\\'))
+            {
+                word += value[++index];
+            }
+            else
+            {
+                word += character;
+            }
+            continue;
+        }
+
+        if (std::isspace(static_cast<unsigned char>(character)) != 0)
+        {
+            if (started)
+            {
+                result.arguments.push_back(std::move(word));
+                word.clear();
+                started = false;
+            }
+        }
+        else if (character == '\'' || character == '"')
+        {
+            quote = character;
+            started = true;
+        }
+        else if (character == '\\')
+        {
+            if (index + 1 == value.size())
+            {
+                result.error = "the tool command ends with an escape";
+                return result;
+            }
+            word += value[++index];
+            started = true;
+        }
+        else
+        {
+            word += character;
+            started = true;
+        }
+    }
+
+    if (quote != '\0')
+    {
+        result.error = "the tool command has an unterminated quote";
+        return result;
+    }
+    if (started)
+        result.arguments.push_back(std::move(word));
+    if (result.arguments.empty())
+        result.error = "the tool command is empty";
+    return result;
+}
+
+std::string CompilerValue()
+{
+    const char* named = std::getenv("CC");
+
+    if (named == nullptr || named[0] == '\0')
+        return NUOCC_CC;
+    return named;
+}
+
+bool ResolveTool(const std::string& value, const std::string& tool_name,
+    std::vector<std::string>& command)
+{
+    ToolWords words = SplitWords(value);
+    if (!words.error.empty())
+    {
+        std::cerr << "error: invalid " << tool_name << ": ";
+        std::cerr << words.error << std::endl;
+        return false;
+    }
+    if (words.arguments.front().empty())
+    {
+        std::cerr << "error: invalid " << tool_name;
+        std::cerr << ": the executable is empty" << std::endl;
+        return false;
+    }
+
+    command = std::move(words.arguments);
+    return true;
 }
 
 /* The file name without the directories it is found in. */
@@ -87,6 +203,35 @@ std::string ReplaceSuffix(const std::string& path, const std::string& suffix)
         return "";
 
     return name.substr(0, dot) + suffix;
+}
+
+bool InspectFile(const std::string& path, bool& exists)
+{
+    std::error_code error;
+    exists = std::filesystem::exists(path, error);
+    if (!error)
+        return true;
+
+    std::cerr << "error: could not inspect " << path << ": ";
+    std::cerr << error.message() << std::endl;
+    return false;
+}
+
+void ReportToolFailure(const ToolCommand& command, const ToolResult& result)
+{
+    std::cerr << "error: " << FormatCommand(command);
+    if (!result.error_message.empty())
+        std::cerr << ": " << result.error_message;
+    else if (result.exited)
+        std::cerr << ": exited with status " << result.exit_status;
+    std::cerr << std::endl;
+
+    if (result.standard_error && !result.standard_error->empty())
+    {
+        std::cerr << *result.standard_error;
+        if (result.standard_error->back() != '\n')
+            std::cerr << std::endl;
+    }
 }
 
 }   /* namespace */
@@ -199,47 +344,38 @@ bool Driver::ParseOptions(int argc, const char* const* argv)
  * it wrote. Nothing comes back when it could not be run or stopped on an
  * error, in which case it has already said why on the error stream.
  */
-std::optional<std::string> Driver::Preprocess(const std::string& source) const
+std::optional<std::string> Driver::Preprocess(const std::string& source,
+    const std::vector<std::string>& cpp_command) const
 {
     /*
      * The system's include directory is left out, since the header files
      * there use parts of C this compiler does not have, and our own is
-     * named instead. The two words are joined so that the pre-processor
-     * reads one argument however the path is written.
+     * named instead. The include path is one argument, so the pre-processor
+     * sees it whole even when it contains spaces or shell metacharacters.
      */
-    const std::string command = std::string(NUOCC_CPP) +
-        " -nostdinc -I" + Quote(NUOCC_INCLUDE_DIR) + " " + Quote(source);
+    std::vector<std::string> arguments = cpp_command;
+    arguments.insert(arguments.end(), {"-nostdinc",
+        "-I" + std::string(NUOCC_INCLUDE_DIR), source});
+    const ToolCommand command{
+        .arguments = std::move(arguments),
+        .input_files = {}};
 
     if (options_.verbose)
-        std::cout << command << std::endl;
+        std::cout << FormatCommand(command) << std::endl;
 
-    FILE *pipe = popen(command.c_str(), "r");
+    ToolResult result = RunTool(command, true);
 
-    if (pipe == nullptr)
+    if (!result.Succeeded())
     {
-        std::cerr << "error: could not run " << NUOCC_CPP << std::endl;
-        return std::nullopt;
-    }
-
-    std::string text;
-    char buffer[4096];
-    size_t got;
-
-    while ((got = fread(buffer, 1, sizeof(buffer), pipe)) > 0)
-        text.append(buffer, got);
-
-    /*
-     * A pre-processor which stopped on an error leaves what it managed to
-     * write, which is not the whole program, so it is thrown away.
-     */
-    if (pclose(pipe) != 0)
-    {
+        ReportToolFailure(command, result);
         std::cerr << "error: " << source << " could not be pre-processed";
         std::cerr << std::endl;
         return std::nullopt;
     }
 
-    return text;
+    if (result.standard_error && !result.standard_error->empty())
+        std::cerr << *result.standard_error;
+    return std::move(*result.standard_output);
 }
 
 /*
@@ -249,9 +385,10 @@ std::optional<std::string> Driver::Preprocess(const std::string& source) const
  * so false only says that the pre-processor could not be run.
  */
 bool Driver::CompileToCode(const std::string& source,
-    const std::string& output) const
+    const std::string& output,
+    const std::vector<std::string>& cpp_command) const
 {
-    std::optional<std::string> text = Preprocess(source);
+    std::optional<std::string> text = Preprocess(source, cpp_command);
 
     if (!text)
         return false;
@@ -286,19 +423,28 @@ bool Driver::CompileToCode(const std::string& source,
     return OptimiseCode(output);
 }
 
-bool Driver::RunCommand(const std::string& command) const
+bool Driver::RunCommand(const ToolCommand& command) const
 {
     if (options_.verbose)
-        std::cout << command << std::endl;
+        std::cout << FormatCommand(command) << std::endl;
 
-    return std::system(command.c_str()) == 0;
+    ToolResult result = RunTool(command, false);
+    if (!result.Succeeded())
+    {
+        ReportToolFailure(command, result);
+        return false;
+    }
+    return true;
 }
 
 bool Driver::Assemble(const std::string& assembly,
-    const std::string& object) const
+    const std::string& object,
+    const std::vector<std::string>& compiler_command) const
 {
-    return RunCommand(CompilerName() + " -c " + Quote(assembly) + " -o " +
-                      Quote(object));
+    std::vector<std::string> arguments = compiler_command;
+    arguments.insert(arguments.end(), {"-c", assembly, "-o", object});
+    return RunCommand({
+        .arguments = std::move(arguments), .input_files = {}});
 }
 
 /*
@@ -307,18 +453,27 @@ bool Driver::Assemble(const std::string& assembly,
  * so that a compiler which was moved away from its sources can still link
  * a program which does not need it.
  */
-bool Driver::Link(const std::vector<std::string>& objects) const
+bool Driver::Link(const std::vector<std::string>& objects,
+    const std::vector<std::string>& compiler_command) const
 {
-    std::string command = CompilerName() + " -o " + Quote(options_.output);
+    std::vector<std::string> arguments = compiler_command;
+    arguments.insert(arguments.end(), {"-o", options_.output});
 
     for (const std::string& object : objects)
-        command += " " + Quote(object);
+        arguments.push_back(object);
 
     const std::filesystem::path runtime(NUOCC_RUNTIME);
+    std::error_code runtime_error;
 
-    if (std::filesystem::exists(runtime))
+    if (std::filesystem::exists(runtime, runtime_error))
     {
-        command += " " + Quote(runtime.string());
+        arguments.push_back(runtime.string());
+    }
+    else if (runtime_error)
+    {
+        std::cerr << "error: could not inspect " << NUOCC_RUNTIME << ": "
+                  << runtime_error.message() << std::endl;
+        return false;
     }
     else
     {
@@ -327,7 +482,8 @@ bool Driver::Link(const std::vector<std::string>& objects) const
         std::cerr << " not linked in" << std::endl;
     }
 
-    return RunCommand(command);
+    return RunCommand({
+        .arguments = std::move(arguments), .input_files = {}});
 }
 
 /*
@@ -336,53 +492,81 @@ bool Driver::Link(const std::vector<std::string>& objects) const
  * file, and what it makes is the program: there is nothing to assemble and
  * nothing to link afterwards.
  */
-int Driver::BuildProgram(const std::string& builder,
-    const std::string& suffix) const
+bool Driver::BuildProgram(const std::string& suffix,
+    const std::vector<std::string>& cpp_command) const
 {
     if (options_.assemble)
     {
         std::cerr << "error: -c makes an object file, which this target";
         std::cerr << " does not" << std::endl;
-        return 1;
+        return false;
     }
 
     std::vector<std::string> written;
+    std::vector<std::string> created;
+    const auto remove_created = [&created]()
+    {
+        for (const std::string& code : created)
+            std::remove(code.c_str());
+    };
 
     for (const std::string& source : options_.inputs)
     {
         const std::string code = ReplaceSuffix(source, suffix);
-
         if (code.empty())
         {
             std::cerr << "error: " << source << " has no suffix to replace";
             std::cerr << std::endl;
-            return 1;
+            remove_created();
+            return false;
         }
 
         if (options_.verbose)
             std::cout << "compiling " << source << std::endl;
 
-        if (!CompileToCode(source, code))
-            return 1;
-
+        bool existed = false;
+        if (!InspectFile(code, existed))
+        {
+            remove_created();
+            return false;
+        }
+        if (!CompileToCode(source, code, cpp_command))
+        {
+            bool created_now = false;
+            if (!InspectFile(code, created_now))
+            {
+                remove_created();
+                return false;
+            }
+            if (!existed && created_now)
+                created.push_back(code);
+            remove_created();
+            return false;
+        }
         written.push_back(code);
+        if (!existed)
+            created.push_back(code);
     }
 
-    /* -S asks for the code itself, and stops there. */
-    if (!options_.assemble && !options_.link)
-        return 0;
+    if (!options_.link)
+        return true;
 
-    if (!RunCommand(BuildCommand(written, options_.output)))
+    const std::optional<ToolCommand> command =
+        BuildCommand(written, options_.output);
+    if (!command || command->arguments.empty())
     {
-        std::cerr << builder << " could not build the program" << std::endl;
-        return 1;
+        std::cerr << "error: this target cannot build a program" << std::endl;
+        remove_created();
+        return false;
+    }
+    if (!RunCommand(*command))
+    {
+        remove_created();
+        return false;
     }
 
-    /* The code has done its work once it is the program. */
-    for (const std::string& code : written)
-        std::remove(code.c_str());
-
-    return 0;
+    remove_created();
+    return true;
 }
 
 int Driver::Run(int argc, const char* const* argv)
@@ -394,6 +578,10 @@ int Driver::Run(int argc, const char* const* argv)
     }
 
     std::vector<std::string> objects;
+    std::vector<std::string> created_objects;
+    std::vector<std::string> cpp_command;
+    if (!ResolveTool(NUOCC_CPP, "preprocessor", cpp_command))
+        return 1;
 
     /*
      * What the target of this build writes, the tool which turns it into
@@ -411,7 +599,21 @@ int Driver::Run(int argc, const char* const* argv)
      * linked the way the code of the other targets is.
      */
     if (!code_builder.empty())
-        return BuildProgram(code_builder, code_suffix);
+        return BuildProgram(code_suffix, cpp_command) ? 0 : 1;
+
+    std::vector<std::string> compiler_command;
+    if ((options_.assemble || options_.link) &&
+        !ResolveTool(CompilerValue(), "compiler", compiler_command))
+    {
+        return 1;
+    }
+
+    std::vector<std::string> code_tool_command;
+    if (!code_tool.empty() && (options_.assemble || options_.link) &&
+        !ResolveTool(code_tool, "target code tool", code_tool_command))
+    {
+        return 1;
+    }
 
     for (const std::string& source : options_.inputs)
     {
@@ -427,7 +629,10 @@ int Driver::Run(int argc, const char* const* argv)
         if (options_.verbose)
             std::cout << "compiling " << source << std::endl;
 
-        if (!CompileToCode(source, code))
+        bool code_existed = false;
+        if (!InspectFile(code, code_existed))
+            return 1;
+        if (!CompileToCode(source, code, cpp_command))
             return 1;
 
         /* -S asks for the code itself, and stops there. */
@@ -439,53 +644,56 @@ int Driver::Run(int argc, const char* const* argv)
          * it, and what it wrote is the assembly.
          */
         std::string assembly = code;
+        bool assembly_existed = code_existed;
 
         if (!code_tool.empty())
         {
             assembly = ReplaceSuffix(source, ".s");
+            if (!InspectFile(assembly, assembly_existed))
+                return 1;
+            std::vector<std::string> arguments = code_tool_command;
+            arguments.insert(arguments.end(), {"-o", assembly, code});
 
-            if (!RunCommand(code_tool + " -o " + Quote(assembly) + " " +
-                            Quote(code)))
+            if (!RunCommand({
+                    .arguments = std::move(arguments),
+                    .input_files = {}}))
             {
-                std::cerr << code_tool << " could not compile " << code;
-                std::cerr << std::endl;
                 return 1;
             }
         }
 
         const std::string object = ReplaceSuffix(source, ".o");
-
-        if (!Assemble(assembly, object))
+        bool object_existed = false;
+        if (!InspectFile(object, object_existed) ||
+            !Assemble(assembly, object, compiler_command))
         {
-            std::cerr << "Assembly of " << assembly << " failed";
-            std::cerr << std::endl;
             return 1;
         }
 
         /* The code the compiler wrote has done its work once it is an
          * object file, and so has the assembly it was turned into. */
-        std::remove(code.c_str());
+        if (!code_existed)
+            std::remove(code.c_str());
 
-        if (assembly != code)
+        if (assembly != code && !assembly_existed)
             std::remove(assembly.c_str());
 
         objects.push_back(object);
+        if (!object_existed)
+            created_objects.push_back(object);
     }
 
     if (options_.link)
     {
-        if (!Link(objects))
-        {
-            std::cerr << "Linking failed" << std::endl;
+        if (!Link(objects, compiler_command))
             return 1;
-        }
 
         /*
          * The object files were made so that the program could be linked,
          * and are taken away once it has been. Keeping them is what the
          * -c flag asks for.
          */
-        for (const std::string& object : objects)
+        for (const std::string& object : created_objects)
             std::remove(object.c_str());
     }
 

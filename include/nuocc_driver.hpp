@@ -7,6 +7,8 @@
 namespace nuocc
 {
 
+struct ToolCommand;
+
 /*
  * The command line of the compiler and the stages it puts an input file
  * through: the source is compiled to the code the target writes, that code
@@ -51,19 +53,17 @@ private:
 
     /* The stages of the compilation. */
 
-    /*
-     * Make the program out of the code a target which builds its own
-     * programs wrote, which is one file of code for each source file.
-     */
+    /* Turn one source file into the code file the target writes. */
     bool CompileToCode(const std::string& source,
-                       const std::string& output) const;
+                       const std::string& output,
+                       const std::vector<std::string>& cpp_command) const;
 
     /*
      * Make the program out of the code a target which builds its own
      * programs wrote, which is one file of code for each source file.
      */
-    int BuildProgram(const std::string& builder,
-                     const std::string& suffix) const;
+    bool BuildProgram(const std::string& suffix,
+                      const std::vector<std::string>& cpp_command) const;
 
     /*
      * Feed one source file through the C pre-processor and answer with
@@ -72,13 +72,17 @@ private:
      * takes the comments away, so the scanner which follows only ever
      * sees plain declarations.
      */
-    std::optional<std::string> Preprocess(const std::string& source) const;
+    std::optional<std::string> Preprocess(
+        const std::string& source,
+        const std::vector<std::string>& cpp_command) const;
     bool Assemble(const std::string& assembly,
-                  const std::string& object) const;
-    bool Link(const std::vector<std::string>& objects) const;
+                  const std::string& object,
+                  const std::vector<std::string>& compiler_command) const;
+    bool Link(const std::vector<std::string>& objects,
+              const std::vector<std::string>& compiler_command) const;
 
     /* Run one command, having said what it is when -v was given. */
-    bool RunCommand(const std::string& command) const;
+    bool RunCommand(const ToolCommand& command) const;
 
     Options options_;
 };

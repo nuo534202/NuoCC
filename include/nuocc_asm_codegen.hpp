@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "nodes/nuocc_ast_nodes.hpp"
+#include "utils/nuocc_command.hpp"
 #include "utils/nuocc_types.hpp"
 
 namespace nuocc
@@ -424,10 +425,12 @@ std::string CodeBuilder();
 
 /*
  * The command which makes the program out of the code the compiler wrote,
- * which is one file of it for each source file.
+ * which is one file of it for each source file, or no command when this
+ * target does not have a program builder of its own. When present,
+ * arguments[0] must name the target builder returned by CodeBuilder().
  */
-std::string BuildCommand(const std::vector<std::string>& code,
-                         const std::string& program);
+std::optional<ToolCommand> BuildCommand(const std::vector<std::string>& code,
+                                        const std::string& program);
 
 /*
  * Put the code the compiler wrote through the pass over the whole of it

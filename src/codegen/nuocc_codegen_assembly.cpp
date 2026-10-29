@@ -152,10 +152,11 @@ std::string CodeBuilder()
     return "";
 }
 
-std::string BuildCommand(const std::vector<std::string>& /*code*/,
+std::optional<ToolCommand> BuildCommand(
+    const std::vector<std::string>& /*code*/,
     const std::string& /*program*/)
 {
-    return "";
+    return std::nullopt;
 }
 
 }   /* namespace nuocc */

@@ -68,6 +68,20 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/include)
     target_link_libraries(scanner_whitespace_test PRIVATE Threads::Threads)
 
+    add_executable(tool_command_test
+        test/nuocc_command_test.cpp
+        src/utils/nuocc_command.cpp)
+    target_include_directories(tool_command_test PRIVATE
+        ${PROJECT_SOURCE_DIR}/include)
+
+    add_test(NAME tool_command COMMAND tool_command_test)
+    set_tests_properties(tool_command PROPERTIES TIMEOUT 10)
+
+    add_test(NAME tool_invocation
+        COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/tool_invocation_test.sh
+            $<TARGET_FILE:nuocc> ${PROJECT_SOURCE_DIR})
+    set_tests_properties(tool_invocation PROPERTIES TIMEOUT 30)
+
     add_test(NAME scanner_whitespace
         COMMAND scanner_whitespace_test)
     set_tests_properties(scanner_whitespace PROPERTIES TIMEOUT 10)
