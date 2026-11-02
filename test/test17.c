@@ -1,10 +1,9 @@
-int   c;
-int   d;
+int   c[2];
 int  *e;
 int   f;
 
 int main() {
-  c= 12; d=18; printint(c);
-  e= &c + 1; f= *e; printint(f);
+  c[0]= 12; c[1]= 18; printint(c[0]);
+  e= &c[0] + 1; f= *e; printint(f);
   return(0);
 }
