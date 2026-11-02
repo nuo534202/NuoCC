@@ -72,6 +72,14 @@ if [ -z "$target" ]; then
     echo "error: $nuocc reported an empty target" >&2
     exit 2
 fi
+# Keep this list in sync with NUOCC_TARGET in CMakeLists.txt.
+case $target in
+    x86_64|arm64|qbe|m6809) ;;
+    *)
+        echo "error: $nuocc reported an unsupported target: $target" >&2
+        exit 2
+        ;;
+esac
 target_expected=$script_dir/expected/$target
 skip_file=$script_dir/$target/skip.txt
 if ! code_suffix=$("$nuocc" --code-suffix); then
@@ -116,7 +124,7 @@ programs=$(
 for name in $programs; do
     # A program this target cannot build is not one it fails.
     if [ -f "$skip_file" ] &&
-       grep -q "^$name\b" "$skip_file"; then
+       grep -Eq "^$name([[:space:]]|$)" "$skip_file"; then
         skipped=$((skipped + 1))
         continue
     fi
