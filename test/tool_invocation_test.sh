@@ -65,6 +65,19 @@ SCRIPT
 chmod 700 "$fake_cpp" "$fake_cc" "$fake_qbe" "$fake_lwasm"
 
 target=$("$nuocc" --target)
+if [ -z "$target" ]; then
+    echo "the compiler reported an empty target" >&2
+    exit 1
+fi
+code_suffix=$("$nuocc" --code-suffix)
+case $target in
+    qbe) expected_suffix=.q ;;
+    *)   expected_suffix=.s ;;
+esac
+if [ "$code_suffix" != "$expected_suffix" ]; then
+    echo "the compiler reported an unexpected code suffix" >&2
+    exit 1
+fi
 stem="source '; \$HOME \`marker\`"
 source=$work_dir/$stem.c
 printf 'int main() { return(0); }\n' > "$source"
@@ -91,7 +104,7 @@ if (
     exit 1
 fi
 
-preserved=$work_dir/$stem.s
+preserved=$work_dir/$stem$code_suffix
 printf 'keep this file\n' > "$preserved"
 if (
     cd "$work_dir"

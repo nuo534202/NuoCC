@@ -71,33 +71,6 @@ char QbeCodegen::SizeLetter(int32 size)
     std::exit(1);
 }
 
-/*
- * The load which reads a value of a size: a char is read without a sign,
- * since it has none and a value of it is 0 to 255, and an int with one,
- * since reading it without would turn a negative value into a large
- * positive one.
- */
-const char* QbeCodegen::LoadLetter(int32 size)
-{
-    switch (size)
-    {
-        case kCharSize:
-            return "ub";
-        case kShortSize:
-            return "sh";
-        case kIntSize:
-            return "sw";
-        case kLongSize:
-            return "l";
-        default:
-            break;
-    }
-
-    std::cerr << "Error: a value of " << size;
-    std::cerr << " bytes cannot be read!" << std::endl;
-    std::exit(1);
-}
-
 std::string QbeCodegen::Label(label_idx label)
 {
     return "@L" + std::to_string(label);
@@ -139,6 +112,51 @@ void QbeCodegen::EmitUnary(reg_idx reg, std::string_view op)
     ofs_ << std::endl;
 }
 
+void QbeCodegen::EmitComparison(reg_idx reg,
+    std::string_view op,
+    const std::string& left,
+    const std::string& right)
+{
+    const std::string result = NewValue();
+
+    ofs_ << "  " << result << " =w " << op << " " << left << ", ";
+    ofs_ << right << std::endl;
+    ofs_ << "  " << Register(reg) << " =l extuw " << result << std::endl;
+}
+
+void QbeCodegen::LoadAt(reg_idx reg, const std::string& address, int32 size)
+{
+    switch (size)
+    {
+        case kLongSize:
+            ofs_ << "  " << Register(reg) << " =l loadl " << address;
+            ofs_ << std::endl;
+            return;
+        case kIntSize:
+            ofs_ << "  " << Register(reg) << " =l loadsw " << address;
+            ofs_ << std::endl;
+            return;
+        case kCharSize:
+        case kShortSize:
+            break;
+        default:
+            std::cerr << "Error: a value of " << size;
+            std::cerr << " bytes cannot be read!" << std::endl;
+            std::exit(1);
+    }
+
+    const char* instruction =
+        size == kCharSize ? "loadub" : "loadsh";
+    const char* extension =
+        size == kCharSize ? "extuw" : "extsw";
+    const std::string load = NewValue();
+    ofs_ << "  " << load << " =w " << instruction << " " << address;
+    ofs_ << std::endl;
+
+    ofs_ << "  " << Register(reg) << " =l " << extension << " " << load;
+    ofs_ << std::endl;
+}
+
 /*
  * The address of a place in the frame of the function. The frame is one
  * block of stack room, which QBE hands out in whole long words, so the
@@ -161,8 +179,17 @@ void QbeCodegen::StoreAt(const std::string& address,
     const std::string& value,
     int32 size)
 {
-    ofs_ << "  store" << SizeLetter(size) << " " << value << ", " << address;
-    ofs_ << std::endl;
+    if (size != kLongSize)
+    {
+        const char letter = SizeLetter(size);
+        const std::string word = NewValue();
+        ofs_ << "  " << word << " =w copy " << value << std::endl;
+        ofs_ << "  store" << letter << " " << word << ", " << address;
+        ofs_ << std::endl;
+        return;
+    }
+
+    ofs_ << "  storel " << value << ", " << address << std::endl;
 }
 
 /*
@@ -222,7 +249,10 @@ void QbeCodegen::EmitFunctionPreamble(
     if (!symbol.is_static)
         ofs_ << "export ";
 
-    ofs_ << "function l $" << symbol.name << "(";
+    ofs_ << "function ";
+    if (function_return_type_ != PrimitiveType::kVoid)
+        ofs_ << "l ";
+    ofs_ << "$" << symbol.name << "(";
 
     for (idx_t k = 0; k < parameters.size(); k++)
     {
@@ -245,7 +275,8 @@ void QbeCodegen::EmitFunctionPreamble(
      * the program was parsed, is one block of stack room: QBE hands it out
      * in whole long words, so it is lined up to one of those.
      */
-    const int32 frame_size = (local_size + kLongSize - 1) / kLongSize;
+    const int32 frame_size =
+        ((local_size + kLongSize - 1) / kLongSize) * kLongSize;
 
     if (frame_size > 0)
         ofs_ << "  %frame =l alloc8 " << frame_size << std::endl;
@@ -345,9 +376,7 @@ reg_idx QbeCodegen::LoadSymbol(const Symbol& symbol)
 
     reg_idx reg = AllocRegister();
 
-    ofs_ << "  " << Register(reg) << " =l load";
-    ofs_ << LoadLetter(PrimitiveSize(symbol.type));
-    ofs_ << " " << address << std::endl;
+    LoadAt(reg, address, PrimitiveSize(symbol.type));
 
     return reg;
 }
@@ -561,14 +590,14 @@ reg_idx QbeCodegen::Invert(reg_idx reg, PrimitiveType /*type*/)
  * with zero leaves behind. */
 reg_idx QbeCodegen::LogNot(reg_idx reg, PrimitiveType /*type*/)
 {
-    EmitBinary(reg, "ceql", Register(reg), "0");
+    EmitComparison(reg, "ceql", Register(reg), "0");
 
     return reg;
 }
 
 reg_idx QbeCodegen::ToBool(reg_idx reg, PrimitiveType /*type*/)
 {
-    EmitBinary(reg, "cnel", Register(reg), "0");
+    EmitComparison(reg, "cnel", Register(reg), "0");
 
     return reg;
 }
@@ -613,9 +642,18 @@ reg_idx QbeCodegen::CompareAndSet(NodeTag op_type,
         std::exit(1);
     }
 
-    EmitBinary(reg1, it->second.set, Register(reg1), Register(reg2));
+    std::string right = Register(reg2);
+    if (reg1 == reg2)
+    {
+        right = NewValue();
+        ofs_ << "  " << right << " =l copy " << Register(reg2) << std::endl;
+        FreeRegister(reg2);
+    }
 
-    FreeRegister(reg2);
+    EmitComparison(reg1, it->second.set, Register(reg1), right);
+
+    if (reg1 != reg2)
+        FreeRegister(reg2);
 
     return reg1;
 }
@@ -639,11 +677,19 @@ void QbeCodegen::CompareAndJump(NodeTag op_type,
         std::exit(1);
     }
 
+    std::string right = Register(reg2);
+    if (reg1 == reg2)
+    {
+        right = NewValue();
+        ofs_ << "  " << right << " =l copy " << Register(reg2) << std::endl;
+        FreeRegister(reg2);
+    }
+
     const std::string test = NewValue();
     const label_idx next = NewLabel();
 
-    ofs_ << "  " << test << " =l " << it->second.inverse << " ";
-    ofs_ << Register(reg1) << ", " << Register(reg2) << std::endl;
+    ofs_ << "  " << test << " =w " << it->second.inverse << " ";
+    ofs_ << Register(reg1) << ", " << right << std::endl;
     ofs_ << "  jnz " << test << ", " << Label(label) << ", ";
     ofs_ << Label(next) << std::endl;
 
@@ -657,7 +703,8 @@ void QbeCodegen::CompareAndJump(NodeTag op_type,
      * was given are done with. Only those two are freed: what the rest of
      * the expression holds is not this comparison's to throw away. */
     FreeRegister(reg1);
-    FreeRegister(reg2);
+    if (reg1 != reg2)
+        FreeRegister(reg2);
 }
 
 void QbeCodegen::JumpIfEqual(reg_idx reg1,
@@ -668,8 +715,8 @@ void QbeCodegen::JumpIfEqual(reg_idx reg1,
     const std::string test = NewValue();
     const label_idx next = NewLabel();
 
-    ofs_ << "  " << test << " =l ceql " << Register(reg1) << ", ";
-    ofs_ << Register(reg2) << std::endl;
+    ofs_ << "  " << test << " =w ceql ";
+    ofs_ << Register(reg1) << ", " << Register(reg2) << std::endl;
     ofs_ << "  jnz " << test << ", " << Label(label) << ", ";
     ofs_ << Label(next) << std::endl;
 
@@ -683,7 +730,7 @@ void QbeCodegen::JumpIfZero(reg_idx reg, label_idx label)
     const std::string test = NewValue();
     const label_idx next = NewLabel();
 
-    ofs_ << "  " << test << " =l ceql " << Register(reg) << ", 0" << std::endl;
+    ofs_ << "  " << test << " =w ceql " << Register(reg) << ", 0" << std::endl;
     ofs_ << "  jnz " << test << ", " << Label(label) << ", ";
     ofs_ << Label(next) << std::endl;
 
@@ -695,7 +742,7 @@ void QbeCodegen::JumpIfNonZero(reg_idx reg, label_idx label)
     const std::string test = NewValue();
     const label_idx next = NewLabel();
 
-    ofs_ << "  " << test << " =l cnel " << Register(reg) << ", 0" << std::endl;
+    ofs_ << "  " << test << " =w cnel " << Register(reg) << ", 0" << std::endl;
     ofs_ << "  jnz " << test << ", " << Label(label) << ", ";
     ofs_ << Label(next) << std::endl;
 
@@ -812,9 +859,7 @@ reg_idx QbeCodegen::LoadStrAddress(label_idx label)
  */
 reg_idx QbeCodegen::Deref(reg_idx reg, PrimitiveType pointer_type)
 {
-    ofs_ << "  " << Register(reg) << " =l load";
-    ofs_ << LoadLetter(PrimitiveSize(ValueAt(pointer_type)));
-    ofs_ << " " << Register(reg) << std::endl;
+    LoadAt(reg, Register(reg), PrimitiveSize(ValueAt(pointer_type)));
 
     return reg;
 }
@@ -823,9 +868,7 @@ reg_idx QbeCodegen::LoadDeref(reg_idx address_reg, PrimitiveType type)
 {
     reg_idx value_reg = AllocRegister();
 
-    ofs_ << "  " << Register(value_reg) << " =l load";
-    ofs_ << LoadLetter(PrimitiveSize(type));
-    ofs_ << " " << Register(address_reg) << std::endl;
+    LoadAt(value_reg, Register(address_reg), PrimitiveSize(type));
 
     return value_reg;
 }

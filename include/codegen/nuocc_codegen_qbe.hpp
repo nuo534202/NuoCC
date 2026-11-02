@@ -178,6 +178,15 @@ private:
     /* The same for an operation which takes one value. */
     void EmitUnary(reg_idx reg, std::string_view op);
 
+    /* Compare two long values and extend the word result to a register. */
+    void EmitComparison(reg_idx reg,
+                        std::string_view op,
+                        const std::string& left,
+                        const std::string& right);
+
+    /* Load a value of a size and extend it to a register. */
+    void LoadAt(reg_idx reg, const std::string& address, int32 size);
+
     /* The address of a place in the frame of the function being written. */
     std::string FrameAddress(int32 offset);
 
@@ -194,10 +203,9 @@ private:
      * held, which is done once it is over. */
     void WriteHeldStrings();
 
-    /* The letters which say of what width the operations of a size are
-     * written, and the name of a label of this target. */
+    /* The letter which says of what width a stored value is written, and
+     * the name of a label of this target. */
     static char SizeLetter(int32 size);
-    static const char* LoadLetter(int32 size);
     static std::string Label(label_idx label);
 };
 

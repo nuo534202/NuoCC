@@ -254,6 +254,8 @@ void Driver::Usage(const char* program) const
     std::cerr << std::endl;
     std::cerr << "       --target, say which target this compiler was built";
     std::cerr << " for and stop" << std::endl;
+    std::cerr << "       --code-suffix, say what suffix the target writes";
+    std::cerr << " and stop" << std::endl;
 }
 
 bool Driver::ParseOptions(int argc, const char* const* argv)
@@ -275,6 +277,11 @@ bool Driver::ParseOptions(int argc, const char* const* argv)
         if (argument == "--target")
         {
             std::cout << TargetName() << std::endl;
+            std::exit(0);
+        }
+        if (argument == "--code-suffix")
+        {
+            std::cout << CodeSuffix() << std::endl;
             std::exit(0);
         }
 

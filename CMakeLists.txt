@@ -82,6 +82,15 @@ if(BUILD_TESTING)
             $<TARGET_FILE:nuocc> ${PROJECT_SOURCE_DIR})
     set_tests_properties(tool_invocation PROPERTIES TIMEOUT 30)
 
+    if(NUOCC_TARGET STREQUAL "qbe")
+        add_test(NAME qbe_widths
+            COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/qbe_widths_test.sh
+                $<TARGET_FILE:nuocc> ${PROJECT_SOURCE_DIR})
+        set_tests_properties(qbe_widths PROPERTIES
+            SKIP_RETURN_CODE 77
+            TIMEOUT 30)
+    endif()
+
     add_test(NAME scanner_whitespace
         COMMAND scanner_whitespace_test)
     set_tests_properties(scanner_whitespace PROPERTIES TIMEOUT 10)

@@ -64,9 +64,24 @@ esac
 
 # Which target this compiler was built for, which says which of the tests
 # apply to it, what it prints, and what runs the programs it builds.
-target=$("$nuocc" --target)
+if ! target=$("$nuocc" --target); then
+    echo "error: $nuocc could not report its target" >&2
+    exit 2
+fi
+if [ -z "$target" ]; then
+    echo "error: $nuocc reported an empty target" >&2
+    exit 2
+fi
 target_expected=$script_dir/expected/$target
 skip_file=$script_dir/$target/skip.txt
+if ! code_suffix=$("$nuocc" --code-suffix); then
+    echo "error: $nuocc could not report its code suffix" >&2
+    exit 2
+fi
+if [ -z "$code_suffix" ]; then
+    echo "error: $nuocc reported an empty code suffix" >&2
+    exit 2
+fi
 
 # A program for the machine this compiler runs on is run by the system. One
 # for another machine is run by an emulator of it, which has to be on the
@@ -80,7 +95,10 @@ skipped=0
 
 # The compiler writes its assembly next to itself, so it is run in a
 # directory of its own and nothing is left behind in the project.
-work_dir=$(mktemp -d)
+if ! work_dir=$(mktemp -d); then
+    echo "error: could not create a test work directory" >&2
+    exit 2
+fi
 trap 'rm -rf "$work_dir"' EXIT
 
 passed=0
@@ -149,26 +167,63 @@ done
 # the code it wrote is tested: the peephole optimiser is not allowed to
 # change what a program does, so a program of that target says nothing about
 # it, and the code it leaves does.
-for expected in "$script_dir/$target"/*.s; do
-    [ -f "$expected" ] || continue
-    name=$(basename -- "$expected" .s)
+# Every source in a target directory is a recording fixture. It must have one
+# companion recording with the target's code suffix, and every recording must
+# have its source.
+recorded_stems=$work_dir/recorded_stems
+for path in "$script_dir/$target"/*.c \
+            "$script_dir/$target"/*"$code_suffix"; do
+    [ -f "$path" ] || continue
+    name=${path##*/}
+    echo "${name%.*}"
+done | sort -u > "$recorded_stems"
+if [ ! -s "$recorded_stems" ]; then
+    echo "FAIL $target: no code recordings found in $script_dir/$target"
+    failed=$((failed + 1))
+fi
 
-    if ! (cd "$work_dir" && "$nuocc" -S "$script_dir/$target/$name.c" \
+while IFS= read -r name; do
+    source=$script_dir/$target/$name.c
+    if [ ! -f "$source" ]; then
+        echo "FAIL $name: recording has no source fixture: $source"
+        failed=$((failed + 1))
+        continue
+    fi
+
+    expected=$script_dir/$target/$name$code_suffix
+    if [ ! -f "$expected" ]; then
+        echo "FAIL $name: no recording found beside $source"
+        failed=$((failed + 1))
+        continue
+    fi
+
+    if ! fixture_dir=$(mktemp -d "$work_dir/code.XXXXXX"); then
+        echo "error: could not create a work directory for $name" >&2
+        exit 2
+    fi
+    if ! (cd "$fixture_dir" && "$nuocc" -S "$source" \
             >/dev/null 2>&1); then
         echo "FAIL $name: the compiler could not build it"
         failed=$((failed + 1))
         continue
     fi
 
-    if cmp -s "$expected" "$work_dir/$name.s"; then
+    generated_file=$fixture_dir/$name$code_suffix
+    if [ ! -f "$generated_file" ]; then
+        echo "FAIL $name: the compiler wrote no $code_suffix code file"
+        failed=$((failed + 1))
+        continue
+    fi
+
+    if cmp -s "$expected" "$generated_file"; then
         echo "ok   $name (the code the target writes)"
         passed=$((passed + 1))
     else
         echo "FAIL $name: the code the target writes is not the recorded one"
-        diff "$expected" "$work_dir/$name.s" | sed -n '1,10p'
+        diff "$expected" "$generated_file" | sed -n '1,10p'
         failed=$((failed + 1))
     fi
-done
+done < "$recorded_stems"
 
 # The programs which have to be refused, and what the compiler has to say.
 for source in "$script_dir"/errors/*.c; do
