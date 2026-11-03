@@ -152,12 +152,20 @@ for name in $programs; do
         continue
     fi
 
-    # What the program itself returns is not checked: a test is free to
-    # end without a return statement.
+    # A failed program or runner must not pass by printing matching output.
+    run_status=0
     if [ -n "$runner" ]; then
-        "$runner" "$work_dir/out" > "$work_dir/trial.out" 2>"$work_dir/emu.log"
+        "$runner" "$work_dir/out" > "$work_dir/trial.out" \
+            2>"$work_dir/run.log" || run_status=$?
     else
-        "$work_dir/out" > "$work_dir/trial.out"
+        "$work_dir/out" > "$work_dir/trial.out" \
+            2>"$work_dir/run.log" || run_status=$?
+    fi
+    if [ "$run_status" -ne 0 ]; then
+        echo "FAIL $name: the program or runner exited with status $run_status"
+        sed -n '1,3p' "$work_dir/run.log"
+        failed=$((failed + 1))
+        continue
     fi
 
     if cmp -s "$expected" "$work_dir/trial.out"; then

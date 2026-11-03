@@ -2,9 +2,10 @@ int fred(int ignored) {
   return(56);
 }
 
-void main() {
+int main(void) {
   int result;
   printint(23);
   result= fred(10);
   printint(result);
+    return(0);
 }

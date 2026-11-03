@@ -82,6 +82,11 @@ if(BUILD_TESTING)
             $<TARGET_FILE:nuocc> ${PROJECT_SOURCE_DIR})
     set_tests_properties(tool_invocation PROPERTIES TIMEOUT 30)
 
+    add_test(NAME runtests_failure
+        COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/runtests_failure_test.sh
+            ${PROJECT_SOURCE_DIR})
+    set_tests_properties(runtests_failure PROPERTIES TIMEOUT 30)
+
     if(NUOCC_TARGET STREQUAL "qbe")
         add_test(NAME qbe_widths
             COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/qbe_widths_test.sh
