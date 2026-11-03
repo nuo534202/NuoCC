@@ -38,6 +38,7 @@ public:
      * Scan the whole program, which is the text the pre-processor wrote
      * for one source file: the comments, the #include lines and the
      * pre-processor's own markers are all handled here.
+     * Throws CompilerError when the input contains a lexical error.
      */
     void Scan(const std::string& text);
     const std::vector<NodePtr>& GetTokenList() const;

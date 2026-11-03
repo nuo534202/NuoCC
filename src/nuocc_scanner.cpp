@@ -1,9 +1,8 @@
 #include "nuocc_scanner.hpp"
 
-#include <cstdlib>
-#include <iostream>
 #include <limits>
-#include <stdexcept>
+
+#include "utils/nuocc_error.hpp"
 
 namespace nuocc
 {
@@ -123,9 +122,8 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
             /* character is not in the alphabet */
             if (kAlphabet.find(ch) == kAlphabet.end())
             {
-                std::cerr << "Error: unrecognized character " << ch;
-                std::cerr << "!" << std::endl;
-                std::exit(1);
+                throw CompilerError(
+                    std::string("Error: unrecognized character ") + ch + "!");
             }
 
             if (IsNewToken(token, ch))
@@ -153,18 +151,15 @@ void Scanner::ScanCharLiteral(const std::string& buf, idx_t& i)
 
     if (i >= buf.size() || IsLineBreak(buf[i]))
     {
-        std::cerr << "lexical error: unterminated character literal!";
-        std::cerr << std::endl;
-        std::exit(1);
+        throw CompilerError("lexical error: unterminated character literal!");
     }
 
     char value = ScanEscape(buf, i);
 
     if (i >= buf.size() || buf[i] != '\'')
     {
-        std::cerr << "lexical error: expected ' at end of character ";
-        std::cerr << "literal!" << std::endl;
-        std::exit(1);
+        throw CompilerError(
+            "lexical error: expected ' at end of character literal!");
     }
 
     i++;    /* step over the closing quote */
@@ -190,9 +185,7 @@ void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
         /* A string may not reach the end of the file or a new line. */
         if (i >= buf.size() || IsLineBreak(buf[i]))
         {
-            std::cerr << "lexical error: unterminated string literal!";
-            std::cerr << std::endl;
-            std::exit(1);
+            throw CompilerError("lexical error: unterminated string literal!");
         }
 
         if (buf[i] == '"')
@@ -222,9 +215,8 @@ char Scanner::ScanEscape(const std::string& buf, idx_t& i)
 
     if (i >= buf.size() || IsLineBreak(buf[i]))
     {
-        std::cerr << "lexical error: expected a character after a ";
-        std::cerr << "backslash!" << std::endl;
-        std::exit(1);
+        throw CompilerError(
+            "lexical error: expected a character after a backslash!");
     }
 
     char escaped = buf[i++];
@@ -255,9 +247,9 @@ char Scanner::ScanEscape(const std::string& buf, idx_t& i)
         case 'x':
             return static_cast<char>(ScanCode(buf, i, 16));
         default:
-            std::cerr << "lexical error: unknown escape sequence \\";
-            std::cerr << escaped << "!" << std::endl;
-            std::exit(1);
+            throw CompilerError(
+                std::string("lexical error: unknown escape sequence \\") +
+                escaped + "!");
     }
 }
 
@@ -291,17 +283,15 @@ int Scanner::ScanCode(const std::string& buf, idx_t& i, int radix)
          * not name a character at all. */
         if (value > 255)
         {
-            std::cerr << "lexical error: the character code " << value;
-            std::cerr << " is too large for a char!" << std::endl;
-            std::exit(1);
+            throw CompilerError("lexical error: the character code " +
+                std::to_string(value) + " is too large for a char!");
         }
     }
 
     if (digits == 0)
     {
-        std::cerr << "lexical error: there are no digits in the character";
-        std::cerr << " code!" << std::endl;
-        std::exit(1);
+        throw CompilerError(
+            "lexical error: there are no digits in the character code!");
     }
 
     return static_cast<int>(value);
@@ -449,8 +439,7 @@ void Scanner::CommitToken(const std::string& token)
             break;
 
         case T_UnknownToken:
-            std::cerr << "lexical error: unknown token!" << std::endl;
-            std::exit(1);
+            throw CompilerError("lexical error: unknown token!");
         default:
             token_node = std::make_unique<Node>(T_UnknownToken);
             break;
@@ -521,9 +510,8 @@ int32 Scanner::ToIntLit(const std::string& token)
 
     if (start == token.size())
     {
-        std::cerr << "lexical error: there are no digits after the 0x of ";
-        std::cerr << token << "!" << std::endl;
-        std::exit(1);
+        throw CompilerError(
+            "lexical error: there are no digits after the 0x of " + token + "!");
     }
 
     int64 value = 0;
@@ -534,10 +522,9 @@ int32 Scanner::ToIntLit(const std::string& token)
 
         if (digit < 0 || digit >= radix)
         {
-            std::cerr << "lexical error: the digit " << token[k] << " of ";
-            std::cerr << token << " is not one a number of radix " << radix;
-            std::cerr << " holds!" << std::endl;
-            std::exit(1);
+            throw CompilerError(std::string("lexical error: the digit ") +
+                token[k] + " of " + token + " is not one a number of radix " +
+                std::to_string(radix) + " holds!");
         }
 
         value = value * radix + digit;
@@ -546,9 +533,8 @@ int32 Scanner::ToIntLit(const std::string& token)
          * large to be held is refused rather than wrapped round. */
         if (value > std::numeric_limits<int32>::max())
         {
-            std::cerr << "lexical error: integer literal " << token;
-            std::cerr << " is too large!" << std::endl;
-            std::exit(1);
+            throw CompilerError(
+                "lexical error: integer literal " + token + " is too large!");
         }
     }
 

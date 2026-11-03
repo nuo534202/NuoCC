@@ -68,6 +68,15 @@ if(BUILD_TESTING)
         ${PROJECT_SOURCE_DIR}/include)
     target_link_libraries(scanner_whitespace_test PRIVATE Threads::Threads)
 
+    add_executable(scanner_error_test
+        test/scanner_error_test.cpp
+        src/nuocc_scanner.cpp)
+    target_include_directories(scanner_error_test PRIVATE
+        ${PROJECT_SOURCE_DIR}/include)
+
+    add_test(NAME scanner_error COMMAND scanner_error_test)
+    set_tests_properties(scanner_error PROPERTIES TIMEOUT 10)
+
     add_executable(tool_command_test
         test/nuocc_command_test.cpp
         src/utils/nuocc_command.cpp)

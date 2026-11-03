@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "nuocc_scanner.hpp"
+#include "utils/nuocc_error.hpp"
 
 namespace
 {
@@ -263,7 +264,15 @@ int main(int argc, char* argv[])
     if (argc > 1)
     {
         watchdog.SetCase(std::string("failure ") + argv[1]);
-        return RunFailureCase(argv[1]);
+        try
+        {
+            return RunFailureCase(argv[1]);
+        }
+        catch (const nuocc::CompilerError& error)
+        {
+            std::cerr << error.what() << std::endl;
+            return EXIT_FAILURE;
+        }
     }
 
     const std::vector<std::pair<std::string, std::string>> cases = {
