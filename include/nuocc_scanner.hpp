@@ -38,6 +38,9 @@ public:
      * Scan the whole program, which is the text the pre-processor wrote
      * for one source file: the comments, the #include lines and the
      * pre-processor's own markers are all handled here.
+     * Each call replaces the token list from the previous scan. A failed
+     * call leaves it empty. References and pointers into the old list do not
+     * survive a later call.
      * Throws CompilerError when the input contains a lexical error.
      */
     void Scan(const std::string& text);
@@ -56,7 +59,7 @@ private:
 
     void ScanCharLiteral(const std::string& buf, idx_t& i);
     void ScanStrLiteral(const std::string& buf, idx_t& i);
-    char ScanEscape(const std::string& buf, idx_t& i);
+    unsigned char ScanEscape(const std::string& buf, idx_t& i);
 
     /*
      * The character code an escape names, which begins at buf[i] and is

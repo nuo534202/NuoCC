@@ -40,6 +40,8 @@ int main()
         {R"("\q")", "lexical error: unknown escape sequence \\q!"},
         {R"("\x100")",
          "lexical error: the character code 256 is too large for a char!"},
+        {R"("\400")",
+         "lexical error: the character code 256 is too large for a char!"},
         {R"("\x")", "lexical error: there are no digits in the character code!"},
         {"..", "lexical error: unknown token!"},
         {"0x", "lexical error: there are no digits after the 0x of 0x!"},

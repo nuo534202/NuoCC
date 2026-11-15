@@ -61,10 +61,19 @@ constexpr bool IsAsciiAlpha(char c)
  */
 void Scanner::Scan(const std::string& text)
 {
-    idx_t i = 0;
-    StringToToken(text, i);
+    token_list_.clear();
 
-    token_list_.push_back(std::make_unique<Node>(T_EOF));
+    idx_t i = 0;
+    try
+    {
+        StringToToken(text, i);
+        token_list_.push_back(std::make_unique<Node>(T_EOF));
+    }
+    catch (...)
+    {
+        token_list_.clear();
+        throw;
+    }
 }
 
 const std::vector<NodePtr>& Scanner::GetTokenList() const
@@ -154,7 +163,7 @@ void Scanner::ScanCharLiteral(const std::string& buf, idx_t& i)
         throw CompilerError("lexical error: unterminated character literal!");
     }
 
-    char value = ScanEscape(buf, i);
+    const unsigned char value = ScanEscape(buf, i);
 
     if (i >= buf.size() || buf[i] != '\'')
     {
@@ -164,8 +173,7 @@ void Scanner::ScanCharLiteral(const std::string& buf, idx_t& i)
 
     i++;    /* step over the closing quote */
 
-    token_list_.push_back(std::make_unique<Literal<int, T_IntLit>>(
-        static_cast<unsigned char>(value)));
+    token_list_.push_back(std::make_unique<Literal<int, T_IntLit>>(value));
 }
 
 /*
@@ -194,7 +202,7 @@ void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
             break;
         }
 
-        text.push_back(ScanEscape(buf, i));
+        text.push_back(static_cast<char>(ScanEscape(buf, i)));
     }
 
     token_list_.push_back(
@@ -206,9 +214,9 @@ void Scanner::ScanStrLiteral(const std::string& buf, idx_t& i)
  * i just after what was read. A character may be written as itself, as one
  * of the simple escapes, or by its code in octal or in hexadecimal.
  */
-char Scanner::ScanEscape(const std::string& buf, idx_t& i)
+unsigned char Scanner::ScanEscape(const std::string& buf, idx_t& i)
 {
-    char c = buf[i++];
+    const unsigned char c = static_cast<unsigned char>(buf[i++]);
 
     if (c != '\\')
         return c;
@@ -243,9 +251,9 @@ char Scanner::ScanEscape(const std::string& buf, idx_t& i)
         case '0': case '1': case '2': case '3':
         case '4': case '5': case '6': case '7':
             i--;
-            return static_cast<char>(ScanCode(buf, i, 8));
+            return static_cast<unsigned char>(ScanCode(buf, i, 8));
         case 'x':
-            return static_cast<char>(ScanCode(buf, i, 16));
+            return static_cast<unsigned char>(ScanCode(buf, i, 16));
         default:
             throw CompilerError(
                 std::string("lexical error: unknown escape sequence \\") +

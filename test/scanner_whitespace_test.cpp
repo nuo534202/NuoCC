@@ -181,7 +181,7 @@ bool CheckStringLiteral(const std::string& expected, const std::string& text)
     return true;
 }
 
-bool CheckCharacterLiteral(char expected, const std::string& text)
+bool CheckCharacterLiteral(int expected, const std::string& text)
 {
     nuocc::Scanner scanner;
     scanner.Scan(text);
@@ -197,8 +197,7 @@ bool CheckCharacterLiteral(char expected, const std::string& text)
 
     const auto* literal = dynamic_cast<
         const nuocc::Literal<int, nuocc::T_IntLit>*>(tokens[0].get());
-    if (literal == nullptr ||
-        literal->GetValue() != static_cast<unsigned char>(expected))
+    if (literal == nullptr || literal->GetValue() != expected)
     {
         std::cerr << "character literal case produced a different value"
                   << std::endl;
@@ -206,6 +205,105 @@ bool CheckCharacterLiteral(char expected, const std::string& text)
     }
 
     return true;
+}
+
+bool CheckScannerReuse()
+{
+    nuocc::Scanner scanner;
+    for (const std::string name : {"first", "first", "second", ""})
+    {
+        scanner.Scan(name);
+        const auto& tokens = scanner.GetTokenList();
+        if (tokens.size() != (name.empty() ? 1 : 2) ||
+            tokens.back()->GetNodeTag() != nuocc::T_EOF ||
+            (!name.empty() && !CheckIdentifier(tokens[0], name)))
+        {
+            std::cerr << "repeated scan retained earlier tokens" << std::endl;
+            return false;
+        }
+    }
+
+    try
+    {
+        scanner.Scan("partial @");
+        std::cerr << "scanner accepted invalid input" << std::endl;
+        return false;
+    }
+    catch (const nuocc::CompilerError& error)
+    {
+        if (std::string_view(error.what()) !=
+                "Error: unrecognized character @!" ||
+            !scanner.GetTokenList().empty())
+        {
+            std::cerr << "failed scan left an invalid token list or error: "
+                      << error.what() << std::endl;
+            return false;
+        }
+    }
+
+    scanner.Scan("recovered");
+    const auto& tokens = scanner.GetTokenList();
+    return tokens.size() == 2 && CheckIdentifier(tokens[0], "recovered") &&
+        tokens[1]->GetNodeTag() == nuocc::T_EOF;
+}
+
+bool CheckEscapedByte(int expected, const std::string& escape)
+{
+    if (!CheckCharacterLiteral(expected, "'" + escape + "'"))
+        return false;
+
+    nuocc::Scanner scanner;
+    scanner.Scan("\"" + escape + "z\"");
+    const auto& tokens = scanner.GetTokenList();
+    if (tokens.size() != 2 || tokens[1]->GetNodeTag() != nuocc::T_EOF)
+        return false;
+
+    const auto* literal = dynamic_cast<
+        const nuocc::Literal<std::string, nuocc::T_StrLit>*>(tokens[0].get());
+    return literal != nullptr && literal->GetValue().size() == 2 &&
+        static_cast<unsigned char>(literal->GetValue()[0]) == expected &&
+        literal->GetValue()[1] == 'z';
+}
+
+bool CheckEscapedHighBytes()
+{
+    constexpr char kHexDigits[] = "0123456789abcdef";
+    for (int value = 0x80; value <= 0xff; ++value)
+    {
+        const std::string hexadecimal = std::string("\\x") +
+            kHexDigits[value >> 4] + kHexDigits[value & 15];
+        const std::string octal = std::string("\\") +
+            static_cast<char>('0' + (value >> 6)) +
+            static_cast<char>('0' + ((value >> 3) & 7)) +
+            static_cast<char>('0' + (value & 7));
+        const std::pair<std::string_view, std::string> escapes[] = {
+            {"hexadecimal", hexadecimal},
+            {"octal", octal},
+        };
+        for (const auto& [radix, escape] : escapes)
+        {
+            if (!CheckEscapedByte(value, escape))
+            {
+                std::cerr << radix << " escaped byte "
+                          << std::string(escape) << " failed" << std::endl;
+                return false;
+            }
+        }
+    }
+
+    const char raw = static_cast<char>(0xe9);
+    if (!CheckCharacterLiteral(0xe9, std::string("'") + raw + "'"))
+        return false;
+
+    nuocc::Scanner scanner;
+    scanner.Scan(std::string("\"") + raw + "\"");
+    const auto& tokens = scanner.GetTokenList();
+    if (tokens.size() != 2 || tokens[1]->GetNodeTag() != nuocc::T_EOF)
+        return false;
+    const auto* literal = dynamic_cast<
+        const nuocc::Literal<std::string, nuocc::T_StrLit>*>(tokens[0].get());
+    return literal != nullptr && literal->GetValue().size() == 1 &&
+        static_cast<unsigned char>(literal->GetValue().front()) == 0xe9;
 }
 
 bool CheckDirectiveAtEnd(std::string_view line_break)
@@ -355,6 +453,17 @@ int main(int argc, char* argv[])
         std::cerr << "character literal whitespace case failed" << std::endl;
         return EXIT_FAILURE;
     }
+
+    watchdog.SetCase("scanner reuse after successful and failed scans");
+    if (!CheckScannerReuse())
+    {
+        std::cerr << "scanner reuse case failed" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    watchdog.SetCase("octal and hexadecimal high bytes");
+    if (!CheckEscapedHighBytes())
+        return EXIT_FAILURE;
 
     return EXIT_SUCCESS;
 }
