@@ -135,6 +135,18 @@ void Scanner::StringToToken(const std::string& buf, idx_t& i)
                     std::string("Error: unrecognized character ") + ch + "!");
             }
 
+            /*
+             * Two dots stay together while they may still become the
+             * ellipsis. When no third dot follows, they are two operators.
+             */
+            if (token == "." && ch == '.' &&
+                (i + 1 == buf.size() || buf[i + 1] != '.'))
+            {
+                CommitToken(token);
+                BeginToken(token, ch);
+                continue;
+            }
+
             if (IsNewToken(token, ch))
             {
                 CommitToken(token);

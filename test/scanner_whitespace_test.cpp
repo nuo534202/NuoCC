@@ -1,5 +1,6 @@
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
@@ -247,6 +248,46 @@ bool CheckScannerReuse()
         tokens[1]->GetNodeTag() == nuocc::T_EOF;
 }
 
+bool CheckDotOperators()
+{
+    struct DotCase
+    {
+        std::string text;
+        std::vector<nuocc::NodeTag> tags;
+    };
+
+    const DotCase cases[] = {
+        {"a..x", {nuocc::T_Identifier, nuocc::T_Dot, nuocc::T_Dot,
+                  nuocc::T_Identifier, nuocc::T_EOF}},
+        {"..", {nuocc::T_Dot, nuocc::T_Dot, nuocc::T_EOF}},
+        {"...", {nuocc::T_Ellipsis, nuocc::T_EOF}},
+    };
+
+    for (const DotCase& test_case : cases)
+    {
+        nuocc::Scanner scanner;
+        scanner.Scan(test_case.text);
+        const auto& tokens = scanner.GetTokenList();
+        if (tokens.size() != test_case.tags.size())
+        {
+            std::cerr << "dot case produced the wrong token count: "
+                      << test_case.text << std::endl;
+            return false;
+        }
+        for (std::size_t index = 0; index < tokens.size(); ++index)
+        {
+            if (tokens[index]->GetNodeTag() != test_case.tags[index])
+            {
+                std::cerr << "dot case " << test_case.text
+                          << " produced the wrong tag at token " << index
+                          << std::endl;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool CheckEscapedByte(int expected, const std::string& escape)
 {
     if (!CheckCharacterLiteral(expected, "'" + escape + "'"))
@@ -460,6 +501,10 @@ int main(int argc, char* argv[])
         std::cerr << "scanner reuse case failed" << std::endl;
         return EXIT_FAILURE;
     }
+
+    watchdog.SetCase("complete and split dot operators");
+    if (!CheckDotOperators())
+        return EXIT_FAILURE;
 
     watchdog.SetCase("octal and hexadecimal high bytes");
     if (!CheckEscapedHighBytes())

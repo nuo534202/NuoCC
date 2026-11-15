@@ -43,7 +43,6 @@ int main()
         {R"("\400")",
          "lexical error: the character code 256 is too large for a char!"},
         {R"("\x")", "lexical error: there are no digits in the character code!"},
-        {"..", "lexical error: unknown token!"},
         {"0x", "lexical error: there are no digits after the 0x of 0x!"},
         {"0999", "lexical error: the digit 9 of 0999 is not one a number of "
                  "radix 8 holds!"},

@@ -35,9 +35,9 @@ public:
 
 public:
     /*
-     * Scan the whole program, which is the text the pre-processor wrote
-     * for one source file: the comments, the #include lines and the
-     * pre-processor's own markers are all handled here.
+     * Scan the pre-processor's output for one source file. Comments and
+     * directives have already been removed by the pre-processor; its file and
+     * line markers are skipped here.
      * Each call replaces the token list from the previous scan. A failed
      * call leaves it empty. References and pointers into the old list do not
      * survive a later call.
