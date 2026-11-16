@@ -3,8 +3,10 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <system_error>
 #include <utility>
 
 namespace nuocc
@@ -418,24 +420,61 @@ bool Peephole::OptimiseFile(const std::string& file) const
     for (std::string line; std::getline(source, line);)
         lines.push_back(line);
 
+    if (source.bad())
+    {
+        std::cerr << "error: cannot read the code in " << file << std::endl;
+        return false;
+    }
+
     source.close();
 
     const Lines left = Optimise(lines);
+    std::filesystem::path temporary = file;
+    temporary += ".tmp";
 
-    std::ofstream written(file, std::ios::out | std::ios::trunc);
+    std::ofstream written(temporary, std::ios::out | std::ios::trunc);
 
     if (!written.is_open())
     {
-        std::cerr << "error: cannot write the code to " << file << std::endl;
+        std::cerr << "error: cannot write the code to " << temporary.string()
+                  << std::endl;
         return false;
     }
 
     for (const std::string& line : left)
         written << line << '\n';
 
+    written.flush();
+
     if (!written)
     {
-        std::cerr << "error: cannot write the code to " << file << std::endl;
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        std::cerr << "error: cannot write the code to " << temporary.string()
+                  << std::endl;
+        return false;
+    }
+
+    written.close();
+
+    if (written.fail())
+    {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        std::cerr << "error: cannot write the code to " << temporary.string()
+                  << std::endl;
+        return false;
+    }
+
+    std::error_code error;
+    std::filesystem::rename(temporary, file, error);
+
+    if (error)
+    {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        std::cerr << "error: cannot replace the code in " << file << ": "
+                  << error.message() << std::endl;
         return false;
     }
 

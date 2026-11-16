@@ -96,6 +96,17 @@ if(BUILD_TESTING)
             ${PROJECT_SOURCE_DIR})
     set_tests_properties(runtests_failure PROPERTIES TIMEOUT 30)
 
+    if(NOT NUOCC_TARGET STREQUAL "qbe")
+        add_executable(peephole_file_test
+            test/peephole_file_test.cpp
+            src/codegen/nuocc_peephole.cpp)
+        target_include_directories(peephole_file_test PRIVATE
+            ${PROJECT_SOURCE_DIR}/include)
+
+        add_test(NAME peephole_file COMMAND peephole_file_test)
+        set_tests_properties(peephole_file PROPERTIES TIMEOUT 10)
+    endif()
+
     if(NUOCC_TARGET STREQUAL "qbe")
         add_test(NAME qbe_widths
             COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/qbe_widths_test.sh

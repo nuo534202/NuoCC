@@ -57,6 +57,10 @@ public:
      * Read the code a target wrote out of the file it was written into, put
      * it through the pass, and write back what the pass left. This is what
      * a target's OptimiseCode() asks for.
+     *
+     * The optimised code is written beside the original and replaces it only
+     * after a complete write. Therefore, true means the replacement
+     * succeeded, while false leaves the original file unchanged.
      */
     bool OptimiseFile(const std::string& file) const;
 
