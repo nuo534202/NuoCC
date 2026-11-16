@@ -36,9 +36,11 @@ main:
 	subq	$144, %rsp
 	movq	$3, %r8
 	movq	%r8, number(%rip)
+	movq	number(%rip), %r8
 	movq	$1, %r9
 	addq	%r9, %r8
 	movq	%r8, -16(%rbp)
+	movq	-16(%rbp), %r8
 	movq	%r8, number(%rip)
 	movq	$97, %r8
 	movb	%r8b, -1(%rbp)

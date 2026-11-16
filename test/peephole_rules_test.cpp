@@ -63,6 +63,21 @@ int main()
         }
     }
 
+    const std::vector<nuocc::PeepholeRule> invalid_placeholders = {
+        {.matched = {"first %0", "second"}, .kept = {"first"}},
+        {.matched = {"first %10", "second"}, .kept = {"first"}},
+        {.matched = {"first %1", "second"}, .kept = {"first %2"}},
+    };
+
+    for (const nuocc::PeepholeRule& rule : invalid_placeholders)
+    {
+        if (!RejectsRule(rule))
+        {
+            ReportFailure("an invalid peephole placeholder was accepted");
+            return 1;
+        }
+    }
+
     const nuocc::Peephole m6809(nuocc::M6809PeepholeRules());
     const nuocc::Peephole::Lines flag_setters = {
         "\tstd\t2,u",
@@ -76,6 +91,20 @@ int main()
     if (m6809.Optimise(flag_setters) != flag_setters)
     {
         ReportFailure("a 6809 flag-setting load was removed");
+        return 1;
+    }
+
+    const nuocc::Peephole x86(nuocc::X86PeepholeRules());
+    const nuocc::Peephole::Lines x86_moves = {
+        "\tmovq\t%rax, 8(%rbp)",
+        "\tmovq\t8(%rbp), %rax",
+        "\tmovq\t8(%rbp), %rax",
+        "\tmovq\t%rax, 8(%rbp)",
+    };
+
+    if (x86.Optimise(x86_moves) != x86_moves)
+    {
+        ReportFailure("an x86 load or store was removed without role checks");
         return 1;
     }
 

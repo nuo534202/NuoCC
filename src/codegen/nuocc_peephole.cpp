@@ -238,7 +238,11 @@ const std::vector<PeepholeRule> kArm64Rules = {
  * two lines.
  */
 const std::vector<PeepholeRule> kX86Rules = {
-    {{"movq %1, %2", "movq %2, %1"}, {"movq %1, %2"}},
+    /*
+     * A store followed by a load is left alone: AT&T movq names the same
+     * instruction in both directions, so a text-only rule cannot tell which
+     * operand is the register and which is memory.
+     */
     {{"jmp %1", "%1:"}, {"%1:"}},
 };
 
@@ -336,12 +340,56 @@ void ValidateRules(const std::vector<PeepholeRule>& rules)
 {
     for (std::size_t k = 0; k < rules.size(); k++)
     {
-        if (rules[k].kept.size() < rules[k].matched.size())
-            continue;
+        if (rules[k].kept.size() >= rules[k].matched.size())
+        {
+            throw CompilerError(
+                "error: peephole rule " + std::to_string(k + 1) +
+                " does not remove a line");
+        }
 
-        throw CompilerError(
-            "error: peephole rule " + std::to_string(k + 1) +
-            " does not remove a line");
+        std::array<bool, 10> bound{};
+
+        const auto validate = [&](const std::string& shape, bool binds) {
+            for (std::size_t at = 0; at < shape.size(); at++)
+            {
+                if (shape[at] != '%' || at + 1 == shape.size() ||
+                    shape[at + 1] < '0' || shape[at + 1] > '9')
+                {
+                    continue;
+                }
+
+                const char digit = shape[at + 1];
+
+                if (digit == '0' ||
+                    (at + 2 < shape.size() &&
+                     shape[at + 2] >= '0' && shape[at + 2] <= '9'))
+                {
+                    throw CompilerError(
+                        "error: peephole rule " + std::to_string(k + 1) +
+                        " uses an invalid placeholder");
+                }
+
+                const std::size_t part =
+                    static_cast<std::size_t>(digit - '0');
+
+                if (binds)
+                    bound[part] = true;
+                else if (!bound[part])
+                {
+                    throw CompilerError(
+                        "error: peephole rule " + std::to_string(k + 1) +
+                        " uses a placeholder which matched does not bind");
+                }
+
+                at++;
+            }
+        };
+
+        for (const std::string& line : rules[k].matched)
+            validate(line, true);
+
+        for (const std::string& line : rules[k].kept)
+            validate(line, false);
     }
 }
 

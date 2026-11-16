@@ -12,10 +12,10 @@ namespace nuocc
  *
  * A line is written the way the code generator writes one, as the name of
  * an instruction and the operand it works on, or as a label. A part of it
- * written %1, %2 and so on stands for any text which is not nothing, and
- * where a rule uses the same part twice the two have to be the same text,
- * so a rule written for `std %1` and then `ldd %1` is about a value which
- * is stored and read back in one place rather than in two.
+ * written %1 through %9 stands for any text which is not nothing, and
+ * where a rule uses the same part twice the two have to be the same text.
+ * %0 and multi-digit part names are invalid. Every part used by kept must
+ * also occur in matched, since a part is bound while a rule is matched.
  *
  * Every rule leaves fewer lines than it matched, so the code of a program
  * only gets shorter while the pass is being made.

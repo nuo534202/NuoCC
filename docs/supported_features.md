@@ -1013,25 +1013,24 @@
     arm64 and the x86-64 have them. A branch to the label standing next to
     it is taken away, since the machine comes to the same instruction by
     carrying on to it; what a return statement leaves is this, and it is
-    much the commonest thing the pass takes away. A value of eight bytes, a
-    long or an address, which is held in the place of a register and read
-    straight back is left in the register, since a store from a register
-    leaves the value there and the read of a value that wide brings back
-    exactly what the register holds; what the code generator writes when an
-    expression worked out and held for the next one has been put in its
-    place is this. The arm64 takes away the read of a char as well, since a
-    char has no sign of its own and a register holding one holds the whole
-    of it; the x86-64 leaves that read alone, because a store of one byte
-    names the register one way and a read of it names it another, and a
-    rule can only say that the same text stands on two lines. A read of a
-    narrower value which has a sign is left alone on both machines: such a
+    much the commonest thing the pass takes away. The arm64 takes away the
+    read of a long or an address which is held in the place of a register
+    and read straight back, since a store from a register leaves the value
+    there and the read of a value that wide brings back exactly what the
+    register holds. It takes away the read of a char as well, since a char
+    has no sign of its own and a register holding one holds the whole of
+    it. A read of a narrower value which has a sign is left alone: such a
     read gives the value the width of its type back, and the register may
     hold the wider value the program worked out, so taking the read away
     would print something else for a program whose arithmetic ran past the
-    width of its type. What the pass leaves is recorded beside the programs
-    under test/arm64 and test/x86_64, and the suite compares what the
-    compiler writes with it; every program of the suite still prints what
-    it printed before, since what the pass takes away is what did nothing.
+    width of its type. The x86-64 has only the branch rule, because AT&T
+    `movq` names a store and a load with the same text and neither operand
+    says which one is the register, so a text-only rule cannot tell which
+    direction it has matched. What the pass leaves is recorded beside the
+    programs under test/arm64 and test/x86_64, and the suite compares what
+    the compiler writes with it; every program of the suite still prints
+    what it printed before, since what the pass takes away is what did
+    nothing.
 
 68. Arrays of Composite Values, and Stepping a Pointer to One (acwj Part
     61, `61_What_Next`, the rest of what items 27, 28, 29 and 53 left out).
