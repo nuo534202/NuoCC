@@ -14,12 +14,13 @@ namespace nuocc
  * gives the same value as the one it was given:
  *
  *  - constant folding: an operation whose two sides the compiler already
- *    knows is worked out while the program is being compiled, and the
- *    number it comes to is left in its place. The value is worked out in
- *    an integer wider than the language has, and is only folded when it
- *    fits the type the operation answers with, so that a folded tree
- *    always gives the value the operation would have given when the
- *    program ran;
+ *    knows is worked out while the program is being compiled when a wider
+ *    intermediate is available. The 64-bit intermediate is only wider than
+ *    types narrower than eight bytes; eight-byte operations are left in the
+ *    tree. A result is folded only when it fits both the operation's type
+ *    and the signed 32-bit value held by an integer literal, so that a
+ *    folded tree always gives the value the operation would have given
+ *    when the program ran;
  *
  *  - taking away an operation which does nothing with one of its sides,
  *    such as `x + 0` or `x * 1`, which leaves the other side in its place.

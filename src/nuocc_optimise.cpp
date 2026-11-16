@@ -162,6 +162,32 @@ bool FoldUnary(AstNodeTag tag, int64 operand, int64& value)
 }
 
 /*
+ * Whether an operation of this type can be folded at all. A target's
+ * eight-byte integer is as wide as the intermediate, so it has no wider
+ * type in which an overflowing result could be recognised safely.
+ */
+bool CanFoldType(PrimitiveType type)
+{
+    return PrimitiveSize(type) < static_cast<int32>(sizeof(int64));
+}
+
+/*
+ * Whether a result can be stored in the same literal node the parser uses.
+ * It must fit both the operation's type and the signed 32-bit value the
+ * node holds.
+ */
+bool CanRepresentFolded(int64 value, PrimitiveType type)
+{
+    if (value < std::numeric_limits<int32>::min() ||
+        value > std::numeric_limits<int32>::max())
+    {
+        return false;
+    }
+
+    return ValueFitsType(value, type);
+}
+
+/*
  * The number the tree became, in place of the tree itself. Its type is the
  * type of the operation which was worked out, so that everything reading it
  * afterwards reads the type the operation was done at.
@@ -353,13 +379,17 @@ void FoldNode(AstNodePtr& tree)
         IsLiteral(tree->GetRight()))
     {
         const AstOperator& op = static_cast<const AstOperator&>(*tree);
+        const PrimitiveType type = tree->GetType();
 
-        if (FoldBinary(op.GetOpType(),
+        if (CanFoldType(type) &&
+            FoldBinary(op.GetOpType(),
                        LiteralValue(tree->GetLeft()),
                        LiteralValue(tree->GetRight()),
                        folded) &&
-            ValueFitsType(folded, tree->GetType()))
-            tree = FoldedLeaf(folded, tree->GetType());
+            CanRepresentFolded(folded, type))
+        {
+            tree = FoldedLeaf(folded, type);
+        }
 
         return;
     }
@@ -368,7 +398,7 @@ void FoldNode(AstNodePtr& tree)
      * FoldUnary answers for the tags which are not such an operation. */
     if (IsLiteral(tree->GetLeft()) &&
         FoldUnary(tag, LiteralValue(tree->GetLeft()), folded) &&
-        ValueFitsType(folded, tree->GetType()))
+        CanRepresentFolded(folded, tree->GetType()))
     {
         tree = FoldedLeaf(folded, tree->GetType());
         return;
