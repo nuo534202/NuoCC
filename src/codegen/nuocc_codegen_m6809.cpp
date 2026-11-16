@@ -139,9 +139,9 @@ std::string M6809Codegen::SpillSlot(int32 slot, int32 byte) const
     return Frame(base + slot * kPlaceSize + byte);
 }
 
-std::string M6809Codegen::StringName(label_idx label)
+std::string M6809Codegen::StringName(label_idx label) const
 {
-    return "__str" + std::to_string(label);
+    return "__str" + UnitName() + "_" + std::to_string(label);
 }
 
 std::string M6809Codegen::Label(label_idx label) const
@@ -303,7 +303,7 @@ void M6809Codegen::StoreThrough(reg_idx reg, int32 size)
     ofs_ << "\tstd\t2,x" << std::endl;
 }
 
-void M6809Codegen::CopyValue(reg_idx dest, reg_idx src, int32 size)
+void M6809Codegen::CopyRegister(reg_idx dest, reg_idx src, int32 size)
 {
     if (size <= 2)
     {
@@ -712,9 +712,9 @@ void M6809Codegen::EmitFillHighHalf(reg_idx reg, bool from_sign)
 /*
  * Nothing has to be done to widen a value which is held as the whole of
  * it, but a value which is narrower than the type it is widened to has to
- * have the bytes above it filled in: a char has none of the sign it has
- * not got, and an int is filled with a copy of the bit which says which
- * half of the number it is.
+ * have the bytes above it filled in: a char and an address have no sign,
+ * and an int is filled with a copy of the bit which says which half of the
+ * number it is.
  */
 reg_idx M6809Codegen::Widen(reg_idx reg,
     PrimitiveType old_type,
@@ -726,7 +726,8 @@ reg_idx M6809Codegen::Widen(reg_idx reg,
     if (new_size <= old_size || new_size <= 2)
         return reg;
 
-    EmitFillHighHalf(reg, old_size > 1);
+    const bool from_sign = old_size > 1 && IsIntType(old_type);
+    EmitFillHighHalf(reg, from_sign);
 
     return reg;
 }
@@ -754,9 +755,9 @@ void M6809Codegen::ReloadRegister(reg_idx reg, int32 slot)
 /*
  * Give a value the type it was cast to. A char keeps the low byte of what
  * it is given and has zeroes above it, since it has no sign; an int and a
- * pointer keep the low two bytes, which is where the low half of a long
- * already is; and a long takes the value it is given with the bytes above
- * it filled in.
+ * pointer keep the low two bytes; and a long takes the value it is given
+ * with the bytes above it filled from the sign of an integer or with
+ * zeroes for an address.
  */
 reg_idx M6809Codegen::Cast(reg_idx reg,
     PrimitiveType old_type,
@@ -774,7 +775,11 @@ reg_idx M6809Codegen::Cast(reg_idx reg,
     }
 
     if (size > 2)
-        EmitFillHighHalf(reg, SizeOf(old_type) > 1);
+    {
+        const bool from_sign = SizeOf(old_type) > 1 &&
+                               IsIntType(old_type);
+        EmitFillHighHalf(reg, from_sign);
+    }
 
     return reg;
 }
@@ -835,7 +840,7 @@ reg_idx M6809Codegen::Scale(reg_idx reg, int32 scale, PrimitiveType type)
 
 void M6809Codegen::Move(reg_idx dest, reg_idx src, PrimitiveType type)
 {
-    CopyValue(dest, src, SizeOf(type));
+    CopyRegister(dest, src, SizeOf(type));
 }
 
 reg_idx M6809Codegen::Negate(reg_idx reg, PrimitiveType type)
@@ -959,7 +964,7 @@ reg_idx M6809Codegen::IncDec(const Symbol& symbol, int32 delta, bool post)
     const int32 size = SizeOf(symbol.type);
 
     reg_idx new_reg = AllocRegister();
-    CopyValue(new_reg, old_reg, size);
+    CopyRegister(new_reg, old_reg, size);
     EmitAddConstant(new_reg, delta, size);
 
     StoreSymbol(symbol, new_reg);

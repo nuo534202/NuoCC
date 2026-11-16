@@ -24,9 +24,9 @@ namespace nuocc
  * is one byte, a short, an int and a pointer two, and a long four. A short
  * is as wide as an int here, since the machine has no narrower number of
  * its own. A value is held in the low bytes of its register's place, big
- * endian, with the bytes above it saying what the value is: a char has
- * zeroes above it, since it has no sign, and a short has the byte which
- * says which half of the number it is.
+ * endian, with the bytes above it saying what the value is: a char and an
+ * address have zeroes above them since they have no sign, and a short has
+ * the byte which says which half of the number it is.
  */
 class M6809Codegen : public AsmCodegen
 {
@@ -159,11 +159,11 @@ private:
     std::string SpillSlot(int32 slot, int32 byte) const;
 
     /*
-     * The names the storage of a string literal and a label are given. A
-     * label carries the name of the file of code it is written in as well,
-     * since every file of a program numbers its labels from one.
+     * The names the storage of a string literal and a label are given.
+     * Both carry the name of the file of code they are written in, since
+     * every file of a program numbers its labels from one.
      */
-    static std::string StringName(label_idx label);
+    std::string StringName(label_idx label) const;
     std::string Label(label_idx label) const;
 
     /*
@@ -196,7 +196,7 @@ private:
     void StoreThrough(reg_idx reg, int32 size);
 
     /* Move the bytes of a value from one register to another. */
-    void CopyValue(reg_idx dest, reg_idx src, int32 size);
+    void CopyRegister(reg_idx dest, reg_idx src, int32 size);
 
     /*
      * Compare the two values and jump to the label when the comparison

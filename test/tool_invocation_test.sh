@@ -1,11 +1,12 @@
 #!/bin/sh
 #
-# Check that the driver preserves argv entries which a shell would interpret.
+# Check driver arguments and the unit scope of m6809 string labels.
 
 set -eu
 
 nuocc=$1
 source_dir=$2
+system_path=$PATH
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/nuocc-tool-test.XXXXXX")
 trap 'rm -rf "$work_dir"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -165,6 +166,29 @@ if [ "$target" = "m6809" ]; then
         echo "an lwasm failure was accepted" >&2
         exit 1
     fi
+
+    lwasm_only_dir=$work_dir/lwasm-only
+    multi_input=$work_dir/multi-file-input
+    multi_output=$work_dir/multi-file-program
+    multi_first=$work_dir/multi_first.c
+    multi_second=$work_dir/multi_second.c
+    mkdir "$lwasm_only_dir"
+    cp "$fake_lwasm" "$lwasm_only_dir/lwasm"
+    printf 'char *first_text() { return("first"); }\n' > "$multi_first"
+    printf 'char *second_text() { return("second"); }\n' > "$multi_second"
+    (
+        cd "$work_dir"
+        PATH="$lwasm_only_dir:$system_path" \
+            NUOCC_LWASM_LOG="$work_dir/multi-lwasm-arguments" \
+            NUOCC_LWASM_STDIN="$multi_input" \
+            "$nuocc" -o "$multi_output" "$multi_first" "$multi_second"
+    )
+    for name in multi_first multi_second; do
+        if ! grep -Eq "^__str${name}_[0-9]+:" "$multi_input"; then
+            echo "a string label was not scoped to $name" >&2
+            exit 1
+        fi
+    done
     exit 0
 fi
 
