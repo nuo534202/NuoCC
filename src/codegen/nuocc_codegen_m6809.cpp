@@ -480,11 +480,15 @@ reg_idx M6809Codegen::StoreSymbol(const Symbol& symbol, reg_idx reg)
  */
 reg_idx M6809Codegen::Add(reg_idx reg1, reg_idx reg2, PrimitiveType type)
 {
+    const int32 size = SizeOf(type);
+
     ofs_ << "\tldd\t" << Slot(reg1, kLowHalf) << std::endl;
     ofs_ << "\taddd\t" << Slot(reg2, kLowHalf) << std::endl;
+    if (size == 1)
+        ofs_ << "\tclra" << std::endl;
     ofs_ << "\tstd\t" << Slot(reg1, kLowHalf) << std::endl;
 
-    if (SizeOf(type) > 2)
+    if (size > 2)
     {
         ofs_ << "\tldd\t" << Slot(reg1, kHighHalf) << std::endl;
         ofs_ << "\tadcb\t" << Slot(reg2, kHighHalf + 1) << std::endl;
@@ -499,11 +503,15 @@ reg_idx M6809Codegen::Add(reg_idx reg1, reg_idx reg2, PrimitiveType type)
 
 reg_idx M6809Codegen::Sub(reg_idx reg1, reg_idx reg2, PrimitiveType type)
 {
+    const int32 size = SizeOf(type);
+
     ofs_ << "\tldd\t" << Slot(reg1, kLowHalf) << std::endl;
     ofs_ << "\tsubd\t" << Slot(reg2, kLowHalf) << std::endl;
+    if (size == 1)
+        ofs_ << "\tclra" << std::endl;
     ofs_ << "\tstd\t" << Slot(reg1, kLowHalf) << std::endl;
 
-    if (SizeOf(type) > 2)
+    if (size > 2)
     {
         ofs_ << "\tldd\t" << Slot(reg1, kHighHalf) << std::endl;
         ofs_ << "\tsbcb\t" << Slot(reg2, kHighHalf + 1) << std::endl;
@@ -594,6 +602,10 @@ reg_idx M6809Codegen::EmitRuntimeBinary(reg_idx reg1,
         ofs_ << "\tleax\t" << Slot(reg1, kLowHalf) << std::endl;
         ofs_ << "\tleay\t" << Slot(reg2, kLowHalf) << std::endl;
         ofs_ << "\tjsr\t" << helper16 << std::endl;
+
+        /* A char keeps only the low byte, even when a product carries. */
+        if (SizeOf(type) == 1)
+            ofs_ << "\tclr\t" << Slot(reg1, kLowHalf) << std::endl;
     }
     else
     {
@@ -916,13 +928,18 @@ reg_idx M6809Codegen::ToBool(reg_idx reg, PrimitiveType type)
     return reg;
 }
 
-/* Add a number which the compiler knows to a value in a register. */
+/*
+ * Add a signed 32-bit number which the compiler knows to a value in a
+ * register. Its only caller is IncDec(), which passes either 1 or -1.
+ */
 void M6809Codegen::EmitAddConstant(reg_idx reg, int64 value, int32 size)
 {
     if (size <= 2)
     {
         ofs_ << "\tldd\t" << Slot(reg, kLowHalf) << std::endl;
         ofs_ << "\taddd\t#" << (value & 0xffff) << std::endl;
+        if (size == 1)
+            ofs_ << "\tclra" << std::endl;
         ofs_ << "\tstd\t" << Slot(reg, kLowHalf) << std::endl;
         return;
     }
@@ -931,8 +948,8 @@ void M6809Codegen::EmitAddConstant(reg_idx reg, int64 value, int32 size)
     ofs_ << "\taddd\t#" << (value & 0xffff) << std::endl;
     ofs_ << "\tstd\t" << Slot(reg, kLowHalf) << std::endl;
     ofs_ << "\tldd\t" << Slot(reg, kHighHalf) << std::endl;
-    ofs_ << "\tadcb\t#" << ((value >> 8) & 0xff) << std::endl;
-    ofs_ << "\tadca\t#" << ((value >> 16) & 0xff) << std::endl;
+    ofs_ << "\tadcb\t#" << ((value >> 16) & 0xff) << std::endl;
+    ofs_ << "\tadca\t#" << ((value >> 24) & 0xff) << std::endl;
     ofs_ << "\tstd\t" << Slot(reg, kHighHalf) << std::endl;
 }
 
