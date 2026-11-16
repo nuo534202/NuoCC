@@ -63,5 +63,21 @@ int main()
         }
     }
 
+    const nuocc::Peephole m6809(nuocc::M6809PeepholeRules());
+    const nuocc::Peephole::Lines flag_setters = {
+        "\tstd\t2,u",
+        "\tldd\t2,u",
+        "\tlbeq\tdone",
+        "\tstx\t6,u",
+        "\tldx\t6,u",
+        "\tlbeq\tdone",
+    };
+
+    if (m6809.Optimise(flag_setters) != flag_setters)
+    {
+        ReportFailure("a 6809 flag-setting load was removed");
+        return 1;
+    }
+
     return 0;
 }

@@ -900,19 +900,18 @@
     peephole optimiser). Once the whole of a 6809 program has been written,
     the code of it is put through a pass which looks at the few
     instructions standing at each place and leaves out the ones the machine
-    has no need of. A value which is stored in a place and read straight
-    back is the value the machine has in its register still, so the read is
-    left out; the same is done for an address the machine has in X; and a
-    jump to the label standing beside it is left out, since the machine
-    would come to the same instruction by carrying on to it. The rules of
-    the pass are written into the compiler rather than read from a file the
-    way the tutorial has them, and a rule is a sequence of instructions
-    together with what is left in their place, where a part of one written
-    `%1` stands for any text and has to stand for the same text wherever
-    the rule uses it. Nothing a program prints is changed by the pass, since
-    what it takes away is what did nothing; what is changed is the code,
-    which is smaller. Only the 6809 has the pass, because the rules are the
-    instructions of that machine.
+    has no need of. A jump to the label standing beside it is left out,
+    since the machine would come to the same instruction by carrying on to
+    it. A value stored and then loaded straight back is left in place,
+    because `LDD` and `LDX` set condition codes which a following branch may
+    use while the stores do not. The rules of the pass are written into the
+    compiler rather than read from a file the way the tutorial has them,
+    and a rule is a sequence of instructions together with what is left in
+    their place. A part written `%1` stands for any text and must stand for
+    the same text wherever the rule uses it. Nothing a program prints is
+    changed by the pass, since what it takes away is what did nothing; what
+    is changed is the code, which is smaller. Only the 6809 has the pass,
+    because the rules are the instructions of that machine.
 
 62. A Value of Two Bytes, Which Has a Sign (acwj Part 61, `61_What_Next`,
     the idea of adding `short`s). An integer of two bytes is written

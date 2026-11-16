@@ -174,20 +174,12 @@ bool Matches(const CodeLine& wanted, const CodeLine& line, Parts& parts)
  * Each of them takes away an instruction which the machine does not need,
  * and each of them is about one place twice where it has to be, so that
  * what is taken away cannot be about two different places.
+ *
+ * A store followed by a load from the same place is left alone: LDD and
+ * LDX set the condition codes which a following branch may use, while STD
+ * and STX do not, and this pass has no way to show that the codes are dead.
  */
 const std::vector<PeepholeRule> kM6809Rules = {
-    /*
-     * A value which is stored and then read straight back is the value the
-     * machine holds in D still: a store from D leaves the value there, so
-     * the read brings back what the register holds already. The code
-     * generator writes this pair where the value one expression was worked
-     * out into has been put in its place and the next expression begins by
-     * asking for it.
-     */
-    {{"std %1", "ldd %1"}, {"std %1"}},
-    /* The same for the address the machine holds in X, which a store from
-     * X leaves there. */
-    {{"stx %1", "ldx %1"}, {"stx %1"}},
     /*
      * A jump to the label standing next to it is taken away: the machine
      * comes to the same instruction by carrying on to it.

@@ -38,6 +38,7 @@ __Larithmetic_4:
 	lbeq	__Larithmetic_2
 	ldd	#1
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_2:
 	ldd	#0
@@ -68,6 +69,7 @@ __Larithmetic_8:
 	lbeq	__Larithmetic_6
 	ldd	#2
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_6:
 	ldd	#0
@@ -98,11 +100,13 @@ __Larithmetic_13:
 	lbeq	__Larithmetic_10
 	ldd	#3
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 	jmp	__Larithmetic_11
 __Larithmetic_10:
 	ldd	#4
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_11:
 	ldd	#255
@@ -112,7 +116,9 @@ __Larithmetic_11:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	std	8,u
+	ldd	8,u
 	addd	#1
 	clra
 	std	8,u
@@ -123,6 +129,7 @@ __Larithmetic_11:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 	ldd	#0
 	std	4,u
@@ -131,7 +138,9 @@ __Larithmetic_11:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	std	8,u
+	ldd	8,u
 	addd	#65535
 	clra
 	std	8,u
@@ -142,6 +151,7 @@ __Larithmetic_11:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 	ldd	#200
 	std	4,u
@@ -191,6 +201,7 @@ __Larithmetic_16:
 	clra
 	ldb	,x
 	std	8,u
+	ldd	8,u
 	std	12,u
 	ldd	#1
 	std	16,u
@@ -206,6 +217,7 @@ __Larithmetic_16:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 	ldd	#0
 	std	4,u
@@ -222,6 +234,7 @@ __Larithmetic_16:
 	clra
 	ldb	,x
 	std	8,u
+	ldd	8,u
 	std	12,u
 	ldd	#1
 	std	16,u
@@ -237,6 +250,7 @@ __Larithmetic_16:
 	clra
 	ldb	small
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 	ldd	#1
 	std	2,u
@@ -291,6 +305,7 @@ __Larithmetic_21:
 	lbne	__Larithmetic_22
 	ldd	#5
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_22:
 	ldd	#4148
@@ -309,12 +324,14 @@ __Larithmetic_22:
 	std	6,u
 	ldd	4,u
 	std	8,u
+	ldd	8,u
 	addd	#1
 	std	8,u
 	ldd	6,u
 	adcb	#0
 	adca	#0
 	std	6,u
+	ldd	6,u
 	std	wide
 	ldd	8,u
 	std	wide+2
@@ -334,6 +351,7 @@ __Larithmetic_22:
 	lbne	__Larithmetic_23
 	ldd	#6
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_23:
 	ldd	wide
@@ -344,12 +362,14 @@ __Larithmetic_23:
 	std	6,u
 	ldd	4,u
 	std	8,u
+	ldd	8,u
 	addd	#65535
 	std	8,u
 	ldd	6,u
 	adcb	#255
 	adca	#255
 	std	6,u
+	ldd	6,u
 	std	wide
 	ldd	8,u
 	std	wide+2
@@ -369,10 +389,12 @@ __Larithmetic_23:
 	lbne	__Larithmetic_24
 	ldd	#7
 	std	4,u
+	ldd	4,u
 	jsr	__printint
 __Larithmetic_24:
 	ldd	#0
 	std	4,u
+	ldd	4,u
 	std	__ret
 __Larithmetic_1:
 	leas	82,s
