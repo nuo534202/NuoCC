@@ -9,6 +9,8 @@
 #include <system_error>
 #include <utility>
 
+#include "utils/nuocc_error.hpp"
+
 namespace nuocc
 {
 
@@ -338,9 +340,26 @@ std::string Written(const CodeLine& line, const Parts& parts)
     return "\t" + line.name + "\t" + Substituted(line.operand, parts);
 }
 
+void ValidateRules(const std::vector<PeepholeRule>& rules)
+{
+    for (std::size_t k = 0; k < rules.size(); k++)
+    {
+        if (rules[k].kept.size() < rules[k].matched.size())
+            continue;
+
+        throw CompilerError(
+            "error: peephole rule " + std::to_string(k + 1) +
+            " does not remove a line");
+    }
+}
+
 }   /* namespace */
 
-Peephole::Peephole(const std::vector<PeepholeRule>& rules) : rules_(rules) {}
+Peephole::Peephole(std::vector<PeepholeRule> rules)
+    : rules_(std::move(rules))
+{
+    ValidateRules(rules_);
+}
 
 Peephole::Lines Peephole::Optimise(const Lines& code) const
 {

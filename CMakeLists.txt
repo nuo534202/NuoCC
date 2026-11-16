@@ -105,6 +105,15 @@ if(BUILD_TESTING)
 
         add_test(NAME peephole_file COMMAND peephole_file_test)
         set_tests_properties(peephole_file PROPERTIES TIMEOUT 10)
+
+        add_executable(peephole_rules_test
+            test/peephole_rules_test.cpp
+            src/codegen/nuocc_peephole.cpp)
+        target_include_directories(peephole_rules_test PRIVATE
+            ${PROJECT_SOURCE_DIR}/include)
+
+        add_test(NAME peephole_rules COMMAND peephole_rules_test)
+        set_tests_properties(peephole_rules PROPERTIES TIMEOUT 10)
     endif()
 
     if(NUOCC_TARGET STREQUAL "qbe")

@@ -45,7 +45,12 @@ public:
     /* The lines of a program, as the code generator wrote them. */
     using Lines = std::vector<std::string>;
 
-    explicit Peephole(const std::vector<PeepholeRule>& rules);
+    /*
+     * Keep a copy of the rules, so the caller does not have to keep the
+     * vector alive. Throws CompilerError when a rule does not remove at
+     * least one line, which is what guarantees Optimise() terminates.
+     */
+    explicit Peephole(std::vector<PeepholeRule> rules);
 
     /*
      * Put the lines of a program through the rules until none of them
@@ -65,7 +70,7 @@ public:
     bool OptimiseFile(const std::string& file) const;
 
 private:
-    const std::vector<PeepholeRule>& rules_;
+    std::vector<PeepholeRule> rules_;
 };
 
 /*
