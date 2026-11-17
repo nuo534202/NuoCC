@@ -295,16 +295,15 @@ int32 PowerOfTwoPlaces(int32 value)
 }
 
 /*
- * Write a multiplication by a power of two as a shift of the other side,
- * and answer whether there was one.
+ * Write an unsigned char multiplication by a power of two as a shift of
+ * the other side, and answer whether there was one.
  *
- * A product by a power of two is the other side moved up as many places as
- * the power says, since every place up doubles the value, and a shift
- * moves a value up by a number of places in one step where a multiplication
- * works out a whole product: `x * 8` is `x << 3`. The two are the same
- * value whatever the other side is: moving a value up one place leaves
- * every bit of it standing one place higher with a zero at the bottom,
- * which is what doubling it does.
+ * A char has no sign, so moving it up one place leaves every bit of it
+ * standing one place higher with a zero at the bottom, which is the same
+ * value as doubling it, including when the result wraps beyond one byte.
+ * A signed multiplication is left as it is: a left shift of a value below
+ * nothing, or one whose result overflows the type, does not have that
+ * guaranteed meaning.
  *
  * A division by a power of two is not written this way. A division rounds
  * towards nothing, while a shift of a value below nothing moves the top
@@ -315,7 +314,7 @@ bool WriteMultiplyAsShift(AstNodePtr& tree)
 {
     const AstOperator& op = static_cast<const AstOperator&>(*tree);
 
-    if (op.GetOpType() != T_Star)
+    if (op.GetOpType() != T_Star || tree->GetType() != PrimitiveType::kChar)
         return false;
 
     AstNodePtr value;

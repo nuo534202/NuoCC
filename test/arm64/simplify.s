@@ -54,22 +54,22 @@ _main:
 	adrp	x17, _value@PAGE
 	add	x17, x17, _value@PAGEOFF
 	ldrsw	x19, [x17]
-	movz	x20, #1
-	lsl	x19, x19, x20
+	movz	x20, #2
+	mul	x19, x19, x20
 	mov	x0, x19
 	bl	_printint
 	adrp	x17, _value@PAGE
 	add	x17, x17, _value@PAGEOFF
 	ldrsw	x19, [x17]
-	movz	x20, #3
-	lsl	x19, x19, x20
+	movz	x20, #8
+	mul	x19, x19, x20
 	mov	x0, x19
 	bl	_printint
+	movz	x19, #2
 	adrp	x17, _value@PAGE
 	add	x17, x17, _value@PAGEOFF
-	ldrsw	x19, [x17]
-	movz	x20, #1
-	lsl	x19, x19, x20
+	ldrsw	x20, [x17]
+	mul	x19, x19, x20
 	mov	x0, x19
 	bl	_printint
 	adrp	x17, _value@PAGE

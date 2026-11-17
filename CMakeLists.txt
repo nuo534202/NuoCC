@@ -91,6 +91,11 @@ if(BUILD_TESTING)
             $<TARGET_FILE:nuocc> ${PROJECT_SOURCE_DIR})
     set_tests_properties(tool_invocation PROPERTIES TIMEOUT 30)
 
+    add_test(NAME optimise_contract
+        COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/optimise_contract_test.sh
+            $<TARGET_FILE:nuocc>)
+    set_tests_properties(optimise_contract PROPERTIES TIMEOUT 10)
+
     add_test(NAME runtests_failure
         COMMAND /bin/sh ${PROJECT_SOURCE_DIR}/test/runtests_failure_test.sh
             ${PROJECT_SOURCE_DIR})

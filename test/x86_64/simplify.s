@@ -40,23 +40,20 @@ main:
 	movq	$0, %r8
 	movl	%r8d, count(%rip)
 	movslq	value(%rip), %r8
-	movq	$1, %r9
-	movb	%r9b, %cl
-	shlq	%cl, %r8
+	movq	$2, %r9
+	imulq	%r9, %r8
 	movq	%r8, %rdi
 	call	printint
 
 	movslq	value(%rip), %r8
-	movq	$3, %r9
-	movb	%r9b, %cl
-	shlq	%cl, %r8
+	movq	$8, %r9
+	imulq	%r9, %r8
 	movq	%r8, %rdi
 	call	printint
 
-	movslq	value(%rip), %r8
-	movq	$1, %r9
-	movb	%r9b, %cl
-	shlq	%cl, %r8
+	movq	$2, %r8
+	movslq	value(%rip), %r9
+	imulq	%r9, %r8
 	movq	%r8, %rdi
 	call	printint
 

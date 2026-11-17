@@ -27,7 +27,8 @@ int main() {
     wide = 1000;
     small = 100;
 
-    /* A multiplication by a power of two is written as a shift. */
+    /* Signed multiplication stays a multiplication; the unsigned char
+     * multiplication below is the one written as a shift. */
     print value * 2;
     print value * 8;
     print 2 * value;
@@ -70,9 +71,8 @@ int main() {
     print 0 + bump();
     print count;
 
-    /* The same forms with a value below nothing, whose answer a shift
-     * gives as well, since moving a value up and doubling it are the same
-     * thing. */
+    /* A signed value stays a multiplication even by a power of two, since
+     * shifting a negative value does not have the same guaranteed meaning. */
     value = -7;
     print value * 2;
     print value * 4;

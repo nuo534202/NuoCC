@@ -8,16 +8,11 @@ twice:
 	std	0,u
 	ldd	0,u
 	std	4,u
-	ldd	#1
+	ldd	#2
 	std	8,u
-	ldb	9,u
-	lbeq	__Loptimise_3
-__Loptimise_2:
-	lsl	5,u
-	rol	4,u
-	decb
-	lbne	__Loptimise_2
-__Loptimise_3:
+	leax	4,u
+	leay	8,u
+	jsr	__mul16
 	ldd	4,u
 	std	__ret
 __Loptimise_1:
@@ -35,21 +30,21 @@ main:
 	ldd	0,u
 	std	4,u
 	ldd	4,u
-	lbeq	__Loptimise_6
+	lbeq	__Loptimise_4
 	ldd	#1
 	std	4,u
-	jmp	__Loptimise_7
-__Loptimise_6:
+	jmp	__Loptimise_5
+__Loptimise_4:
 	ldd	#0
 	std	4,u
-__Loptimise_7:
+__Loptimise_5:
 	ldd	4,u
-	lbeq	__Loptimise_5
+	lbeq	__Loptimise_3
 	ldd	#0
 	std	4,u
 	ldd	4,u
 	jsr	__printint
-__Loptimise_5:
+__Loptimise_3:
 	ldd	#4
 	std	4,u
 	ldx	#thing
@@ -86,7 +81,7 @@ __Loptimise_5:
 	std	4,u
 	ldd	4,u
 	jsr	__printint
-__Loptimise_4:
+__Loptimise_2:
 	leas	82,s
 	puls	u
 	rts

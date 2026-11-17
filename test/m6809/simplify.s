@@ -37,44 +37,29 @@ main:
 	std	count
 	ldd	value
 	std	2,u
-	ldd	#1
+	ldd	#2
 	std	6,u
-	ldb	7,u
-	lbeq	__Lsimplify_4
-__Lsimplify_3:
-	lsl	3,u
-	rol	2,u
-	decb
-	lbne	__Lsimplify_3
-__Lsimplify_4:
+	leax	2,u
+	leay	6,u
+	jsr	__mul16
 	ldd	2,u
 	jsr	__printint
 	ldd	value
 	std	2,u
-	ldd	#3
+	ldd	#8
 	std	6,u
-	ldb	7,u
-	lbeq	__Lsimplify_6
-__Lsimplify_5:
-	lsl	3,u
-	rol	2,u
-	decb
-	lbne	__Lsimplify_5
-__Lsimplify_6:
+	leax	2,u
+	leay	6,u
+	jsr	__mul16
 	ldd	2,u
 	jsr	__printint
-	ldd	value
+	ldd	#2
 	std	2,u
-	ldd	#1
+	ldd	value
 	std	6,u
-	ldb	7,u
-	lbeq	__Lsimplify_8
-__Lsimplify_7:
-	lsl	3,u
-	rol	2,u
-	decb
-	lbne	__Lsimplify_7
-__Lsimplify_8:
+	leax	2,u
+	leay	6,u
+	jsr	__mul16
 	ldd	2,u
 	jsr	__printint
 	ldd	value
